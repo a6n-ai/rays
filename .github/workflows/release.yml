@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    env:
+      VERSION: ${{ inputs.version || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          v="${VERSION#v}"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+          plutil -replace CFBundleShortVersionString -string "$v" macos/Resources/Info.plist
+          plutil -replace CFBundleVersion -string "${{ github.run_number }}" macos/Resources/Info.plist
+
+      - name: Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Build Rays.app
+        run: scripts/bundle-app.sh
+
+      - name: Package
+        run: |
+          ditto -c -k --keepParent bin/Rays.app "Rays-${VERSION}.zip"
+          shasum -a 256 "Rays-${VERSION}.zip" | cut -d' ' -f1 > sha256.txt
+          echo "SHA256=$(cat sha256.txt)" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        run: |
+          gh release create "v${VERSION}" "Rays-${VERSION}.zip" \
+            --title "Rays ${VERSION}" \
+            --notes "Install: brew install --cask a6n-ai/tap/rays"
+
+      - name: Update Homebrew cask
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::notice::Set the TAP_TOKEN secret (contents:write on a6n-ai/homebrew-tap) to bump the cask automatically. sha256=${SHA256}"
+            exit 0
+          fi
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/a6n-ai/homebrew-tap.git" tap
+          sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/; s/^  sha256 \".*\"/  sha256 \"${SHA256}\"/" tap/Casks/rays.rb
+          cd tap
+          git config user.name "rays-release"
+          git config user.email "rays-release@users.noreply.github.com"
+          git commit -am "rays ${VERSION}" && git push
