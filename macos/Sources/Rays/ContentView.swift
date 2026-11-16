@@ -452,7 +452,7 @@ private struct WelcomeEmpty: View {
 
             GlassEffectContainer(spacing: 12) {
                 HStack(spacing: 12) {
-                    tile("link", .blue, "Paste a link", "⌘L") {
+                    tile("link", .blue, "Paste links", "Any format, ⌘L") {
                         NotificationCenter.default.post(name: .focusAddBar, object: nil)
                     }
                     tile("tray.and.arrow.down", .green, "Drop files", "Links or .webloc", action: nil)

@@ -60,7 +60,7 @@ struct AddBar: View {
     private var field: some View {
         HStack(spacing: 8) {
             Image(systemName: "link").foregroundStyle(.secondary)
-            TextField(isTargeted ? "Drop to download" : "Paste a link", text: $input, axis: .horizontal)
+            TextField(isTargeted ? "Drop to download" : "Paste links in any format: lines, commas, CSV…", text: $input, axis: .horizontal)
                 .textFieldStyle(.plain)
                 .focused($fieldFocused)
                 .onReceive(NotificationCenter.default.publisher(for: .focusAddBar)) { _ in fieldFocused = true }
