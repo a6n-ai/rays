@@ -13,6 +13,7 @@ extension SorterFolder {
 struct SorterView: View {
     @State private var model: SorterModel
 
+    @State private var confirmRemoveAll = false
     private var outdated: [SorterFolder] { (model.status?.folders ?? []).filter(\.needsUpdate) }
 
     @MainActor init(model: SorterModel? = nil) {
@@ -78,6 +79,25 @@ struct SorterView: View {
                     }
                     ForEach(Array(moves.prefix(10).enumerated()), id: \.offset) { _, move in
                         MoveRow(move: move)
+                    }
+                }
+                if !(model.status?.folders ?? []).isEmpty {
+                    Section {
+                        Button(role: .destructive) { confirmRemoveAll = true } label: {
+                            Text("Remove Sorter…").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.red)
+                        .disabled(model.busy)
+                        .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
+                                            titleVisibility: .visible) {
+                            Button("Remove Sorter", role: .destructive) {
+                                Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Files already sorted stay where they are.")
+                        }
                     }
                 }
             }

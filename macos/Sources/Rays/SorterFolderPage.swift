@@ -41,18 +41,14 @@ struct SorterFolderPage: View {
                 }
             }
 
-            Section {
-                Button("Sort Now") { Task { await model.sortNow(folder) } }
-                    .disabled(model.busy || model.loadFailed || !readiness.isReady)
-                    .help(readiness.isReady ? "Sort new files in this folder now" : readiness.title)
-                if let result = model.sortResults[folder.path] {
-                    Text(result)
-                        .foregroundStyle(.secondary)
-                }
-                Button("Show in Finder") { NSWorkspace.shared.open(URL(filePath: folder.path)) }
-            } footer: {
-                if !readiness.isReady {
-                    Text(readiness.title)
+            if model.sortResults[folder.path] != nil || !readiness.isReady {
+                Section {
+                    if let result = model.sortResults[folder.path] {
+                        Label(result, systemImage: "wand.and.stars").foregroundStyle(.secondary)
+                    }
+                    if !readiness.isReady {
+                        Label(readiness.title, systemImage: readiness.symbol).foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -80,7 +76,31 @@ struct SorterFolderPage: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .navigationTitle(folder.name)
-        .toolbar { ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() } }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                ToolbarIconGroup {
+                    Button { Task { await model.sortNow(folder) } } label: {
+                        ToolbarIcon(symbol: "wand.and.stars", title: "Sort now",
+                                    tint: readiness.isReady ? .purple : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.busy || model.loadFailed || !readiness.isReady)
+                    .help(readiness.isReady ? "Sort new files in \(folder.name) now" : readiness.title)
+                    Button { NSWorkspace.shared.open(URL(filePath: folder.path)) } label: {
+                        ToolbarIcon(symbol: "folder", title: "Show in Finder", tint: .blue)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show \(folder.name) in Finder")
+                    Button { Task { await model.refresh() } } label: {
+                        ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Check this folder again")
+                }
+            }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
+        }
         .confirmationDialog(
             "Stop sorting \(folder.name)?",
             isPresented: $confirmingRemoval,
