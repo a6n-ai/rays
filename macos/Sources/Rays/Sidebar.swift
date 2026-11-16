@@ -2,6 +2,7 @@ import SwiftUI
 
 enum Destination: Hashable {
     case downloads
+    case sorter
     case folder(URL)
 }
 
@@ -48,6 +49,8 @@ struct SidebarView: View {
             Section("Rays") {
                 Label("Downloads", systemImage: "arrow.down.circle")
                     .tag(Destination.downloads)
+                Label("Sorter", systemImage: "sparkles")
+                    .tag(Destination.sorter)
             }
             Section("Folders") {
                 if denied {

@@ -14,10 +14,11 @@ struct SorterRunResult: Sendable {
 }
 
 /// Drives the `sorter` CLI. The label rule must match sorter's `watch` (sorter/src/main.rs), because
-/// the Sorting toggle reads the launchd plist on disk to know whether a folder is watched.
+/// moving the watch after a Downloads change reads the launchd plist on disk to find the old one.
 enum Sorter {
-    static let defaultPath = FileManager.default.homeDirectoryForCurrentUser
-        .appending(path: "local-scripts/sorter/bin/sorter").path(percentEncoded: false)
+    /// The copy bundled into Rays.app; the app never runs a sorter from elsewhere.
+    static let defaultPath = Bundle.main.bundleURL
+        .appending(path: "Contents/MacOS/sorter").path(percentEncoded: false)
 
     static func label(for folder: URL, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String {
         let homePath = canonicalPath(home)

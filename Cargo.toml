@@ -1,5 +1,5 @@
 [workspace]
-members = ["engine", "cli", "bindgen"]
+members = ["engine", "cli", "bindgen", "sorter", "extract"]
 resolver = "3"
 
 [profile.release]

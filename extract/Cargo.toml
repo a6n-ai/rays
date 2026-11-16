@@ -1,0 +1,10 @@
+[package]
+name = "extract"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+calamine = "0.38.0"
+pdf-extract = "0.12.1"
+quick-xml = "0.42.0"
+zip = "9.5.1"

@@ -30,8 +30,21 @@ lipo -create target/aarch64-apple-darwin/release/dl target/x86_64-apple-darwin/r
 cp target/release/dl-universal bin/dl
 # The browser native host runs this copy, so it must live inside the signed bundle.
 cp target/release/dl-universal "$app/Contents/MacOS/dl"
+# The sorter runs from the bundle and finds extract next to itself, so both are universal and signed like dl.
+cargo build --release -p sorter -p extract --target aarch64-apple-darwin
+cargo build --release -p sorter -p extract --target x86_64-apple-darwin
+for bin in sorter extract; do
+  lipo -create "target/aarch64-apple-darwin/release/$bin" "target/x86_64-apple-darwin/release/$bin" -output "target/release/$bin-universal"
+  cp "target/release/$bin-universal" "$app/Contents/MacOS/$bin"
+  codesign --force -s - "$app/Contents/MacOS/$bin"
+done
 cp -R extension "$app/Contents/Resources/extension"
 # A signed Firefox/Zen package (from scripts/sign-firefox.sh) enables one-click "Add" in those browsers.
+# Without a local one, fetch the newest package CI signed (skipped quietly when offline or no gh).
+if [ ! -f build/firefox/rays.xpi ]; then
+  tag="$(gh release list --json tagName -q '[.[] | select(.tagName | startswith("extension-v"))][0].tagName' 2>/dev/null || true)"
+  if [ -n "$tag" ]; then gh release download "$tag" --pattern rays.xpi --dir build/firefox --clobber 2>/dev/null || true; fi
+fi
 if [ -f build/firefox/rays.xpi ]; then cp build/firefox/rays.xpi "$app/Contents/Resources/rays.xpi"; fi
 
 codesign --force -s - "$app/Contents/MacOS/dl"

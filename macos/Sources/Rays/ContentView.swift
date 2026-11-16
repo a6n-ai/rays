@@ -16,12 +16,18 @@ struct ContentView: View {
             SidebarView(selection: $destination)
                 .onAppear {
                     let path = lastFolder
-                    if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
+                    if path == "sorter" {
+                        destination = .sorter
+                    } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
                         destination = .folder(URL(filePath: path, directoryHint: .isDirectory))
                     }
                 }
                 .onChange(of: destination) { _, new in
-                    if case .folder(let url)? = new { lastFolder = url.path(percentEncoded: false) } else { lastFolder = "" }
+                    switch new {
+                    case .folder(let url)?: lastFolder = url.path(percentEncoded: false)
+                    case .sorter?: lastFolder = "sorter"
+                    default: lastFolder = ""
+                    }
                 }
         } detail: {
             detail
@@ -42,6 +48,7 @@ struct ContentView: View {
             accept(texts.flatMap(Links.inText))
         } isTargeted: { setTargeted($0) }
         .task(id: model.generation) { await model.run() }
+        .onReceive(NotificationCenter.default.publisher(for: .openSorter)) { _ in destination = .sorter }
     }
 
     @ViewBuilder private var detail: some View {
@@ -49,6 +56,8 @@ struct ContentView: View {
         case .folder(let folder)?:
             FolderView(root: EngineModel.downloadsURL, folder: folder) { destination = .downloads }
                 .id(folder)
+        case .sorter?:
+            SorterView()
         default:
             DownloadsView(isDropTargeted: isDropTargeted)
         }
