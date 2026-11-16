@@ -166,7 +166,7 @@ private struct DownloadsTab: View {
                 SettingRow(symbol: "square.stack.3d.down.right.fill", color: .green,
                            title: "Downloads at once", hint: "How many files download at the same time.") {
                     Picker("Downloads at once", selection: Binding(get: { maxRunning }, set: { model.setMaxRunning($0) })) {
-                        ForEach(1...10, id: \.self) { Text("\($0)").tag($0) }
+                        ForEach(1...10, id: \.self) { Text($0 == 3 ? "3 (Recommended)" : "\($0)").tag($0) }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
@@ -176,7 +176,7 @@ private struct DownloadsTab: View {
                 SettingRow(symbol: "point.3.connected.trianglepath.dotted", color: .purple,
                            title: "Parts per file", hint: "Big files download in parts at once. 4 works well for most sites.") {
                     Picker("Parts per file", selection: Binding(get: { connections }, set: { model.setConnections($0) })) {
-                        ForEach(1...16, id: \.self) { Text("\($0)").tag($0) }
+                        ForEach(1...16, id: \.self) { Text($0 == 4 ? "4 (Recommended)" : "\($0)").tag($0) }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
