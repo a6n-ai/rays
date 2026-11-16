@@ -19,10 +19,6 @@ struct SorterView: View {
     @AppStorage("sorterTab") private var tab: SorterTab = .setup
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @AppStorage("sorterShowFolders") private var showFolders = true
-    private static let waitChoices: [(seconds: Int, title: String)] = [
-        (10, "10 seconds (Recommended)"), (30, "30 seconds"), (60, "1 minute"),
-        (300, "5 minutes"), (900, "15 minutes"), (3600, "1 hour"),
-    ]
     @State private var removing: SorterFolder?
     private var outdated: [SorterFolder] { (model.status?.folders ?? []).filter(\.needsUpdate) }
 
@@ -54,7 +50,7 @@ struct SorterView: View {
                     Section {
                         Picker(selection: Binding(get: { model.status?.waitSeconds ?? 10 },
                                                   set: { secs in Task { await model.setWait(secs) } })) {
-                            ForEach(Self.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
+                            ForEach(SorterModel.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
                         } label: {
                             Label("Sort new files after", systemImage: "timer")
                         }

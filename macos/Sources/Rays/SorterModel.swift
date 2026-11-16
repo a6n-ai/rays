@@ -97,6 +97,11 @@ final class SorterModel {
         if result.status == 0 { sortResults[folder.path] = Sorter.lastLine(result.stdout) }
     }
 
+    static let waitChoices: [(seconds: Int, title: String)] = [
+        (10, "10 seconds (Recommended)"), (30, "30 seconds"), (60, "1 minute"),
+        (300, "5 minutes"), (900, "15 minutes"), (3600, "1 hour"),
+    ]
+
     func setWait(_ seconds: Int) async {
         _ = await perform(["config", "set-wait", String(seconds)])
     }
