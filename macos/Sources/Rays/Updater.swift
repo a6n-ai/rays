@@ -100,14 +100,15 @@ struct UpdatePill: View {
     var body: some View {
         if updater.showsPill, let release = updater.available {
             HStack(spacing: 10) {
-                Image(systemName: "sparkles").foregroundStyle(.tint)
-                Text("Rays \(release.version) is available")
+                Image(systemName: "arrow.down.circle.fill").foregroundStyle(.green)
+                Text("A new version of Rays is available")
                     .font(.callout.weight(.medium))
                 Button("Download") {
                     if let dmg = release.dmg { model.add(dmg.absoluteString) } else { NSWorkspace.shared.open(release.page) }
                     updater.dismissPill()
                 }
                 .buttonStyle(.glassProminent)
+                .tint(.green)
                 .controlSize(.small)
                 .help("Download the new version with Rays, then open it and drag Rays to Applications")
                 Button { updater.dismissPill() } label: {
@@ -121,7 +122,7 @@ struct UpdatePill: View {
             .padding(.leading, 14)
             .padding(.trailing, 8)
             .padding(.vertical, 6)
-            .glassEffect(.regular, in: .capsule)
+            .glassEffect(.regular.tint(.green.opacity(0.18)), in: .capsule)
             .padding(.top, 8)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
