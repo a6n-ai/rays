@@ -181,66 +181,75 @@ private struct CategoryRow: View {
 }
 
 
-/// The Sorter's Files tab: each sorter folder with its category folders. A row opens the folder as
-/// its own page (Files-app style).
-struct SorterFilesSections: View {
+/// The Sorter's Files tab as a Finder-style table: every category folder of every sorter folder.
+/// Double-click opens the folder as its own page.
+struct SorterFilesTable: View {
     let model: SorterModel
 
+    struct Row: Identifiable {
+        let url: URL
+        let name: String
+        let parent: String
+        let count: Int
+        let modified: Date
+        var id: URL { url }
+    }
+
+    @State private var rows: [Row] = []
+    @State private var order = [KeyPathComparator(\Row.parent, comparator: .localizedStandard)]
+    @State private var selection = Set<URL>()
+    @State private var pushed: URL?
+
     var body: some View {
+        Table(rows.sorted(using: order), selection: $selection, sortOrder: $order) {
+            TableColumn("Name", value: \.name, comparator: .localizedStandard) { row in
+                HStack(spacing: 6) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: row.url.path))
+                        .resizable().frame(width: 16, height: 16).accessibilityHidden(true)
+                    Text(row.name)
+                }
+            }
+            .width(min: 140, ideal: 200)
+            TableColumn("In", value: \.parent, comparator: .localizedStandard) { row in
+                Text(row.parent).foregroundStyle(.secondary)
+            }
+            .width(min: 90, ideal: 120)
+            TableColumn("Items", value: \.count) { row in
+                Text("\(row.count)").foregroundStyle(.secondary).monospacedDigit()
+            }
+            .width(min: 50, ideal: 60)
+            TableColumn("Date Modified", value: \.modified) { row in
+                Text(row.modified.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .width(min: 120, ideal: 160)
+        }
+        .contextMenu(forSelectionType: URL.self) { _ in } primaryAction: { ids in pushed = ids.first }
+        .scrollContentBackground(.hidden)
+        .overlay {
+            if rows.isEmpty {
+                ContentUnavailableView("Nothing sorted yet", systemImage: "folder",
+                                       description: Text("Sorted folders show up here once files are filed."))
+            }
+        }
+        .navigationDestination(item: $pushed) { SortedBrowserPage(folder: $0) }
+        .task(id: model.status) { await load() }
+    }
+
+    private func load() async {
         let folders = model.status?.folders ?? []
         let categories = model.status?.categories ?? []
-        if folders.isEmpty {
-            Section { Text("Add a folder in Setup to see sorted files here.").foregroundStyle(.secondary) }
-        }
-        ForEach(folders) { folder in
-            Section(folder.name) {
-                let dirs = categories.compactMap { category -> (String, URL)? in
-                    let url = URL(filePath: model.destination(for: folder, category: category.name)
-                                  ?? URL(filePath: folder.path).appending(path: category.name).path)
-                    return FileManager.default.fileExists(atPath: url.path) ? (category.name, url) : nil
-                }
-                if dirs.isEmpty {
-                    Text("Nothing sorted yet.").foregroundStyle(.secondary)
-                }
-                ForEach(Array(dirs.enumerated()), id: \.element.1) { index, item in
-                    NavigationLink(value: item.1) {
-                        CategoryFolderRow(url: item.1, title: item.0,
-                                          color: SorterFolderPage.colors[index % SorterFolderPage.colors.count])
-                    }
-                }
+        let targets: [(URL, String, String)] = folders.flatMap { folder in
+            categories.map { category in
+                (URL(filePath: model.destination(for: folder, category: category.name)
+                     ?? URL(filePath: folder.path).appending(path: category.name).path), category.name, folder.name)
             }
         }
-    }
-}
-
-private struct CategoryFolderRow: View {
-    let url: URL
-    let title: String
-    let color: Color
-    @State private var count: Int?
-
-    var body: some View {
-        HStack(spacing: 10) {
-            SettingIcon(symbol: "folder.fill", color: color)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                Text(url.tildePath)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+        rows = await Task.detached {
+            targets.compactMap { url, name, parent -> Row? in
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+                return Row(url: url, name: name, parent: parent, count: SortedItem.list(url).count, modified: modified)
             }
-            Spacer(minLength: 8)
-            if let count {
-                Text(count == 1 ? "1 item" : "\(count) items")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-        }
-        .task {
-            let folder = url
-            count = await Task.detached { SortedItem.list(folder).count }.value
-        }
+        }.value
     }
 }

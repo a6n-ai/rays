@@ -136,11 +136,14 @@ struct SorterView: View {
                         MoveRow(move: move)
                     }
                 }
-                } else {
-                    SorterFilesSections(model: model)
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .opacity(tab == .files ? 0 : 1)
+            .accessibilityHidden(tab == .files)
+            .allowsHitTesting(tab != .files)
+            .overlay { if tab == .files { SorterFilesTable(model: model) } }
             .confirmationDialog("Remove \(removing.map { URL(filePath: $0.path).lastPathComponent } ?? "this folder") from the sorter?",
                                 isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                                 titleVisibility: .visible) {

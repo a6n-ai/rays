@@ -34,10 +34,10 @@ struct SortedItem: Identifiable, Hashable, Sendable {
 }
 
 enum SortedLayout: String, CaseIterable, Identifiable {
-    case icons, list, table
+    case table, icons
     var id: Self { self }
-    var symbol: String { switch self { case .icons: "square.grid.2x2"; case .list: "list.bullet"; case .table: "tablecells" } }
-    var title: String { switch self { case .icons: "Icons"; case .list: "List"; case .table: "Mac list" } }
+    var symbol: String { switch self { case .icons: "square.grid.2x2"; case .table: "list.bullet" } }
+    var title: String { switch self { case .icons: "Icons"; case .table: "List" } }
 }
 
 enum SortedOrder: String, CaseIterable, Identifiable {
@@ -63,7 +63,7 @@ enum SortedOrder: String, CaseIterable, Identifiable {
 struct SortedBrowserPage: View {
     let folder: URL
 
-    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .icons
+    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .table
     @State private var columnOrder = [KeyPathComparator(\SortedItem.name, comparator: .localizedStandard)]
     @AppStorage("sortedBrowserOrder") private var order: SortedOrder = .name
     @State private var items: [SortedItem]?
@@ -131,11 +131,6 @@ struct SortedBrowserPage: View {
                     }
                     .padding(20)
                 }
-            } else {
-                List(shown) { item in
-                    itemLink(item) { ListRow(item: item) }
-                }
-                .scrollContentBackground(.hidden)
             }
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -176,31 +171,6 @@ private struct GridTile: View {
         .frame(maxWidth: .infinity)
         .padding(8)
         .contentShape(RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-private struct ListRow: View {
-    let item: SortedItem
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Thumbnail(url: item.url, side: 32)
-                .frame(width: 36, height: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).lineLimit(1).truncationMode(.middle)
-                Text(item.details.isEmpty ? item.kind : item.details)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            Spacer(minLength: 8)
-            if item.isFolder {
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-            }
-        }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 }
