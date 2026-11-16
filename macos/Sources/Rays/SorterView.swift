@@ -14,6 +14,7 @@ struct SorterView: View {
     @State private var model: SorterModel
 
     @State private var confirmRemoveAll = false
+    @State private var removing: SorterFolder?
     private var outdated: [SorterFolder] { (model.status?.folders ?? []).filter(\.needsUpdate) }
 
     @MainActor init(model: SorterModel? = nil) {
@@ -47,6 +48,13 @@ struct SorterView: View {
                     ForEach(model.status?.folders ?? []) { folder in
                         NavigationLink(value: folder.path) {
                             FolderRow(folder: folder)
+                        }
+                        .contextMenu {
+                            Button("Sort Now") { Task { await model.sortNow(folder) } }
+                                .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
+                            Button("Show in Finder") { NSWorkspace.shared.open(URL(filePath: folder.path)) }
+                            Divider()
+                            Button("Remove Folder…", role: .destructive) { removing = folder }
                         }
                     }
                     if model.status?.folders.isEmpty == true {
@@ -102,6 +110,17 @@ struct SorterView: View {
                 }
             }
             .formStyle(.grouped)
+            .confirmationDialog("Remove \(removing.map { URL(filePath: $0.path).lastPathComponent } ?? "this folder") from the sorter?",
+                                isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                                titleVisibility: .visible) {
+                Button("Remove Folder", role: .destructive) {
+                    if let folder = removing { Task { await model.remove(folder) } }
+                    removing = nil
+                }
+                Button("Cancel", role: .cancel) { removing = nil }
+            } message: {
+                Text("Files already sorted stay where they are.")
+            }
             .scrollContentBackground(.hidden)
             // Same title and toolbar skeleton as Downloads, so switching pages doesn't jump.
             .navigationTitle("Rays")
