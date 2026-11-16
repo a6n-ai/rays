@@ -47,14 +47,21 @@ struct SorterView: View {
                 Section {
                     ForEach(model.status?.folders ?? []) { folder in
                         NavigationLink(value: folder.path) {
-                            FolderRow(folder: folder)
-                        }
-                        .contextMenu {
-                            Button("Sort Now") { Task { await model.sortNow(folder) } }
+                            HStack {
+                                FolderRow(folder: folder)
+                                Spacer(minLength: 8)
+                                rowIcon("wand.and.stars", "Sort \(folderName(folder)) now",
+                                        tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary) {
+                                    Task { await model.sortNow(folder) }
+                                }
                                 .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
-                            Button("Show in Finder") { NSWorkspace.shared.open(URL(filePath: folder.path)) }
-                            Divider()
-                            Button("Remove Folder…", role: .destructive) { removing = folder }
+                                rowIcon("folder", "Show \(folderName(folder)) in Finder", tint: .blue) {
+                                    NSWorkspace.shared.open(URL(filePath: folder.path))
+                                }
+                                rowIcon("trash", "Remove \(folderName(folder)) from the sorter", tint: .red) {
+                                    removing = folder
+                                }
+                            }
                         }
                     }
                     if model.status?.folders.isEmpty == true {
@@ -179,6 +186,22 @@ struct SorterView: View {
         let watched = Set(folders.map { key(URL(filePath: $0.path)) })
         return [home.appending(path: "Desktop"), home.appending(path: "Documents"), EngineModel.downloadsURL]
             .filter { !watched.contains(key($0)) }
+    }
+
+    private func folderName(_ folder: SorterFolder) -> String { URL(filePath: folder.path).lastPathComponent }
+
+    /// Small borderless icon button inside a list row; borderless so the click doesn't open the row.
+    private func rowIcon(_ symbol: String, _ label: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 26, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(label)
+        .accessibilityLabel(label)
     }
 
     private func sortAll() async {
