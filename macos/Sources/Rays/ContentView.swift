@@ -38,7 +38,7 @@ struct ContentView: View {
             detail
         }
         .containerBackground(.thinMaterial, for: .window)
-        .frame(minWidth: 720, idealWidth: 980, minHeight: 480, idealHeight: 680)
+        .frame(minWidth: 720, idealWidth: 840, minHeight: 480, idealHeight: 580)
         .overlay {
             if isDropTargeted {
                 DropPanel()
