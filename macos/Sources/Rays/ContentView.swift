@@ -36,6 +36,8 @@ struct ContentView: View {
                 }
         } detail: {
             detail
+                .overlay(alignment: .top) { UpdatePill() }
+                .animation(reduceMotion ? nil : .smooth, value: Updater.shared.showsPill)
         }
         .containerBackground(.thinMaterial, for: .window)
         .frame(minWidth: 640, idealWidth: 760, minHeight: 440, idealHeight: 520)

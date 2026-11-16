@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keeps the stable extension copy in step with this build, so a loaded extension stays current.
         BrowserCheck.prepareExtensionFolder()
         sizeWindowOnce()
+        Updater.shared.checkIfDue()
     }
 
     /// Earlier builds opened at 640x480 and macOS keeps that size, so `defaultSize` never applies.

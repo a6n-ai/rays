@@ -82,9 +82,12 @@ final class EngineModel {
     }
 
     func add(_ text: String) {
-        var seen = Set<String>()
-        let urls = text.split(whereSeparator: \.isWhitespace).map(String.init).filter { seen.insert($0).inserted }
-        guard let engine, !urls.isEmpty else { return }
+        let urls = Links.inText(text)
+        guard let engine else { return }
+        guard !urls.isEmpty else {
+            notice = "No link found. Links start with http:// or https://."
+            return
+        }
         let rejected = engine.add(urls: urls).filter { $0.id == nil }
         notice = rejected.isEmpty
             ? nil
@@ -247,13 +250,23 @@ enum Links {
         return NSDictionary(contentsOf: url)?["URL"] as? String
     }
 
+    /// Every http(s) link in pasted text, in order, without repeats. Handles the usual ways links get
+    /// copied: one per line, separated by spaces, commas, semicolons or tabs (CSV and spreadsheet cells),
+    /// quoted, inside Markdown `[name](url)` or HTML `href="url"`, and links pasted back to back.
     static func inText(_ text: String) -> [String] {
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
-            return []
-        }
-        return detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
-            guard let url = match.url, ["http", "https"].contains(url.scheme ?? "") else { return nil }
-            return url.absoluteString
+        // A link runs until whitespace, a quote, or a bracket; a new "http" also starts a new link.
+        let pattern = #"https?://[^\s"'<>\[\]{}|\\^`]+?(?=https?://|[\s"'<>\[\]{}|\\^`]|$)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
+        var seen = Set<String>()
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range, in: text) else { return nil }
+            var link = String(text[range])
+            // CSV / prose punctuation stuck to the end is not part of the link.
+            while let last = link.last, ",;.:!?".contains(last) { link.removeLast() }
+            // A closing ")" belongs to the link only if it has a matching "(" (Wikipedia-style URLs).
+            while link.hasSuffix(")"), link.filter({ $0 == ")" }).count > link.filter({ $0 == "(" }).count { link.removeLast() }
+            guard let url = URL(string: link), let host = url.host(), !host.isEmpty else { return nil }
+            return seen.insert(url.absoluteString).inserted ? url.absoluteString : nil
         }
     }
 }
