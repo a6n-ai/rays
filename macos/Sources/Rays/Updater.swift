@@ -108,6 +108,7 @@ struct UpdatePill: View {
                     updater.dismissPill()
                 }
                 .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
                 .tint(.green)
                 .controlSize(.small)
                 .help("Download the new version with Rays, then open it and drag Rays to Applications")
