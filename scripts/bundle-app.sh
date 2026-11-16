@@ -31,6 +31,8 @@ cp target/release/dl-universal bin/dl
 # The browser native host runs this copy, so it must live inside the signed bundle.
 cp target/release/dl-universal "$app/Contents/MacOS/dl"
 cp -R extension "$app/Contents/Resources/extension"
+# A signed Firefox/Zen package (from scripts/sign-firefox.sh) enables one-click "Add" in those browsers.
+if [ -f build/firefox/rays.xpi ]; then cp build/firefox/rays.xpi "$app/Contents/Resources/rays.xpi"; fi
 
 codesign --force -s - "$app/Contents/MacOS/dl"
 codesign --force -s - "$app"
