@@ -39,6 +39,7 @@ struct SidebarView: View {
     @Environment(EngineModel.self) private var model
     @Binding var selection: Destination?
     @State private var folders: [SidebarFolder] = []
+    @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = true
     @State private var denied = false
     @State private var activations = 0
     @Environment(\.openSettings) private var openSettings
@@ -52,22 +53,9 @@ struct SidebarView: View {
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
             } header: {
-                HStack {
-                    Text("Rays")
-                    Spacer()
-                    Button { openSettings() } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 13, weight: .medium))
-                            .frame(width: 24, height: 20)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Settings (⌘,)")
-                    .accessibilityLabel("Settings")
-                }
+                Text("Rays")
             }
-            Section("Folders") {
+            Section("Folders", isExpanded: $foldersExpanded) {
                 if denied {
                     VStack(alignment: .leading, spacing: 6) {
                         Label("Rays needs access to Downloads", systemImage: "lock")
@@ -83,9 +71,8 @@ struct SidebarView: View {
                     .padding(.vertical, 4)
                 }
                 ForEach(folders) { folder in
-                    Label(folder.name, systemImage: "folder")
-                        .badge(folder.count)
-                        .tag(Destination.folder(folder.url))
+                    // The downloads root's subfolders are already listed here, so it doesn't expand.
+                    FolderNode(url: folder.url, count: folder.count, expandable: folder.url != EngineModel.downloadsURL)
                 }
             }
         }
@@ -94,12 +81,68 @@ struct SidebarView: View {
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .task(id: "\(EngineModel.downloadsURL.path(percentEncoded: false))|\(model.jobs.filter(\.isDone).count)|\(model.folderRevision)|\(activations)") {
             let root = EngineModel.downloadsURL
-            denied = !FolderListing.canRead(root)
-            folders = denied ? [] : FolderListing.sidebarFolders(root: root)
+            // Counting every folder's items is disk work; keep it off the main thread.
+            let listed = await Task.detached(priority: .userInitiated) { () -> [SidebarFolder]? in
+                FolderListing.canRead(root) ? FolderListing.sidebarFolders(root: root) : nil
+            }.value
+            denied = listed == nil
+            folders = listed ?? []
         }
         // Coming back from System Settings after granting access should refresh without a relaunch.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             activations += 1
         }
+    }
+}
+
+
+/// A sidebar folder that can expand to show its own subfolders, read only when first opened.
+private struct FolderNode: View {
+    let url: URL
+    let count: Int
+    var expandable = true
+    @State private var expanded = false
+    @State private var children: [SidebarFolder]?
+    @State private var hasSubfolders = false
+
+    var body: some View {
+        Group {
+            if expandable && hasSubfolders {
+            DisclosureGroup(isExpanded: $expanded) {
+                ForEach(children ?? []) { child in
+                    FolderNode(url: child.url, count: child.count)
+                }
+            } label: {
+                label
+            }
+            .onChange(of: expanded) { _, open in
+                if open && children == nil { children = Self.subfolders(of: url) }
+            }
+            } else {
+                label
+            }
+        }
+        // Checked once per row, not on every redraw.
+        .task(id: url) { if expandable { hasSubfolders = Self.containsSubfolder(url) } }
+    }
+
+    private var label: some View {
+        Label(url.lastPathComponent, systemImage: "folder")
+            .badge(count)
+            .tag(Destination.folder(url))
+    }
+
+    // Cheap check (stops at the first subfolder) so the arrow only shows where there's something inside.
+    private static func containsSubfolder(_ url: URL) -> Bool {
+        guard let items = try? FileManager.default.contentsOfDirectory(
+            at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else { return false }
+        return items.contains { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
+    }
+
+    private static func subfolders(of url: URL) -> [SidebarFolder] {
+        FolderListing.visibleItems(in: url)
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
+            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+            .map { SidebarFolder(url: $0, count: FolderListing.visibleItems(in: $0).count) }
     }
 }

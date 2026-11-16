@@ -117,6 +117,7 @@ struct FolderView: View {
                 pathBar
             }
             .sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
         }
         .onExitCommand(perform: goBack)
         .onChange(of: current, initial: true) { _, folder in

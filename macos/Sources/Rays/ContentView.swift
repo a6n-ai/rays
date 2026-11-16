@@ -193,6 +193,7 @@ private struct DownloadsView: View {
             ToolbarActions()
         }
         .sharedBackgroundVisibility(.hidden)
+        ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
     }
 
     private var subtitle: String {
@@ -400,5 +401,20 @@ private struct DropPanel: View {
         .frame(width: 280, height: 160)
         .glassEffect(.regular, in: .rect(cornerRadius: 24))
         .allowsHitTesting(false)
+    }
+}
+
+
+/// Round glass gear, the last item of every page's toolbar, mirroring the sidebar toggle on the left.
+/// It lives in the content toolbar: in the sidebar's toolbar it fought the sidebar search field for
+/// space and rebuilt the toolbar in a loop (100% CPU).
+struct SettingsToolbarButton: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button { openSettings() } label: {
+            Label("Settings", systemImage: "gearshape")
+        }
+        .help("Settings (⌘,)")
     }
 }

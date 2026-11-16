@@ -2,9 +2,16 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+extension SorterFolder {
+    /// An agent copy other than the bundled sorter, left behind by an older install.
+    var needsUpdate: Bool {
+        guard let agent = agentBinary else { return false }
+        return URL(filePath: agent).resolvingSymlinksInPath() != URL(filePath: Sorter.defaultPath).resolvingSymlinksInPath()
+    }
+}
+
 struct SorterView: View {
     @State private var model: SorterModel
-    @State private var removing: SorterFolder?
 
     @MainActor init(model: SorterModel? = nil) {
         _model = State(initialValue: model ?? SorterModel())
@@ -13,92 +20,76 @@ struct SorterView: View {
     private var watchedCount: Int { model.status?.folders.filter(\.watching).count ?? 0 }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                explainer
-                    .padding(.top, LayoutMetrics.gap)
-
+        NavigationStack {
+            Form {
                 if let error = model.error {
-                    ErrorLine(text: error)
+                    Section { ErrorLine(text: error) }
                 }
                 if model.loadFailed {
-                    ErrorLine(text: SorterModel.unavailableMessage)
+                    Section { ErrorLine(text: SorterModel.unavailableMessage) }
                 }
-                if let status = model.status {
-                    if status.folders.isEmpty {
-                        Text("No folders yet. Add one above to start sorting.")
-                            .foregroundStyle(.secondary)
-                    }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                        ForEach(status.folders) { folder in
-                            FolderCard(model: model, folder: folder, categories: status.categories) {
-                                removing = folder
-                            }
-                        }
-                        AddFolderTile(disabled: model.busy || model.loadFailed, action: chooseFolder)
-                    }
-                    recentSection(status.recent)
-                }
-            }
-            .padding(.horizontal, LayoutMetrics.margin)
-            .padding(.bottom, LayoutMetrics.margin)
-        }
-        .scrollEdgeEffectStyle(.soft, for: .all)
-        .navigationTitle("Sorter")
-        .navigationSubtitle(watchedCount == 1 ? "1 folder watched" : "\(watchedCount) folders watched")
-        .task {
-            while !Task.isCancelled {
-                await model.refresh()
-                try? await Task.sleep(for: .seconds(10))
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Task { await model.refresh() }
-        }
-        .confirmationDialog(
-            "Stop sorting \(removing?.name ?? "this folder")?",
-            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Remove Folder", role: .destructive) {
-                if let folder = removing { Task { await model.remove(folder) } }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Rays stops sorting this folder. Files already sorted stay where they are.")
-        }
-    }
 
-    private var explainer: some View {
-        VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
-            HStack(spacing: 10) {
-                SettingIcon(symbol: "sparkles", color: .pink)
-                Text("Sort with AI").font(.headline)
-            }
-            Text("Rays files new downloads and documents into folders like Work and Personal. It runs on your Mac; nothing is uploaded.")
-                .foregroundStyle(.secondary)
-            AIStatusRow()
-            HStack(spacing: 8) {
-                Button(action: chooseFolder) {
-                    Label("Add Folder…", systemImage: "plus")
+                Section("On-device AI") {
+                    AIStatusRow()
                 }
-                .buttonStyle(.glassProminent)
-                .disabled(model.busy || model.loadFailed)
-                ForEach(quickFolders, id: \.self) { url in
-                    Button { Task { await model.addFolder(url.path(percentEncoded: false)) } } label: {
-                        Label(url.lastPathComponent, systemImage: "plus")
+
+                Section {
+                    ForEach(model.status?.folders ?? []) { folder in
+                        NavigationLink(value: folder.path) {
+                            FolderRow(folder: folder)
+                        }
                     }
-                    .buttonStyle(.glass)
-                    .disabled(model.busy)
+                    if model.status?.folders.isEmpty == true {
+                        Text("No folders yet.").foregroundStyle(.secondary)
+                    }
+                    Button(action: chooseFolder) {
+                        Label("Add Folder…", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+                    .disabled(model.busy || model.loadFailed)
+                    ForEach(quickFolders, id: \.self) { url in
+                        Button { Task { await model.addFolder(url.path(percentEncoded: false)) } } label: {
+                            Label("Add \(url.lastPathComponent)", systemImage: "plus.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tint)
+                        .disabled(model.busy)
+                    }
+                } header: {
+                    Text("Folders")
+                } footer: {
+                    Text("Rays files new items into folders like Work and Personal. It runs on your Mac; nothing is uploaded.")
                 }
-                if model.busy {
-                    ProgressView().controlSize(.small)
+
+                Section("Recent activity") {
+                    let moves = model.status?.recent ?? []
+                    if moves.isEmpty {
+                        Text("Nothing sorted yet.").foregroundStyle(.secondary)
+                    }
+                    ForEach(Array(moves.prefix(10).enumerated()), id: \.offset) { _, move in
+                        MoveRow(move: move)
+                    }
                 }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .navigationTitle("Sorter")
+        .toolbar { ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() } }
+            .navigationSubtitle(watchedCount == 1 ? "1 folder watched" : "\(watchedCount) folders watched")
+            .navigationDestination(for: String.self) { path in
+                SorterFolderPage(model: model, path: path)
+            }
+            .task {
+                while !Task.isCancelled {
+                    await model.refresh()
+                    try? await Task.sleep(for: .seconds(10))
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                Task { await model.refresh() }
             }
         }
-        .padding(LayoutMetrics.margin)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
     /// Desktop, Documents and Downloads, minus any already in the list.
@@ -124,26 +115,29 @@ struct SorterView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await model.addFolder(url.path(percentEncoded: false)) }
     }
+}
 
-    private func recentSection(_ moves: [SorterMove]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Recent activity").font(.headline)
-            VStack(alignment: .leading, spacing: 0) {
-                if moves.isEmpty {
-                    Text("Nothing sorted yet.")
+private struct FolderRow: View {
+    let folder: SorterFolder
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: folder.path))
+                .resizable()
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(folder.name)
+                if folder.needsUpdate {
+                    Label("Old copy — needs update", systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text(folder.watching ? "Sorting new files" : "Paused")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                        .padding(16)
-                }
-                ForEach(Array(moves.prefix(20).enumerated()), id: \.offset) { _, move in
-                    MoveRow(move: move)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
                 }
             }
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.background.secondary, in: sorterCardShape)
-            .overlay(sorterCardShape.strokeBorder(.separator, lineWidth: 1))
         }
     }
 }
@@ -152,7 +146,7 @@ private struct MoveRow: View {
     let move: SorterMove
 
     var body: some View {
-        HStack(spacing: LayoutMetrics.gap) {
+        HStack(spacing: 12) {
             Image(nsImage: NSWorkspace.shared.icon(for: UTType(filenameExtension: URL(filePath: move.file).pathExtension) ?? .data))
                 .resizable()
                 .frame(width: 20, height: 20)
@@ -167,7 +161,7 @@ private struct MoveRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Spacer(minLength: LayoutMetrics.gap)
+            Spacer(minLength: 8)
             Text(Date(timeIntervalSince1970: move.time), style: .relative)
                 .font(.callout)
                 .foregroundStyle(.secondary)
