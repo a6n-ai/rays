@@ -7,6 +7,8 @@ struct SorterFolderPage: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingRemoval = false
+    @AppStorage("sorterShowDestinations") private var showDestinations = false
+    @AppStorage("sorterShowSorted") private var showSorted = true
 
     private static let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo]
 
@@ -52,18 +54,19 @@ struct SorterFolderPage: View {
                 }
             }
 
-            Section {
+            Section(isExpanded: $showDestinations) {
                 ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
                     CategoryRow(model: model, folder: folder, category: category,
                                 color: Self.colors[index % Self.colors.count])
                 }
+                Text("Files stay inside \(folder.name) unless you choose another folder.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             } header: {
                 Text("Where files go")
-            } footer: {
-                Text("Files stay inside \(folder.name) unless you choose another folder.")
             }
 
-            Section {
+            Section(isExpanded: $showSorted) {
                 let dirs = categories.map { category in
                     (category.name, URL(filePath: model.destination(for: folder, category: category.name)
                                          ?? URL(filePath: folder.path).appending(path: category.name).path))
