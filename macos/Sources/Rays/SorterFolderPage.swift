@@ -145,28 +145,44 @@ private struct CategoryRow: View {
 
     var body: some View {
         let custom = model.destination(for: folder, category: category.name)
-        HStack(spacing: 10) {
-            SettingIcon(symbol: "folder.fill", color: color)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(category.name)
-                Text(category.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Text(custom.map { URL(filePath: $0).tildePath } ?? "Inside \(folder.name)")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(custom ?? folder.path)
-            Button("Change…", action: chooseDestination)
-                .disabled(model.busy)
+        let target = URL(filePath: custom ?? URL(filePath: folder.path).appending(path: category.name).path)
+        Menu {
+            Button("Choose Folder…", systemImage: "folder.badge.plus", action: chooseDestination)
             if custom != nil {
-                Button("Reset") { Task { await model.resetDestination(folder, category: category.name) } }
-                    .disabled(model.busy)
+                Button("Use Inside \(folder.name)", systemImage: "arrow.uturn.backward") {
+                    Task { await model.resetDestination(folder, category: category.name) }
+                }
             }
+            Divider()
+            Button("Show in Finder", systemImage: "magnifyingglass") {
+                NSWorkspace.shared.activateFileViewerSelecting([target])
+            }
+            .disabled(!FileManager.default.fileExists(atPath: target.path))
+        } label: {
+            HStack(spacing: 10) {
+                SettingIcon(symbol: "folder.fill", color: color)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.name)
+                        .foregroundStyle(.primary)
+                    Text(custom.map { URL(filePath: $0).tildePath } ?? "Inside \(folder.name)")
+                        .font(.callout)
+                        .foregroundStyle(custom == nil ? .secondary : Color.accentColor)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .disabled(model.busy)
+        .help(category.description)
+        .accessibilityLabel("\(category.name), \(custom.map { URL(filePath: $0).tildePath } ?? "inside \(folder.name)")")
     }
 
     private func chooseDestination() {
