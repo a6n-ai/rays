@@ -152,9 +152,7 @@ private struct DownloadsView: View {
                 Button("Try Again") { model.restart() }
             }
         } else if model.jobs.isEmpty {
-            EmptyState(
-                symbol: "arrow.down.circle", title: "No downloads",
-                message: "Paste a link below, or drop links or .webloc files on this window.")
+            WelcomeEmpty()
         } else if visible.isEmpty {
             EmptyState(symbol: "tray", title: filter == .active ? "Nothing active" : "Nothing finished")
         } else {
@@ -420,5 +418,83 @@ struct SettingsToolbarButton: View {
             Label("Settings", systemImage: "gearshape")
         }
         .help("Settings (⌘,)")
+    }
+}
+
+extension Notification.Name {
+    static let focusAddBar = Notification.Name("ai.a6n.rays.focusAddBar")
+}
+
+/// First-run / empty Downloads: the three ways to start a download, as glass tiles of equal size.
+/// Glass sits only on things you can press; the background stays the window's material.
+private struct WelcomeEmpty: View {
+    @Environment(\.openSettings) private var openSettings
+    @AppStorage("settingsTab") private var settingsTab = "general"
+    @Namespace private var glass
+
+    var body: some View {
+        VStack(spacing: 28) {
+            VStack(spacing: LayoutMetrics.gap) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 96, height: 96)
+                    .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+                    .accessibilityHidden(true)
+                Text("Ready when you are")
+                    .font(.title2.weight(.semibold))
+                Text("Add a link and Rays downloads it in parts, resumes if it stops, and files it when it's done.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 380)
+            }
+
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 12) {
+                    tile("link", .blue, "Paste a link", "⌘L") {
+                        NotificationCenter.default.post(name: .focusAddBar, object: nil)
+                    }
+                    tile("tray.and.arrow.down", .green, "Drop files", "Links or .webloc", action: nil)
+                    tile("puzzlepiece.extension", .purple, "From your browser", "Right-click a link") {
+                        settingsTab = "browsers"
+                        openSettings()
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, LayoutMetrics.margin)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, LayoutMetrics.margin)
+    }
+
+    @ViewBuilder
+    private func tile(_ symbol: String, _ color: Color, _ title: String, _ hint: String,
+                      action: (() -> Void)?) -> some View {
+        let label = VStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(color)
+                .frame(height: 26)
+            Text(title)
+                .font(.callout.weight(.semibold))
+            Text(hint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 140, height: 104)
+        .contentShape(RoundedRectangle(cornerRadius: 20))
+
+        if let action {
+            Button(action: action) { label }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                .glassEffectID(title, in: glass)
+                .accessibilityLabel("\(title), \(hint)")
+        } else {
+            // Not a button: dropping works anywhere on the window, this only says so.
+            label
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                .glassEffectID(title, in: glass)
+                .accessibilityElement(children: .combine)
+        }
     }
 }

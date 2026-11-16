@@ -60,6 +60,7 @@ struct AddBar: View {
             TextField(isTargeted ? "Drop to download" : "Paste a link", text: $input, axis: .horizontal)
                 .textFieldStyle(.plain)
                 .focused($fieldFocused)
+                .onReceive(NotificationCenter.default.publisher(for: .focusAddBar)) { _ in fieldFocused = true }
                 .onSubmit(submit)
         }
         .padding(.horizontal, 12)
