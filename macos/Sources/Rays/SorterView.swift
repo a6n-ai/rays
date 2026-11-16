@@ -14,6 +14,7 @@ struct SorterView: View {
     @State private var model: SorterModel
 
     @State private var confirmRemoveAll = false
+    @AppStorage("sorterShowFolders") private var showFolders = true
     private static let waitChoices: [(seconds: Int, title: String)] = [
         (10, "10 seconds (Recommended)"), (30, "30 seconds"), (60, "1 minute"),
         (300, "5 minutes"), (900, "15 minutes"), (3600, "1 hour"),
@@ -61,7 +62,7 @@ struct SorterView: View {
                         }
                     }
                 }
-                Section {
+                Section(isExpanded: $showFolders) {
                     ForEach(model.status?.folders ?? []) { folder in
                         NavigationLink(value: folder.path) {
                             HStack {
@@ -100,8 +101,6 @@ struct SorterView: View {
                     }
                 } header: {
                     Text("Folders")
-                } footer: {
-                    Text("Rays files new items into folders like Work and Personal. It runs on your Mac; nothing is uploaded.")
                 }
 
                 Section("Recent activity") {
