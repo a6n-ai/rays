@@ -14,8 +14,11 @@ struct AddBar: View {
         input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// The Download button grows from an icon to a labelled button once there is something to submit.
     private var isExpanded: Bool { fieldFocused || !isBlank }
+
+    /// Web links found in what was typed or pasted; text around them is ignored, as on submit.
+    private var links: [String] { isBlank ? [] : Links.inText(input) }
+    private var linkCount: String { links.count == 1 ? "1 link" : "\(links.count) links" }
 
     var body: some View {
         GlassEffectContainer(spacing: LayoutMetrics.gap) {
@@ -62,6 +65,20 @@ struct AddBar: View {
                 .focused($fieldFocused)
                 .onReceive(NotificationCenter.default.publisher(for: .focusAddBar)) { _ in fieldFocused = true }
                 .onSubmit(submit)
+            if !isBlank {
+                Group {
+                    if links.isEmpty {
+                        Label("No link found", systemImage: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                    } else {
+                        Label(linkCount, systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    }
+                }
+                .font(.callout)
+                .labelStyle(.titleAndIcon)
+                .fixedSize()
+                .transition(.opacity)
+                .accessibilityLabel(links.isEmpty ? "No link found" : "\(linkCount) ready")
+            }
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: LayoutMetrics.barHeight, maxHeight: LayoutMetrics.barHeight)
@@ -70,37 +87,23 @@ struct AddBar: View {
 
     /// Plain style with an explicit glass shape: the glass button styles pad the label, so the frame could not pin the height.
     @ViewBuilder private var downloadButton: some View {
-        let dimmed = !isEnabled || isBlank
+        let ready = !links.isEmpty
+        let dimmed = !isEnabled || !ready
         // Always the round icon; a pasted link fills it with the accent colour instead of growing a label.
         Button(action: submit) {
             Label("Download", systemImage: "arrow.down")
                 .labelStyle(.iconOnly)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isBlank ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(nsColor: .alternateSelectedControlTextColor)))
+                .foregroundStyle(ready ? AnyShapeStyle(Color(nsColor: .alternateSelectedControlTextColor)) : AnyShapeStyle(.tint))
                 .frame(width: LayoutMetrics.barHeight, height: LayoutMetrics.barHeight)
-                .glassEffect(isBlank ? .regular.interactive() : .regular.tint(.accentColor).interactive(), in: .circle)
+                .glassEffect(ready ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
                 .glassEffectID("download", in: glass)
                 .contentShape(Circle())
                 .opacity(dimmed ? 0.4 : 1)
         }
         .buttonStyle(.plain)
-        .disabled(isBlank)
-        .help("Download the pasted links") else {
-            Button(action: submit) {
-                Label("Download", systemImage: "arrow.down")
-                    .labelStyle(.iconOnly)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: LayoutMetrics.barHeight, height: LayoutMetrics.barHeight)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                    .glassEffectID("download", in: glass)
-                    .contentShape(Circle())
-                    .opacity(dimmed ? 0.4 : 1)
-            }
-            .buttonStyle(.plain)
-            .disabled(isBlank)
-            .help("Download the pasted links")
-        }
+        .disabled(!ready)
+        .help(links.isEmpty ? "Paste a link that starts with http:// or https://" : "Download \(linkCount)")
     }
 
     private func noticeCapsule(_ text: String) -> some View {
