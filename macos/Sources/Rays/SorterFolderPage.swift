@@ -17,7 +17,7 @@ struct SorterFolderPage: View {
     }
 
     private func page(_ folder: SorterFolder) -> some View {
-        let readiness = AIReadiness.current()
+        let readiness = AIReadinessStore.shared.value
         let categories = model.status?.categories ?? []
         return Form {
             if let error = model.error {

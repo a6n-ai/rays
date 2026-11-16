@@ -1,12 +1,12 @@
 import Foundation
 
-struct SorterStatus: Decodable, Sendable {
+struct SorterStatus: Decodable, Equatable, Sendable {
     let folders: [SorterFolder]
     let categories: [SorterCategory]
     let recent: [SorterMove]
 }
 
-struct SorterFolder: Decodable, Identifiable, Sendable {
+struct SorterFolder: Decodable, Identifiable, Equatable, Sendable {
     let path: String
     let watching: Bool
     let label: String
@@ -16,13 +16,13 @@ struct SorterFolder: Decodable, Identifiable, Sendable {
     var name: String { URL(filePath: path).lastPathComponent }
 }
 
-struct SorterCategory: Decodable, Identifiable, Sendable {
+struct SorterCategory: Decodable, Identifiable, Equatable, Sendable {
     let name: String
     let description: String
     var id: String { name }
 }
 
-struct SorterMove: Decodable, Sendable {
+struct SorterMove: Decodable, Equatable, Sendable {
     let time: Double
     let file: String
     let from: String
@@ -66,14 +66,16 @@ final class SorterModel {
         for attempt in 0..<2 {
             let result = await Sorter.run(Sorter.defaultPath, ["status", "--json"])
             if result.status == 0, let decoded = try? Self.decode(Data(result.stdout.utf8)) {
-                status = decoded
+                // Assigning an equal value still invalidates every view reading it; skip no-op refreshes.
+                if decoded != status { status = decoded }
                 loadFailed = false
                 break
             }
             if attempt == 0 { try? await Task.sleep(for: .seconds(1)) }
             if attempt == 1 { loadFailed = status == nil }
         }
-        destinations = Self.loadDestinations()
+        let loaded = Self.loadDestinations()
+        if loaded != destinations { destinations = loaded }
     }
 
     func destination(for folder: SorterFolder, category: String) -> String? {

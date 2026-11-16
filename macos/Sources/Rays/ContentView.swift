@@ -63,15 +63,19 @@ struct ContentView: View {
                 query = ""
             }
         } else {
-            switch destination {
-            case .folder(let folder)?:
-                FolderView(root: EngineModel.downloadsURL, folder: folder) { destination = .downloads }
-                    .id(folder)
-            case .sorter?:
-                SorterView()
-            default:
-                DownloadsView(isDropTargeted: isDropTargeted)
+            Group {
+                switch destination {
+                case .folder(let folder)?:
+                    FolderView(root: EngineModel.downloadsURL, folder: folder) { destination = .downloads }
+                case .sorter?:
+                    SorterView()
+                default:
+                    DownloadsView(isDropTargeted: isDropTargeted)
+                }
             }
+            .id(destination)
+            .transition(.opacity)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: destination)
         }
     }
 
@@ -316,7 +320,7 @@ struct ToolbarActions: View {
 }
 
 /// One glass capsule holding equal-width icon buttons; both toolbar groups use it so they match.
-private struct ToolbarIconGroup<Content: View>: View {
+struct ToolbarIconGroup<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -327,7 +331,7 @@ private struct ToolbarIconGroup<Content: View>: View {
 }
 
 /// Every toolbar glyph: same point size, weight, frame and hover effect, so the two groups line up.
-private struct ToolbarIcon: View {
+struct ToolbarIcon: View {
     let symbol: String
     let title: String
     var tint: Color = .primary

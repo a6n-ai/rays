@@ -13,6 +13,8 @@ extension SorterFolder {
 struct SorterView: View {
     @State private var model: SorterModel
 
+    private var outdated: [SorterFolder] { (model.status?.folders ?? []).filter(\.needsUpdate) }
+
     @MainActor init(model: SorterModel? = nil) {
         _model = State(initialValue: model ?? SorterModel())
     }
@@ -33,6 +35,13 @@ struct SorterView: View {
                     AIStatusRow()
                 }
 
+                if !outdated.isEmpty {
+                    Section {
+                        UpdateAllRow(count: outdated.count, busy: model.busy) {
+                            Task { for folder in outdated { await model.update(folder) } }
+                        }
+                    }
+                }
                 Section {
                     ForEach(model.status?.folders ?? []) { folder in
                         NavigationLink(value: folder.path) {
@@ -74,16 +83,43 @@ struct SorterView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            .navigationTitle("Sorter")
-        .toolbar { ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() } }
-            .navigationSubtitle(watchedCount == 1 ? "1 folder watched" : "\(watchedCount) folders watched")
+            // Same title and toolbar skeleton as Downloads, so switching pages doesn't jump.
+            .navigationTitle("Rays")
+            .navigationSubtitle(watchedCount == 1 ? "Sorter: 1 folder watched" : "Sorter: \(watchedCount) folders watched")
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    ToolbarIconGroup {
+                        Button(action: chooseFolder) {
+                            ToolbarIcon(symbol: "folder.badge.plus", title: "Add folder")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Add a folder to sort")
+                        Button { Task { await sortAll() } } label: {
+                            ToolbarIcon(symbol: "wand.and.stars", title: "Sort all now",
+                                        tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
+                        .help(AIReadinessStore.shared.value.isReady ? "Sort new files in every watched folder now" : AIReadinessStore.shared.value.title)
+                        Button { Task { await model.refresh() } } label: {
+                            ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Check folders and recent activity again")
+                    }
+                }
+                .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .primaryAction) { ToolbarActions() }
+                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
+            }
             .navigationDestination(for: String.self) { path in
                 SorterFolderPage(model: model, path: path)
             }
             .task {
                 while !Task.isCancelled {
                     await model.refresh()
-                    try? await Task.sleep(for: .seconds(10))
+                    try? await Task.sleep(for: .seconds(30))
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -104,6 +140,12 @@ struct SorterView: View {
         let watched = Set(folders.map { key(URL(filePath: $0.path)) })
         return [home.appending(path: "Desktop"), home.appending(path: "Documents"), EngineModel.downloadsURL]
             .filter { !watched.contains(key($0)) }
+    }
+
+    private func sortAll() async {
+        for folder in model.status?.folders ?? [] where folder.watching {
+            await model.sortNow(folder)
+        }
     }
 
     private func chooseFolder() {
@@ -208,3 +250,30 @@ private let sorterFixture = """
         .frame(width: 640, height: 480)
 }
 #endif
+
+
+/// Explains what "old copy" means and switches every outdated folder to the bundled sorter at once.
+private struct UpdateAllRow: View {
+    let count: Int
+    let busy: Bool
+    let updateAll: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            SettingIcon(symbol: "exclamationmark.triangle.fill", color: .orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(count == 1 ? "1 folder needs an update" : "\(count) folders need an update")
+                    .font(.callout.weight(.semibold))
+                Text("Switch to the sorter built into Rays. Nothing is moved.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            Button("Update All", action: updateAll)
+                .buttonStyle(.glassProminent)
+                .disabled(busy)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}

@@ -39,7 +39,7 @@ struct SidebarView: View {
     @Environment(EngineModel.self) private var model
     @Binding var selection: Destination?
     @State private var folders: [SidebarFolder] = []
-    @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = true
+    @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = false
     @State private var denied = false
     @State private var activations = 0
     @Environment(\.openSettings) private var openSettings

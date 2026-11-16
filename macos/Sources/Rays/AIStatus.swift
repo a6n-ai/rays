@@ -65,9 +65,30 @@ enum AIReadiness: Equatable {
     }
 }
 
-/// Re-checks when the app comes back to the front (e.g. after turning Apple Intelligence on).
+/// Holds the last readiness check. Views read `value`; the check itself (which touches the observable
+/// SystemLanguageModel) runs outside view bodies, so drawing never subscribes to the model's changes.
+@MainActor
+@Observable
+final class AIReadinessStore {
+    static let shared = AIReadinessStore()
+    private(set) var value: AIReadiness = .ready
+
+    private init() {
+        refresh()
+        // Re-check when the app comes back to the front (e.g. after turning Apple Intelligence on).
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { _ in MainActor.assumeIsolated { AIReadinessStore.shared.refresh() } }
+    }
+
+    func refresh() {
+        let current = AIReadiness.current()
+        if current != value { value = current }
+    }
+}
+
 struct AIStatusRow: View {
-    @State private var readiness = AIReadiness.current()
+    private var readiness: AIReadiness { AIReadinessStore.shared.value }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -88,8 +109,5 @@ struct AIStatusRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            readiness = AIReadiness.current()
-        }
     }
 }
