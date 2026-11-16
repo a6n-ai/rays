@@ -4,6 +4,7 @@ struct SorterStatus: Decodable, Equatable, Sendable {
     let folders: [SorterFolder]
     let categories: [SorterCategory]
     let recent: [SorterMove]
+    let waitSeconds: Int?
 }
 
 struct SorterFolder: Decodable, Identifiable, Equatable, Sendable {
@@ -94,6 +95,10 @@ final class SorterModel {
     func sortNow(_ folder: SorterFolder) async {
         let result = await perform([folder.path])
         if result.status == 0 { sortResults[folder.path] = Sorter.lastLine(result.stdout) }
+    }
+
+    func setWait(_ seconds: Int) async {
+        _ = await perform(["config", "set-wait", String(seconds)])
     }
 
     func addFolder(_ path: String) async {

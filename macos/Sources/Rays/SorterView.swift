@@ -14,6 +14,10 @@ struct SorterView: View {
     @State private var model: SorterModel
 
     @State private var confirmRemoveAll = false
+    private static let waitChoices: [(seconds: Int, title: String)] = [
+        (10, "10 seconds (Recommended)"), (30, "30 seconds"), (60, "1 minute"),
+        (300, "5 minutes"), (900, "15 minutes"), (3600, "1 hour"),
+    ]
     @State private var removing: SorterFolder?
     private var outdated: [SorterFolder] { (model.status?.folders ?? []).filter(\.needsUpdate) }
 
@@ -35,6 +39,19 @@ struct SorterView: View {
 
                 Section("On-device AI") {
                     AIStatusRow()
+                }
+
+                Section {
+                    Picker(selection: Binding(get: { model.status?.waitSeconds ?? 10 },
+                                              set: { secs in Task { await model.setWait(secs) } })) {
+                        ForEach(Self.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
+                    } label: {
+                        Label("Sort new files after", systemImage: "timer")
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(model.busy || model.loadFailed)
+                } footer: {
+                    Text("Rays waits this long after a file arrives, so you can open or move it first.")
                 }
 
                 if !outdated.isEmpty {
@@ -269,11 +286,22 @@ private struct MoveRow: View {
             Text(Date(timeIntervalSince1970: move.time), style: .relative)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            Button(action: reveal) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.blue)
+                    .frame(width: 26, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help("Show in Finder")
+            .accessibilityLabel("Show \(move.file) in Finder")
         }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2, perform: reveal)
-        .help("Double-click to show in Finder")
+        .onTapGesture(perform: open)
+        .help("Click to open")
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: "Open", open)
         .accessibilityAction(named: "Show in Finder", reveal)
     }
 
@@ -284,9 +312,11 @@ private struct MoveRow: View {
         return move.to.dropFirst(base.count).split(separator: "/").joined(separator: " › ")
     }
 
-    private func reveal() {
-        NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: move.to).appending(path: move.file)])
-    }
+    private var url: URL { URL(filePath: move.to).appending(path: move.file) }
+
+    private func open() { NSWorkspace.shared.open(url) }
+
+    private func reveal() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
 }
 
 #if DEBUG

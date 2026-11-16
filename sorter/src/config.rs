@@ -9,6 +9,15 @@ pub enum Edit {
     Remove(String),
     SetDest { folder: String, category: String, dest: String },
     ClearDest { folder: String, category: String },
+    SetWait(u64),
+}
+
+/// How long a watch run waits before sorting, so a new file has time to finish arriving.
+pub const DEFAULT_WAIT_SECS: u64 = 10;
+pub const MAX_WAIT_SECS: u64 = 3600;
+
+pub fn wait_secs(doc: &Value) -> u64 {
+    doc["wait_seconds"].as_u64().unwrap_or(DEFAULT_WAIT_SECS).min(MAX_WAIT_SECS)
 }
 
 /// A missing file means no overrides. An unreadable or invalid file is an error, so an edit never overwrites it.
@@ -41,6 +50,10 @@ fn find(folders: &[Value], path: &str) -> Option<usize> {
 }
 
 pub fn apply(doc: &mut Value, edit: &Edit) -> Result<(), String> {
+    if let Edit::SetWait(secs) = edit {
+        doc["wait_seconds"] = json!((*secs).min(MAX_WAIT_SECS));
+        return Ok(());
+    }
     let folders = doc["folders"].as_array_mut().ok_or("no folders array")?;
     match edit {
         Edit::Add(p) => {
@@ -63,6 +76,7 @@ pub fn apply(doc: &mut Value, edit: &Edit) -> Result<(), String> {
             }
             dests[category.as_str()] = json!(dest);
         }
+        Edit::SetWait(_) => unreachable!("handled above"),
         Edit::ClearDest { folder, category } => {
             if let Some(i) = find(folders, folder)
                 && let Some(dests) = folders[i]["destinations"].as_object_mut()
@@ -157,5 +171,16 @@ mod tests {
         assert!(!l.is_external("Duplicates"));
         let other = Layout::new(Path::new("/elsewhere"), &doc);
         assert_eq!(other.cat_dir("Work"), PathBuf::from("/elsewhere/Work"));
+    }
+
+    #[test]
+    fn wait_defaults_round_trips_and_caps() {
+        let mut doc = json!({"folders": []});
+        assert_eq!(wait_secs(&doc), DEFAULT_WAIT_SECS);
+        apply(&mut doc, &Edit::SetWait(300)).unwrap();
+        assert_eq!(wait_secs(&doc), 300);
+        apply(&mut doc, &Edit::SetWait(99_999)).unwrap();
+        assert_eq!(wait_secs(&doc), MAX_WAIT_SECS);
+        assert!(doc["folders"].is_array());
     }
 }

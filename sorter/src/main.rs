@@ -9,7 +9,7 @@ const USAGE: &str = "usage:
   sorter unwatch FOLDER   stop watching FOLDER
   sorter status --json    folders, categories and recent moves as JSON (used by Rays)
   sorter config add|remove FOLDER
-  sorter config set-dest FOLDER CATEGORY PATH | clear-dest FOLDER CATEGORY";
+  sorter config set-dest FOLDER CATEGORY PATH | clear-dest FOLDER CATEGORY | set-wait SECONDS";
 mod config;
 mod status;
 use serde_json::{Value, json};
@@ -552,6 +552,10 @@ fn main() {
                 ["remove", f] => config::Edit::Remove(abs(f)),
                 ["set-dest", f, c, d] => config::Edit::SetDest { folder: abs(f), category: c.to_string(), dest: abs(d) },
                 ["clear-dest", f, c] => config::Edit::ClearDest { folder: abs(f), category: c.to_string() },
+                ["set-wait", secs] => match secs.parse() {
+                    Ok(n) => config::Edit::SetWait(n),
+                    Err(_) => { eprintln!("set-wait needs a number of seconds"); std::process::exit(2) }
+                },
                 _ => { eprintln!("{USAGE}"); std::process::exit(2) }
             };
             return match config::edit_file(&config_path, &edit) { Ok(()) => {}, Err(e) => { eprintln!("{e}"); std::process::exit(1) } };
@@ -584,7 +588,8 @@ fn main() {
     }
     let since = if all { 0.0 } else { fs::read_to_string(&state).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0.0) };
     if !all {
-        std::thread::sleep(SETTLE); // let the browser finish renaming the download
+        // let the browser finish renaming the download; the user can make this longer in Rays
+        std::thread::sleep(Duration::from_secs(config::wait_secs(&config_doc)).max(SETTLE));
     }
     let mut index = Index::load(&root, state_dir.join(".hash-index.json"));
     let cache_file = state_dir.join(".class-cache.json");

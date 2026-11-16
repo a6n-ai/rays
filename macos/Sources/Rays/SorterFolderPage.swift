@@ -64,6 +64,21 @@ struct SorterFolderPage: View {
             }
 
             Section {
+                let dirs = categories.map { category in
+                    (category.name, URL(filePath: model.destination(for: folder, category: category.name)
+                                         ?? URL(filePath: folder.path).appending(path: category.name).path))
+                }.filter { FileManager.default.fileExists(atPath: $0.1.path) }
+                if dirs.isEmpty {
+                    Text("Nothing sorted yet.").foregroundStyle(.secondary)
+                }
+                ForEach(dirs, id: \.1) { name, url in
+                    SortedFolderRow(url: url, title: name)
+                }
+            } header: {
+                Text("Sorted files")
+            }
+
+            Section {
                 Button(role: .destructive) {
                     confirmingRemoval = true
                 } label: {
@@ -159,5 +174,84 @@ private struct CategoryRow: View {
         panel.prompt = "Use Folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await model.setDestination(folder, category: category.name, path: url.path(percentEncoded: false)) }
+    }
+}
+
+
+/// A sorted folder that opens and closes in place. Its contents are read when it first opens,
+/// off the main thread; files open on click, subfolders nest.
+private struct SortedFolderRow: View {
+    let url: URL
+    var title: String? = nil
+
+    @State private var expanded = false
+    @State private var entries: [URL]?
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            if let entries {
+                if entries.isEmpty {
+                    Text("Empty").foregroundStyle(.secondary)
+                }
+                ForEach(entries, id: \.self) { entry in
+                    if entry.hasDirectoryPath {
+                        SortedFolderRow(url: entry)
+                    } else {
+                        SortedFileRow(url: entry)
+                    }
+                }
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        } label: {
+            Label(title ?? url.lastPathComponent, systemImage: "folder")
+        }
+        .task(id: expanded) {
+            guard expanded, entries == nil else { return }
+            let folder = url
+            entries = await Task.detached { Self.list(folder) }.value
+        }
+    }
+
+    nonisolated private static func list(_ folder: URL) -> [URL] {
+        let items = (try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
+        // Folders first, then files, each by name.
+        return items.sorted {
+            ($0.hasDirectoryPath ? 0 : 1, $0.lastPathComponent.localizedLowercase)
+                < ($1.hasDirectoryPath ? 0 : 1, $1.lastPathComponent.localizedLowercase)
+        }
+    }
+}
+
+private struct SortedFileRow: View {
+    let url: URL
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                .resizable()
+                .frame(width: 18, height: 18)
+                .accessibilityHidden(true)
+            Text(url.lastPathComponent)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 8)
+            Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.blue)
+                    .frame(width: 26, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help("Show in Finder")
+            .accessibilityLabel("Show \(url.lastPathComponent) in Finder")
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { NSWorkspace.shared.open(url) }
+        .help("Click to open")
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: "Open") { NSWorkspace.shared.open(url) }
     }
 }
