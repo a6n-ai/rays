@@ -10,10 +10,13 @@ extension SorterFolder {
     }
 }
 
+enum SorterTab: String { case setup, files, recent }
+
 struct SorterView: View {
     @State private var model: SorterModel
 
     @State private var confirmRemoveAll = false
+    @AppStorage("sorterTab") private var tab: SorterTab = .setup
     @AppStorage("sorterShowFolders") private var showFolders = true
     private static let waitChoices: [(seconds: Int, title: String)] = [
         (10, "10 seconds (Recommended)"), (30, "30 seconds"), (60, "1 minute"),
@@ -31,78 +34,99 @@ struct SorterView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let error = model.error {
-                    Section { ErrorLine(text: error) }
-                }
-                if model.loadFailed {
-                    Section { ErrorLine(text: SorterModel.unavailableMessage) }
-                }
-
-                Section("On-device AI") {
-                    AIStatusRow()
-                }
-
-                Section {
-                    Picker(selection: Binding(get: { model.status?.waitSeconds ?? 10 },
-                                              set: { secs in Task { await model.setWait(secs) } })) {
-                        ForEach(Self.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
-                    } label: {
-                        Label("Sort new files after", systemImage: "timer")
+                if tab == .setup {
+                    if let error = model.error {
+                        Section { ErrorLine(text: error) }
                     }
-                    .pickerStyle(.menu)
-                    .disabled(model.busy || model.loadFailed)
-                } footer: {
-                    Text("Rays waits this long after a file arrives, so you can open or move it first.")
-                }
+                    if model.loadFailed {
+                        Section { ErrorLine(text: SorterModel.unavailableMessage) }
+                    }
 
-                if !outdated.isEmpty {
+                    Section("On-device AI") {
+                        AIStatusRow()
+                    }
+
                     Section {
-                        UpdateAllRow(count: outdated.count, busy: model.busy) {
-                            Task { for folder in outdated { await model.update(folder) } }
+                        Picker(selection: Binding(get: { model.status?.waitSeconds ?? 10 },
+                                                  set: { secs in Task { await model.setWait(secs) } })) {
+                            ForEach(Self.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
+                        } label: {
+                            Label("Sort new files after", systemImage: "timer")
                         }
+                        .pickerStyle(.menu)
+                        .disabled(model.busy || model.loadFailed)
+                    } footer: {
+                        Text("Rays waits this long after a file arrives, so you can open or move it first.")
                     }
-                }
-                Section(isExpanded: $showFolders) {
-                    ForEach(model.status?.folders ?? []) { folder in
-                        NavigationLink(value: folder.path) {
-                            HStack {
-                                FolderRow(folder: folder)
-                                Spacer(minLength: 8)
-                                rowIcon("wand.and.stars", "Sort \(folderName(folder)) now",
-                                        tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary) {
-                                    Task { await model.sortNow(folder) }
-                                }
-                                .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
-                                rowIcon("folder", "Show \(folderName(folder)) in Finder", tint: .blue) {
-                                    NSWorkspace.shared.open(URL(filePath: folder.path))
-                                }
-                                rowIcon("trash", "Remove \(folderName(folder)) from the sorter", tint: .red) {
-                                    removing = folder
-                                }
+
+                    if !outdated.isEmpty {
+                        Section {
+                            UpdateAllRow(count: outdated.count, busy: model.busy) {
+                                Task { for folder in outdated { await model.update(folder) } }
                             }
                         }
                     }
-                    if model.status?.folders.isEmpty == true {
-                        Text("No folders yet.").foregroundStyle(.secondary)
-                    }
-                    Button(action: chooseFolder) {
-                        Label("Add Folder…", systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tint)
-                    .disabled(model.busy || model.loadFailed)
-                    ForEach(quickFolders, id: \.self) { url in
-                        Button { Task { await model.addFolder(url.path(percentEncoded: false)) } } label: {
-                            Label("Add \(url.lastPathComponent)", systemImage: "plus.circle.fill")
+                    Section(isExpanded: $showFolders) {
+                        ForEach(model.status?.folders ?? []) { folder in
+                            NavigationLink(value: folder.path) {
+                                HStack {
+                                    FolderRow(folder: folder)
+                                    Spacer(minLength: 8)
+                                    rowIcon("wand.and.stars", "Sort \(folderName(folder)) now",
+                                            tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary) {
+                                        Task { await model.sortNow(folder) }
+                                    }
+                                    .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
+                                    rowIcon("folder", "Show \(folderName(folder)) in Finder", tint: .blue) {
+                                        NSWorkspace.shared.open(URL(filePath: folder.path))
+                                    }
+                                    rowIcon("trash", "Remove \(folderName(folder)) from the sorter", tint: .red) {
+                                        removing = folder
+                                    }
+                                }
+                            }
+                        }
+                        if model.status?.folders.isEmpty == true {
+                            Text("No folders yet.").foregroundStyle(.secondary)
+                        }
+                        Button(action: chooseFolder) {
+                            Label("Add Folder…", systemImage: "plus.circle.fill")
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.tint)
-                        .disabled(model.busy)
+                        .disabled(model.busy || model.loadFailed)
+                        ForEach(quickFolders, id: \.self) { url in
+                            Button { Task { await model.addFolder(url.path(percentEncoded: false)) } } label: {
+                                Label("Add \(url.lastPathComponent)", systemImage: "plus.circle.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.tint)
+                            .disabled(model.busy)
+                        }
+                    } header: {
+                        Text("Folders")
                     }
-                } header: {
-                    Text("Folders")
-                }
 
+                    if !(model.status?.folders ?? []).isEmpty {
+                        Section {
+                            Button(role: .destructive) { confirmRemoveAll = true } label: {
+                                Text("Remove Sorter…").frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.red)
+                            .disabled(model.busy)
+                            .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
+                                                titleVisibility: .visible) {
+                                Button("Remove Sorter", role: .destructive) {
+                                    Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
+                                }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("Files already sorted stay where they are.")
+                            }
+                        }
+                    }
+                } else if tab == .recent {
                 Section("Recent activity") {
                     let moves = model.status?.recent ?? []
                     if moves.isEmpty {
@@ -112,24 +136,8 @@ struct SorterView: View {
                         MoveRow(move: move)
                     }
                 }
-                if !(model.status?.folders ?? []).isEmpty {
-                    Section {
-                        Button(role: .destructive) { confirmRemoveAll = true } label: {
-                            Text("Remove Sorter…").frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.red)
-                        .disabled(model.busy)
-                        .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
-                                            titleVisibility: .visible) {
-                            Button("Remove Sorter", role: .destructive) {
-                                Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
-                            }
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            Text("Files already sorted stay where they are.")
-                        }
-                    }
+                } else {
+                    SorterFilesSections(model: model)
                 }
             }
             .formStyle(.grouped)
@@ -151,6 +159,21 @@ struct SorterView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ToolbarIconGroup {
+                        ForEach([(SorterTab.setup, "slider.horizontal.3", "Setup"),
+                                 (SorterTab.files, "folder", "Sorted files"),
+                                 (SorterTab.recent, "clock.arrow.circlepath", "Recently sorted")], id: \.0) { item in
+                            Button { tab = item.0 } label: {
+                                ToolbarIcon(symbol: item.1, title: item.2, selected: tab == item.0)
+                            }
+                            .buttonStyle(.plain)
+                            .help(item.2)
+                            .accessibilityAddTraits(tab == item.0 ? .isSelected : [])
+                        }
+                    }
+                }
+                .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .primaryAction) {
+                    ToolbarIconGroup {
                         Button(action: chooseFolder) {
                             ToolbarIcon(symbol: "folder.badge.plus", title: "Add folder")
                         }
@@ -171,8 +194,6 @@ struct SorterView: View {
                     }
                 }
                 .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) { ToolbarActions() }
-                    .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
             }
             .navigationDestination(for: String.self) { path in

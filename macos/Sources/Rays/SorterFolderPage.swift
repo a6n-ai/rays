@@ -8,9 +8,8 @@ struct SorterFolderPage: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingRemoval = false
     @AppStorage("sorterShowDestinations") private var showDestinations = false
-    @AppStorage("sorterShowSorted") private var showSorted = true
 
-    private static let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo]
+    static let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo]
 
     var body: some View {
         if let folder = model.status?.folders.first(where: { $0.path == path }) {
@@ -64,21 +63,6 @@ struct SorterFolderPage: View {
                     .foregroundStyle(.secondary)
             } header: {
                 Text("Where files go")
-            }
-
-            Section(isExpanded: $showSorted) {
-                let dirs = categories.map { category in
-                    (category.name, URL(filePath: model.destination(for: folder, category: category.name)
-                                         ?? URL(filePath: folder.path).appending(path: category.name).path))
-                }.filter { FileManager.default.fileExists(atPath: $0.1.path) }
-                if dirs.isEmpty {
-                    Text("Nothing sorted yet.").foregroundStyle(.secondary)
-                }
-                ForEach(dirs, id: \.1) { name, url in
-                    SortedFolderRow(url: url, title: name)
-                }
-            } header: {
-                Text("Sorted files")
             }
 
             Section {
@@ -199,12 +183,14 @@ private struct CategoryRow: View {
 
 /// A sorted folder that opens and closes in place. Its contents are read when it first opens,
 /// off the main thread; files open on click, subfolders nest.
-private struct SortedFolderRow: View {
+struct SortedFolderRow: View {
     let url: URL
     var title: String? = nil
+    var color: Color? = nil
 
     @State private var expanded = false
     @State private var entries: [URL]?
+    @State private var count: Int?
 
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
@@ -223,7 +209,37 @@ private struct SortedFolderRow: View {
                 ProgressView().controlSize(.small)
             }
         } label: {
-            Label(title ?? url.lastPathComponent, systemImage: "folder")
+            HStack(spacing: 10) {
+                if let color {
+                    SettingIcon(symbol: "folder.fill", color: color)
+                } else {
+                    Image(systemName: "folder.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title ?? url.lastPathComponent)
+                    if color != nil {
+                        Text(url.tildePath)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let count {
+                    Text(count == 1 ? "1 item" : "\(count) items")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+        }
+        .task {
+            let folder = url
+            count = await Task.detached { Self.list(folder).count }.value
         }
         .task(id: expanded) {
             guard expanded, entries == nil else { return }
@@ -272,5 +288,34 @@ private struct SortedFileRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Open") { NSWorkspace.shared.open(url) }
+    }
+}
+
+
+/// The Sorter's Files tab: each sorter folder with its category folders, opened and closed in place.
+struct SorterFilesSections: View {
+    let model: SorterModel
+
+    var body: some View {
+        let folders = model.status?.folders ?? []
+        let categories = model.status?.categories ?? []
+        if folders.isEmpty {
+            Section { Text("Add a folder in Setup to see sorted files here.").foregroundStyle(.secondary) }
+        }
+        ForEach(folders) { folder in
+            Section(folder.name) {
+                let dirs = categories.compactMap { category -> (String, URL)? in
+                    let url = URL(filePath: model.destination(for: folder, category: category.name)
+                                  ?? URL(filePath: folder.path).appending(path: category.name).path)
+                    return FileManager.default.fileExists(atPath: url.path) ? (category.name, url) : nil
+                }
+                if dirs.isEmpty {
+                    Text("Nothing sorted yet.").foregroundStyle(.secondary)
+                }
+                ForEach(Array(dirs.enumerated()), id: \.element.1) { index, item in
+                    SortedFolderRow(url: item.1, title: item.0, color: SorterFolderPage.colors[index % SorterFolderPage.colors.count])
+                }
+            }
+        }
     }
 }
