@@ -181,143 +181,8 @@ private struct CategoryRow: View {
 }
 
 
-/// A sorted folder that opens and closes in place. Its contents are read when it first opens,
-/// off the main thread; files open on click, subfolders nest.
-struct SortedFolderRow: View {
-    let url: URL
-    var title: String? = nil
-    var color: Color? = nil
-
-    @State private var expanded = false
-    @State private var entries: [URL]?
-    @State private var count: Int?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            if let entries {
-                if entries.isEmpty {
-                    Text("Empty").foregroundStyle(.secondary)
-                }
-                ForEach(entries, id: \.self) { entry in
-                    if entry.hasDirectoryPath {
-                        SortedFolderRow(url: entry)
-                    } else {
-                        SortedFileRow(url: entry)
-                    }
-                }
-            } else {
-                ProgressView().controlSize(.small)
-            }
-        } label: {
-            HStack(spacing: 10) {
-                if let color {
-                    SettingIcon(symbol: "folder.fill", color: color)
-                } else {
-                    Image(systemName: "folder.fill")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 18)
-                        .accessibilityHidden(true)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title ?? url.lastPathComponent)
-                    if color != nil {
-                        Text(url.tildePath)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-                Spacer(minLength: 8)
-                if let count {
-                    Text(count == 1 ? "1 item" : "\(count) items")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { expanded.toggle() } }
-        }
-        .task {
-            let folder = url
-            count = await Task.detached { Self.list(folder).count }.value
-        }
-        .task(id: expanded) {
-            guard expanded, entries == nil else { return }
-            let folder = url
-            entries = await Task.detached { Self.list(folder) }.value
-        }
-    }
-
-    nonisolated private static func list(_ folder: URL) -> [URL] {
-        let items = (try? FileManager.default.contentsOfDirectory(
-            at: folder, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey], options: [.skipsHiddenFiles])) ?? []
-        // Folders first, then files, each by name.
-        return items.sorted {
-            ($0.hasDirectoryPath ? 0 : 1, $0.lastPathComponent.localizedLowercase)
-                < ($1.hasDirectoryPath ? 0 : 1, $1.lastPathComponent.localizedLowercase)
-        }
-    }
-}
-
-private struct SortedFileRow: View {
-    let url: URL
-
-    private var details: String {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-        let size = values?.fileSize.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }
-        let date = values?.contentModificationDate?.formatted(date: .abbreviated, time: .omitted)
-        return [size, date].compactMap { $0 }.joined(separator: ", ")
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
-                .resizable()
-                .frame(width: 28, height: 28)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(url.lastPathComponent)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(details)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            Spacer(minLength: 8)
-            icon("arrow.up.forward.app", "Open \(url.lastPathComponent)") { NSWorkspace.shared.open(url) }
-            icon("magnifyingglass", "Show \(url.lastPathComponent) in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            }
-        }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .onTapGesture { NSWorkspace.shared.open(url) }
-        .help("Click to open")
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: "Open") { NSWorkspace.shared.open(url) }
-        .accessibilityAction(named: "Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-    }
-
-    private func icon(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.blue)
-                .frame(width: 26, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .help(label)
-        .accessibilityLabel(label)
-    }
-}
-
-/// The Sorter's Files tab: each sorter folder with its category folders, opened and closed in place.
+/// The Sorter's Files tab: each sorter folder with its category folders. A row opens the folder as
+/// its own page (Files-app style).
 struct SorterFilesSections: View {
     let model: SorterModel
 
@@ -338,9 +203,44 @@ struct SorterFilesSections: View {
                     Text("Nothing sorted yet.").foregroundStyle(.secondary)
                 }
                 ForEach(Array(dirs.enumerated()), id: \.element.1) { index, item in
-                    SortedFolderRow(url: item.1, title: item.0, color: SorterFolderPage.colors[index % SorterFolderPage.colors.count])
+                    NavigationLink(value: item.1) {
+                        CategoryFolderRow(url: item.1, title: item.0,
+                                          color: SorterFolderPage.colors[index % SorterFolderPage.colors.count])
+                    }
                 }
             }
+        }
+    }
+}
+
+private struct CategoryFolderRow: View {
+    let url: URL
+    let title: String
+    let color: Color
+    @State private var count: Int?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            SettingIcon(symbol: "folder.fill", color: color)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(url.tildePath)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            if let count {
+                Text(count == 1 ? "1 item" : "\(count) items")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .task {
+            let folder = url
+            count = await Task.detached { SortedItem.list(folder).count }.value
         }
     }
 }

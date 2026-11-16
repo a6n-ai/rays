@@ -196,6 +196,7 @@ struct SorterView: View {
                 .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
             }
+            .navigationDestination(for: URL.self) { url in SortedBrowserPage(folder: url) }
             .navigationDestination(for: String.self) { path in
                 SorterFolderPage(model: model, path: path)
             }
