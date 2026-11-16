@@ -9,8 +9,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-issuer="$(security find-generic-password -s rays-amo -a jwt-issuer -w)"
-secret="$(security find-generic-password -s rays-amo -a jwt-secret -w)"
+# CI passes the keys as env vars (repo secrets); locally they come from the login Keychain.
+issuer="${WEB_EXT_API_KEY:-$(security find-generic-password -s rays-amo -a jwt-issuer -w)}"
+secret="${WEB_EXT_API_SECRET:-$(security find-generic-password -s rays-amo -a jwt-secret -w)}"
 
 out=build/firefox
 rm -rf "$out" && mkdir -p "$out"
@@ -18,11 +19,14 @@ rm -rf "$out" && mkdir -p "$out"
 src="$out/src"
 cp -R extension "$src"
 python3 - "$src/manifest.json" <<'PY'
-import json, sys
+import json, os, sys
 p = sys.argv[1]
 m = json.load(open(p))
 m.pop("key", None)
 m["background"].pop("service_worker", None)  # Firefox MV3 runs background "scripts"
+# AMO signs each version once; CI stamps a fresh one per run.
+if os.environ.get("EXT_VERSION"):
+    m["version"] = os.environ["EXT_VERSION"]
 json.dump(m, open(p, "w"), indent=2)
 PY
 
