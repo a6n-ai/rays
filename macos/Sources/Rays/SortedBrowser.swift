@@ -33,6 +33,13 @@ struct SortedItem: Identifiable, Hashable, Sendable {
     }
 }
 
+enum SortedLayout: String, CaseIterable, Identifiable {
+    case icons, list, table
+    var id: Self { self }
+    var symbol: String { switch self { case .icons: "square.grid.2x2"; case .list: "list.bullet"; case .table: "tablecells" } }
+    var title: String { switch self { case .icons: "Icons"; case .list: "List"; case .table: "Mac list" } }
+}
+
 enum SortedOrder: String, CaseIterable, Identifiable {
     case name = "Name", date = "Date", size = "Size", kind = "Kind"
     var id: Self { self }
@@ -56,9 +63,11 @@ enum SortedOrder: String, CaseIterable, Identifiable {
 struct SortedBrowserPage: View {
     let folder: URL
 
-    @AppStorage("sortedBrowserGrid") private var grid = true
+    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .icons
+    @State private var columnOrder = [KeyPathComparator(\SortedItem.name, comparator: .localizedStandard)]
     @AppStorage("sortedBrowserOrder") private var order: SortedOrder = .name
     @State private var items: [SortedItem]?
+    @State private var pushed: URL?
 
     var body: some View {
         content
@@ -67,10 +76,13 @@ struct SortedBrowserPage: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ToolbarIconGroup {
-                        Button { grid = true } label: { ToolbarIcon(symbol: "square.grid.2x2", title: "Icons", selected: grid) }
-                            .buttonStyle(.plain).help("Show as icons")
-                        Button { grid = false } label: { ToolbarIcon(symbol: "list.bullet", title: "List", selected: !grid) }
-                            .buttonStyle(.plain).help("Show as list")
+                        ForEach(SortedLayout.allCases) { mode in
+                            Button { layout = mode } label: {
+                                ToolbarIcon(symbol: mode.symbol, title: mode.title, selected: layout == mode)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Show as \(mode.title.lowercased())")
+                        }
                         Menu {
                             Picker("Sort by", selection: $order) {
                                 ForEach(SortedOrder.allCases) { Text($0.rawValue).tag($0) }
@@ -80,6 +92,7 @@ struct SortedBrowserPage: View {
                             ToolbarIcon(symbol: "arrow.up.arrow.down", title: "Sort by \(order.rawValue)")
                         }
                         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+                        .disabled(layout == .table)
                         .help("Sort by \(order.rawValue)")
                     }
                 }
@@ -95,6 +108,7 @@ struct SortedBrowserPage: View {
                 .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
             }
+            .navigationDestination(item: $pushed) { SortedBrowserPage(folder: $0) }
             .task(id: folder) {
                 let url = folder
                 items = await Task.detached { SortedItem.list(url) }.value
@@ -106,7 +120,9 @@ struct SortedBrowserPage: View {
             let shown = order.sorted(items)
             if shown.isEmpty {
                 ContentUnavailableView("Empty", systemImage: "folder", description: Text("Nothing is in this folder yet."))
-            } else if grid {
+            } else if layout == .table {
+                FinderTable(items: items, order: $columnOrder) { pushed = $0 }
+            } else if layout == .icons {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 150), spacing: 16)], spacing: 20) {
                         ForEach(shown) { item in
@@ -214,4 +230,54 @@ private struct Thumbnail: View {
             }
         }
     }
+}
+
+/// Finder's list view: native columns, click a header to sort, double-click to open.
+private struct FinderTable: View {
+    let items: [SortedItem]
+    @Binding var order: [KeyPathComparator<SortedItem>]
+    let openFolder: (URL) -> Void
+    @State private var selection = Set<SortedItem.ID>()
+
+    var body: some View {
+        // Folders stay on top, as in Finder's default list view.
+        let rows = items.sorted { a, b in
+            a.isFolder != b.isFolder ? a.isFolder : order.compare(a, b) == .orderedAscending
+        }
+        Table(rows, selection: $selection, sortOrder: $order) {
+            TableColumn("Name", value: \.name, comparator: .localizedStandard) { item in
+                HStack(spacing: 6) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                        .resizable().frame(width: 16, height: 16).accessibilityHidden(true)
+                    Text(item.name).lineLimit(1).truncationMode(.middle)
+                }
+            }
+            .width(min: 180, ideal: 300)
+            TableColumn("Date Modified", value: \.sortDate) { item in
+                Text(item.modified?.formatted(date: .abbreviated, time: .shortened) ?? "--")
+                    .foregroundStyle(.secondary).monospacedDigit()
+            }
+            .width(min: 120, ideal: 160)
+            TableColumn("Size", value: \.sortSize) { item in
+                Text(item.isFolder ? "--" : item.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "--")
+                    .foregroundStyle(.secondary).monospacedDigit()
+            }
+            .width(min: 60, ideal: 80)
+            TableColumn("Kind", value: \.kind, comparator: .localizedStandard) { item in
+                Text(item.kind).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .width(min: 80, ideal: 140)
+        }
+        .contextMenu(forSelectionType: SortedItem.ID.self) { _ in } primaryAction: { ids in
+            for url in ids {
+                if items.first(where: { $0.url == url })?.isFolder == true { openFolder(url) } else { NSWorkspace.shared.open(url) }
+            }
+        }
+        .scrollContentBackground(.hidden)
+    }
+}
+
+private extension SortedItem {
+    var sortDate: Date { modified ?? .distantPast }
+    var sortSize: Int { size ?? 0 }
 }
