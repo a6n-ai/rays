@@ -46,11 +46,26 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
         List(selection: $selection) {
-            Section("Rays") {
+            Section {
                 Label("Downloads", systemImage: "arrow.down.circle")
                     .tag(Destination.downloads)
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
+            } header: {
+                HStack {
+                    Text("Rays")
+                    Spacer()
+                    Button { openSettings() } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 13, weight: .medium))
+                            .frame(width: 24, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Settings (⌘,)")
+                    .accessibilityLabel("Settings")
+                }
             }
             Section("Folders") {
                 if denied {
@@ -77,15 +92,6 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-        .toolbar {
-            // Sits in the sidebar's title bar beside the system sidebar toggle.
-            ToolbarItem(placement: .automatic) {
-                Button { openSettings() } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .help("Settings (⌘,)")
-            }
-        }
         .task(id: "\(EngineModel.downloadsURL.path(percentEncoded: false))|\(model.jobs.filter(\.isDone).count)|\(model.folderRevision)|\(activations)") {
             let root = EngineModel.downloadsURL
             denied = !FolderListing.canRead(root)

@@ -13,6 +13,9 @@ struct SortingTab: View {
                         .buttonStyle(.glass)
                 }
             }
+            Section {
+                AIStatusRow()
+            }
 
             SavedNote()
         }

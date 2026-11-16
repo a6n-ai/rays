@@ -61,13 +61,18 @@ final class SorterModel {
 #if DEBUG
         guard !isFixture else { return }
 #endif
-        let result = await Sorter.run(Sorter.defaultPath, ["status", "--json"])
-        if result.status == 0, let decoded = try? Self.decode(Data(result.stdout.utf8)) {
-            status = decoded
-        } else {
-            status = nil
+        // One retry, and a failed refresh keeps the last good status: a single slow or overlapping run
+        // (e.g. right after launch) shouldn't flash "isn't available".
+        for attempt in 0..<2 {
+            let result = await Sorter.run(Sorter.defaultPath, ["status", "--json"])
+            if result.status == 0, let decoded = try? Self.decode(Data(result.stdout.utf8)) {
+                status = decoded
+                loadFailed = false
+                break
+            }
+            if attempt == 0 { try? await Task.sleep(for: .seconds(1)) }
+            if attempt == 1 { loadFailed = status == nil }
         }
-        loadFailed = status == nil
         destinations = Self.loadDestinations()
     }
 

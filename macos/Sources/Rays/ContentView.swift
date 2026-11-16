@@ -10,10 +10,15 @@ struct ContentView: View {
     @State private var isDropTargeted = false
     /// Links taken from the current drag. A browser drop can carry both a URL and a String for the same link.
     @State private var droppedLinks = Set<String>()
+    @State private var query = ""
+
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $destination)
+                // On the sidebar column (not the split view) so the field doesn't take toolbar space.
+                .searchable(text: $query, placement: .sidebar, prompt: "Search")
                 .onAppear {
                     let path = lastFolder
                     if path == "sorter" {
@@ -52,14 +57,21 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var detail: some View {
-        switch destination {
-        case .folder(let folder)?:
-            FolderView(root: EngineModel.downloadsURL, folder: folder) { destination = .downloads }
-                .id(folder)
-        case .sorter?:
-            SorterView()
-        default:
-            DownloadsView(isDropTargeted: isDropTargeted)
+        if !trimmedQuery.isEmpty {
+            SearchView(query: trimmedQuery) { folder in
+                destination = .folder(folder)
+                query = ""
+            }
+        } else {
+            switch destination {
+            case .folder(let folder)?:
+                FolderView(root: EngineModel.downloadsURL, folder: folder) { destination = .downloads }
+                    .id(folder)
+            case .sorter?:
+                SorterView()
+            default:
+                DownloadsView(isDropTargeted: isDropTargeted)
+            }
         }
     }
 

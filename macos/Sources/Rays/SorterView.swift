@@ -13,15 +13,14 @@ struct SorterView: View {
     private var watchedCount: Int { model.status?.folders.filter(\.watching).count ?? 0 }
 
     var body: some View {
-        VStack(spacing: 0) {
-            explainer
-                .padding(.horizontal, LayoutMetrics.margin)
-                .padding(.top, LayoutMetrics.gap)
-            if let error = model.error {
-                ErrorLine(text: error)
-                    .padding(.horizontal, LayoutMetrics.margin)
-            }
-            List {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                explainer
+                    .padding(.top, LayoutMetrics.gap)
+
+                if let error = model.error {
+                    ErrorLine(text: error)
+                }
                 if model.loadFailed {
                     ErrorLine(text: SorterModel.unavailableMessage)
                 }
@@ -30,18 +29,21 @@ struct SorterView: View {
                         Text("No folders yet. Add one above to start sorting.")
                             .foregroundStyle(.secondary)
                     }
-                    ForEach(status.folders) { folder in
-                        FolderSection(model: model, folder: folder, categories: status.categories) {
-                            removing = folder
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                        ForEach(status.folders) { folder in
+                            FolderCard(model: model, folder: folder, categories: status.categories) {
+                                removing = folder
+                            }
                         }
+                        AddFolderTile(disabled: model.busy || model.loadFailed, action: chooseFolder)
                     }
                     recentSection(status.recent)
                 }
             }
-            .listStyle(.inset)
-            .scrollContentBackground(.hidden)
-            .scrollEdgeEffectStyle(.soft, for: .all)
+            .padding(.horizontal, LayoutMetrics.margin)
+            .padding(.bottom, LayoutMetrics.margin)
         }
+        .scrollEdgeEffectStyle(.soft, for: .all)
         .navigationTitle("Sorter")
         .navigationSubtitle(watchedCount == 1 ? "1 folder watched" : "\(watchedCount) folders watched")
         .task {
@@ -75,6 +77,7 @@ struct SorterView: View {
             }
             Text("Rays files new downloads and documents into folders like Work and Personal. It runs on your Mac; nothing is uploaded.")
                 .foregroundStyle(.secondary)
+            AIStatusRow()
             HStack(spacing: 8) {
                 Button(action: chooseFolder) {
                     Label("Add Folder…", systemImage: "plus")
@@ -122,127 +125,26 @@ struct SorterView: View {
         Task { await model.addFolder(url.path(percentEncoded: false)) }
     }
 
-    @ViewBuilder private func recentSection(_ moves: [SorterMove]) -> some View {
-        Section("Recent activity") {
-            if moves.isEmpty {
-                Text("Nothing sorted yet.").foregroundStyle(.secondary)
-            }
-            ForEach(Array(moves.prefix(20).enumerated()), id: \.offset) { _, move in
-                MoveRow(move: move)
-            }
-        }
-    }
-}
-
-private struct FolderSection: View {
-    let model: SorterModel
-    let folder: SorterFolder
-    let categories: [SorterCategory]
-    let onRemove: () -> Void
-    @State private var showsDestinations = false
-
-    private static let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo]
-
-    var body: some View {
-        Section {
-            Toggle("Watching", isOn: Binding(
-                get: { folder.watching },
-                set: { on in Task { await model.setWatching(folder, on: on) } }))
-                .toggleStyle(.switch)
-                .disabled(model.busy || model.loadFailed)
-
-            if let agent = folder.agentBinary, !isBundled(agent) {
-                HStack {
-                    Label("Using an old copy of the sorter", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Spacer()
-                    Button("Update") { Task { await model.update(folder) } }
-                        .buttonStyle(.glass)
-                        .disabled(model.busy)
-                }
-            }
-
-            HStack(spacing: LayoutMetrics.gap) {
-                Button("Sort Now") { Task { await model.sortNow(folder) } }
-                    .buttonStyle(.glass)
-                    .disabled(model.busy || model.loadFailed)
-                if let result = model.sortResults[folder.path] {
-                    Text(result).font(.callout).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-
-            DisclosureGroup("Where files go", isExpanded: $showsDestinations) {
-                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
-                    CategoryRow(model: model, folder: folder, category: category,
-                                color: Self.colors[index % Self.colors.count])
-                }
-            }
-
-            Button(role: .destructive, action: onRemove) {
-                Label("Remove Folder", systemImage: "trash")
-            }
-            .disabled(model.busy)
-        } header: {
-            HStack(spacing: 6) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: folder.path))
-                    .resizable()
-                    .frame(width: 16, height: 16)
-                    .accessibilityHidden(true)
-                Text(URL(filePath: folder.path).tildePath)
-            }
-        }
-    }
-
-    private func isBundled(_ path: String) -> Bool {
-        URL(filePath: path).resolvingSymlinksInPath() == URL(filePath: Sorter.defaultPath).resolvingSymlinksInPath()
-    }
-}
-
-private struct CategoryRow: View {
-    let model: SorterModel
-    let folder: SorterFolder
-    let category: SorterCategory
-    let color: Color
-
-    var body: some View {
-        let custom = model.destination(for: folder, category: category.name)
-        LabeledContent {
-            HStack(spacing: 8) {
-                Text(custom.map { URL(filePath: $0).tildePath } ?? "Inside \(folder.name)")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(custom ?? folder.path)
-                Button("Change…", action: chooseDestination)
-                    .buttonStyle(.glass)
-                    .disabled(model.busy)
-                if custom != nil {
-                    Button("Reset") { Task { await model.resetDestination(folder, category: category.name) } }
-                        .buttonStyle(.glass)
-                        .disabled(model.busy)
-                }
-            }
-        } label: {
-            HStack(spacing: 10) {
-                SettingIcon(symbol: "folder.fill", color: color)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(category.name)
-                    Text(category.description)
-                        .font(.callout)
+    private func recentSection(_ moves: [SorterMove]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Recent activity").font(.headline)
+            VStack(alignment: .leading, spacing: 0) {
+                if moves.isEmpty {
+                    Text("Nothing sorted yet.")
                         .foregroundStyle(.secondary)
+                        .padding(16)
+                }
+                ForEach(Array(moves.prefix(20).enumerated()), id: \.offset) { _, move in
+                    MoveRow(move: move)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
                 }
             }
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.background.secondary, in: sorterCardShape)
+            .overlay(sorterCardShape.strokeBorder(.separator, lineWidth: 1))
         }
-    }
-
-    private func chooseDestination() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await model.setDestination(folder, category: category.name, path: url.path(percentEncoded: false)) }
     }
 }
 
