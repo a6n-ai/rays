@@ -3,11 +3,30 @@
 Small macOS download manager: a Rust engine (`engine/`) behind a SwiftUI app (`macos/`), plus a
 terminal client (`cli/`). Design: [docs/designs/rays.md](docs/designs/rays.md).
 
+## Install
+
+**[Download Rays.dmg](https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg)**: open it and drag Rays to Applications.
+
+Or with Homebrew (also puts `dl` on your PATH):
+
+```sh
+brew install --cask a6n-ai/tap/rays      # install
+brew upgrade --cask rays                 # update
+brew uninstall --cask rays               # uninstall (stops Rays' sorter helpers)
+brew uninstall --zap --cask rays         # uninstall and delete settings, history and browser helpers
+```
+
+Requires macOS 26. Rays isn't notarized yet: if macOS says it can't verify Rays on first launch,
+right-click Rays in Applications and choose **Open** (Homebrew installs skip this).
+
 ## Build
 
 ```sh
 scripts/bundle-app.sh     # builds engine (universal), Swift bindings, bin/Rays.app, bin/dl
 ```
+
+`scripts/make-dmg.sh` packs `bin/Rays.app` into a drag-to-install DMG. Pushing a `v*` tag runs
+`.github/workflows/release.yml`, which builds, publishes the zip and DMG, and bumps the Homebrew cask.
 
 Needs Xcode 26 command line tools and `rustup` (the script adds the `aarch64`/`x86_64` Apple targets).
 The app requires macOS 26.

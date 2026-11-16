@@ -49,12 +49,13 @@ jobs:
         run: |
           ditto -c -k --keepParent bin/Rays.app "Rays-${VERSION}.zip"
           scripts/make-dmg.sh "$VERSION"
+          cp "Rays-${VERSION}.dmg" Rays.dmg  # fixed name for the releases/latest/download link
           shasum -a 256 "Rays-${VERSION}.zip" | cut -d' ' -f1 > sha256.txt
           echo "SHA256=$(cat sha256.txt)" >> "$GITHUB_ENV"
 
       - name: Publish release
         run: |
-          gh release create "v${VERSION}" "Rays-${VERSION}.zip" "Rays-${VERSION}.dmg" \
+          gh release create "v${VERSION}" "Rays-${VERSION}.zip" "Rays-${VERSION}.dmg" Rays.dmg \
             --title "Rays ${VERSION}" \
             --notes "$(printf 'Download: open Rays-'"${VERSION}"'.dmg and drag Rays to Applications\nInstall with Homebrew: `brew install --cask a6n-ai/tap/rays`\nUpdate: `brew upgrade --cask rays`\nUninstall: `brew uninstall --cask rays` (add `--zap` to also delete settings and history)')"
 
