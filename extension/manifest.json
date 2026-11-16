@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Rays",
+  "version": "0.1.0",
+  "description": "Send links to the Rays download manager.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApXD54D/ynOgHoydt9TkcF2GREBsWzUb8ku42af3dHZNNSCF2TkbW9lbLb7p6QEHKVeHO7SzaHxGhdGs3iGblUP0XtTjEVGGdsO1L2A9MtYHmIBFzaGYCf03S32uSPdM9/4H3R7JugL5qPHNHLtYLI7yctALmcpux5/LDcdBHrXx9JNDtRskrQiREXnz9E6JtEzaIVPSFqKZP6d1OJdJ8kXBlV5Z6sWTP1ifa+aDwgnzGQnvB6YZHgskTIoEV7LybBB5OrsKX1MC17io7UJnud1wsmNUlEdezgZkms9UC1dhboXGox1O6PuhpCS+1HUv976txxtatjxO4aBosc0h2PwIDAQAB",
+  "permissions": ["contextMenus", "nativeMessaging", "downloads", "storage"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "action": {
+    "default_title": "Rays",
+    "default_icon": {"16": "icons/16.png", "32": "icons/32.png"}
+  },
+  "options_ui": {"page": "options.html", "open_in_tab": false},
+  "icons": {"16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png"},
+  "browser_specific_settings": {"gecko": {"id": "rays@a6n.ai"}}
+}

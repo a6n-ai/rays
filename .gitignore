@@ -1,0 +1,6 @@
+target/
+bin/
+build/
+macos/.build/
+macos/Sources/Rays/Generated/
+.DS_Store
