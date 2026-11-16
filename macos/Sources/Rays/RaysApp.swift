@@ -12,7 +12,7 @@ struct RaysApp: App {
                 .environment(appDelegate.model)
                 .background(OpenSettingsAtLaunch())
         }
-        .defaultSize(width: 640, height: 480)
+        .defaultSize(width: 980, height: 680)
         .windowToolbarStyle(.unified)
         .onChange(of: appearance, initial: true) { _, new in NSApp.appearance = new.nsAppearance }
         .commands {
@@ -54,6 +54,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         // Keeps the stable extension copy in step with this build, so a loaded extension stays current.
         BrowserCheck.prepareExtensionFolder()
+        growWindowOnce()
+    }
+
+    /// Earlier builds opened at 640x480 and macOS keeps that size, so `defaultSize` never applies.
+    /// Resize once to the new default; afterwards the size the user picks is kept.
+    private func growWindowOnce() {
+        let key = "windowGrownTo980"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        DispatchQueue.main.async {
+            guard let window = NSApp.windows.first(where: { $0.isVisible && $0.title == "Rays" }) else { return }
+            let target = NSSize(width: 980, height: 680)
+            guard window.frame.width < target.width || window.frame.height < target.height else { return }
+            var frame = window.frame
+            frame.origin.y += frame.height - target.height
+            frame.size = target
+            window.setFrame(frame, display: true)
+            window.center()
+            UserDefaults.standard.set(true, forKey: key)
+        }
     }
 
     /// Services entry point: takes links (or text containing links) from the sender's selection.

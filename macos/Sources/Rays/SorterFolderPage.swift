@@ -191,6 +191,7 @@ struct SortedFolderRow: View {
     @State private var expanded = false
     @State private var entries: [URL]?
     @State private var count: Int?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
@@ -236,6 +237,8 @@ struct SortedFolderRow: View {
                         .monospacedDigit()
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { expanded.toggle() } }
         }
         .task {
             let folder = url
@@ -250,7 +253,7 @@ struct SortedFolderRow: View {
 
     nonisolated private static func list(_ folder: URL) -> [URL] {
         let items = (try? FileManager.default.contentsOfDirectory(
-            at: folder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])) ?? []
+            at: folder, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey], options: [.skipsHiddenFiles])) ?? []
         // Folders first, then files, each by name.
         return items.sorted {
             ($0.hasDirectoryPath ? 0 : 1, $0.lastPathComponent.localizedLowercase)
@@ -262,35 +265,57 @@ struct SortedFolderRow: View {
 private struct SortedFileRow: View {
     let url: URL
 
+    private var details: String {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let size = values?.fileSize.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }
+        let date = values?.contentModificationDate?.formatted(date: .abbreviated, time: .omitted)
+        return [size, date].compactMap { $0 }.joined(separator: ", ")
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
                 .resizable()
-                .frame(width: 18, height: 18)
+                .frame(width: 28, height: 28)
                 .accessibilityHidden(true)
-            Text(url.lastPathComponent)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 8)
-            Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.blue)
-                    .frame(width: 26, height: 22)
-                    .contentShape(Rectangle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(url.lastPathComponent)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(details)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
-            .buttonStyle(.borderless)
-            .help("Show in Finder")
-            .accessibilityLabel("Show \(url.lastPathComponent) in Finder")
+            Spacer(minLength: 8)
+            icon("arrow.up.forward.app", "Open \(url.lastPathComponent)") { NSWorkspace.shared.open(url) }
+            icon("magnifyingglass", "Show \(url.lastPathComponent) in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
         }
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onTapGesture { NSWorkspace.shared.open(url) }
         .help("Click to open")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Open") { NSWorkspace.shared.open(url) }
+        .accessibilityAction(named: "Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    }
+
+    private func icon(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.blue)
+                .frame(width: 26, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(label)
+        .accessibilityLabel(label)
     }
 }
-
 
 /// The Sorter's Files tab: each sorter folder with its category folders, opened and closed in place.
 struct SorterFilesSections: View {
