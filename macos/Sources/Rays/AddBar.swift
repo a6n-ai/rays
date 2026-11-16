@@ -71,22 +71,21 @@ struct AddBar: View {
     /// Plain style with an explicit glass shape: the glass button styles pad the label, so the frame could not pin the height.
     @ViewBuilder private var downloadButton: some View {
         let dimmed = !isEnabled || isBlank
-        if isExpanded {
-            Button(action: submit) {
-                Label("Download", systemImage: "arrow.down")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(isBlank ? Color.primary : Color(nsColor: .alternateSelectedControlTextColor))
-                    .padding(.horizontal, 16)
-                    .frame(height: LayoutMetrics.barHeight)
-                    .glassEffect(isBlank ? .regular.interactive() : .regular.tint(.accentColor).interactive(), in: .capsule)
-                    .glassEffectID("download", in: glass)
-                    .contentShape(Capsule())
-                    .opacity(dimmed ? 0.4 : 1)
-            }
-            .buttonStyle(.plain)
-            .disabled(isBlank)
-            .help("Download the pasted links")
-        } else {
+        // Always the round icon; a pasted link fills it with the accent colour instead of growing a label.
+        Button(action: submit) {
+            Label("Download", systemImage: "arrow.down")
+                .labelStyle(.iconOnly)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isBlank ? AnyShapeStyle(.tint) : AnyShapeStyle(Color(nsColor: .alternateSelectedControlTextColor)))
+                .frame(width: LayoutMetrics.barHeight, height: LayoutMetrics.barHeight)
+                .glassEffect(isBlank ? .regular.interactive() : .regular.tint(.accentColor).interactive(), in: .circle)
+                .glassEffectID("download", in: glass)
+                .contentShape(Circle())
+                .opacity(dimmed ? 0.4 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(isBlank)
+        .help("Download the pasted links") else {
             Button(action: submit) {
                 Label("Download", systemImage: "arrow.down")
                     .labelStyle(.iconOnly)
