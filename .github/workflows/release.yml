@@ -55,7 +55,7 @@ jobs:
         run: |
           gh release create "v${VERSION}" "Rays-${VERSION}.zip" \
             --title "Rays ${VERSION}" \
-            --notes "Install: brew install --cask a6n-ai/tap/rays"
+            --notes "$(printf 'Install: `brew install --cask a6n-ai/tap/rays`\nUpdate: `brew upgrade --cask rays`\nUninstall: `brew uninstall --cask rays` (add `--zap` to also delete settings and history)')"
 
       - name: Update Homebrew cask
         env:
