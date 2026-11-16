@@ -181,75 +181,29 @@ private struct CategoryRow: View {
 }
 
 
-/// The Sorter's Files tab as a Finder-style table: every category folder of every sorter folder.
-/// Double-click opens the folder as its own page.
+/// The Sorter's Files tab: the sorter's folders (Documents, Downloads…) in a Finder-style list.
+/// Opening one shows its contents in the same browser.
 struct SorterFilesTable: View {
     let model: SorterModel
 
-    struct Row: Identifiable {
-        let url: URL
-        let name: String
-        let parent: String
-        let count: Int
-        let modified: Date
-        var id: URL { url }
-    }
-
-    @State private var rows: [Row] = []
-    @State private var order = [KeyPathComparator(\Row.parent, comparator: .localizedStandard)]
-    @State private var selection = Set<URL>()
+    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
+    @State private var items: [SortedItem] = []
     @State private var pushed: URL?
 
     var body: some View {
-        Table(rows.sorted(using: order), selection: $selection, sortOrder: $order) {
-            TableColumn("Name", value: \.name, comparator: .localizedStandard) { row in
-                HStack(spacing: 6) {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: row.url.path))
-                        .resizable().frame(width: 16, height: 16).accessibilityHidden(true)
-                    Text(row.name)
+        SortedItemsView(items: items, layout: layout) { pushed = $0 }
+            .overlay {
+                if items.isEmpty {
+                    ContentUnavailableView("No folders yet", systemImage: "folder",
+                                           description: Text("Add a folder in Setup to see its sorted files here."))
                 }
             }
-            .width(min: 140, ideal: 200)
-            TableColumn("In", value: \.parent, comparator: .localizedStandard) { row in
-                Text(row.parent).foregroundStyle(.secondary)
+            .navigationDestination(item: $pushed) { SortedBrowserPage(folder: $0) }
+            .task(id: model.status?.folders.map(\.path)) {
+                let paths = (model.status?.folders ?? []).map { URL(filePath: $0.path) }
+                items = await Task.detached {
+                    paths.filter { FileManager.default.fileExists(atPath: $0.path) }.map(SortedItem.item)
+                }.value
             }
-            .width(min: 90, ideal: 120)
-            TableColumn("Items", value: \.count) { row in
-                Text("\(row.count)").foregroundStyle(.secondary).monospacedDigit()
-            }
-            .width(min: 50, ideal: 60)
-            TableColumn("Date Modified", value: \.modified) { row in
-                Text(row.modified.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(.secondary).monospacedDigit()
-            }
-            .width(min: 120, ideal: 160)
-        }
-        .contextMenu(forSelectionType: URL.self) { _ in } primaryAction: { ids in pushed = ids.first }
-        .scrollContentBackground(.hidden)
-        .overlay {
-            if rows.isEmpty {
-                ContentUnavailableView("Nothing sorted yet", systemImage: "folder",
-                                       description: Text("Sorted folders show up here once files are filed."))
-            }
-        }
-        .navigationDestination(item: $pushed) { SortedBrowserPage(folder: $0) }
-        .task(id: model.status) { await load() }
-    }
-
-    private func load() async {
-        let folders = model.status?.folders ?? []
-        let categories = model.status?.categories ?? []
-        let targets: [(URL, String, String)] = folders.flatMap { folder in
-            categories.map { category in
-                (URL(filePath: model.destination(for: folder, category: category.name)
-                     ?? URL(filePath: folder.path).appending(path: category.name).path), category.name, folder.name)
-            }
-        }
-        rows = await Task.detached {
-            targets.compactMap { url, name, parent -> Row? in
-                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-                let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
-                return Row(url: url, name: name, parent: parent, count: SortedItem.list(url).count, modified: modified)
-            }
-        }.value
     }
 }

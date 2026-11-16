@@ -17,6 +17,7 @@ struct SorterView: View {
 
     @State private var confirmRemoveAll = false
     @AppStorage("sorterTab") private var tab: SorterTab = .setup
+    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @AppStorage("sorterShowFolders") private var showFolders = true
     private static let waitChoices: [(seconds: Int, title: String)] = [
         (10, "10 seconds (Recommended)"), (30, "30 seconds"), (60, "1 minute"),
@@ -33,6 +34,10 @@ struct SorterView: View {
 
     var body: some View {
         NavigationStack {
+            Group {
+            if tab == .files {
+                SorterFilesTable(model: model)
+            } else {
             Form {
                 if tab == .setup {
                     if let error = model.error {
@@ -140,10 +145,8 @@ struct SorterView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            .opacity(tab == .files ? 0 : 1)
-            .accessibilityHidden(tab == .files)
-            .allowsHitTesting(tab != .files)
-            .overlay { if tab == .files { SorterFilesTable(model: model) } }
+            }
+            }
             .confirmationDialog("Remove \(removing.map { URL(filePath: $0.path).lastPathComponent } ?? "this folder") from the sorter?",
                                 isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                                 titleVisibility: .visible) {
@@ -189,6 +192,14 @@ struct SorterView: View {
                         .buttonStyle(.plain)
                         .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
                         .help(AIReadinessStore.shared.value.isReady ? "Sort new files in every watched folder now" : AIReadinessStore.shared.value.title)
+                        if tab == .files {
+                            Button { layout = layout == .table ? .icons : .table } label: {
+                                ToolbarIcon(symbol: layout == .table ? "square.grid.2x2" : "list.bullet",
+                                            title: layout == .table ? "Show as icons" : "Show as list")
+                            }
+                            .buttonStyle(.plain)
+                            .help(layout == .table ? "Show as icons" : "Show as list")
+                        }
                         Button { Task { await model.refresh() } } label: {
                             ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh")
                         }
@@ -289,6 +300,7 @@ private struct FolderRow: View {
 
 private struct MoveRow: View {
     let move: SorterMove
+    private static let relative = RelativeDateTimeFormatter()
 
     var body: some View {
         HStack(spacing: 12) {
@@ -307,7 +319,8 @@ private struct MoveRow: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: 8)
-            Text(Date(timeIntervalSince1970: move.time), style: .relative)
+            // A static string: `Text(date, style: .relative)` redraws every second, which keeps the CPU awake.
+            Text(Self.relative.localizedString(for: Date(timeIntervalSince1970: move.time), relativeTo: .now))
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Button(action: reveal) {

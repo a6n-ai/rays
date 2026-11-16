@@ -24,18 +24,27 @@ struct SortedItem: Identifiable, Hashable, Sendable {
         let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey, .fileSizeKey, .contentModificationDateKey, .localizedTypeDescriptionKey]
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
-        return urls.map { url in
-            let v = try? url.resourceValues(forKeys: Set(keys))
-            return SortedItem(url: url, isFolder: (v?.isDirectory ?? false) && !(v?.isPackage ?? false),
-                              size: v?.fileSize, modified: v?.contentModificationDate,
-                              kind: v?.localizedTypeDescription ?? "")
-        }
+        return urls.map(item)
+    }
+
+    nonisolated static func item(_ url: URL) -> SortedItem {
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey, .fileSizeKey, .contentModificationDateKey, .localizedTypeDescriptionKey]
+        let v = try? url.resourceValues(forKeys: keys)
+        return SortedItem(url: url, isFolder: (v?.isDirectory ?? false) && !(v?.isPackage ?? false),
+                          size: v?.fileSize, modified: v?.contentModificationDate,
+                          kind: v?.localizedTypeDescription ?? "")
     }
 }
 
 enum SortedLayout: String, CaseIterable, Identifiable {
     case table, icons
     var id: Self { self }
+
+    /// Until the user picks one, match the view Finder opens new windows in ("icnv" is icon view).
+    static var finderDefault: SortedLayout {
+        let style = CFPreferencesCopyAppValue("FXPreferredViewStyle" as CFString, "com.apple.finder" as CFString) as? String
+        return style == "icnv" ? .icons : .table
+    }
     var symbol: String { switch self { case .icons: "square.grid.2x2"; case .table: "list.bullet" } }
     var title: String { switch self { case .icons: "Icons"; case .table: "List" } }
 }
@@ -63,8 +72,7 @@ enum SortedOrder: String, CaseIterable, Identifiable {
 struct SortedBrowserPage: View {
     let folder: URL
 
-    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .table
-    @State private var columnOrder = [KeyPathComparator(\SortedItem.name, comparator: .localizedStandard)]
+    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @AppStorage("sortedBrowserOrder") private var order: SortedOrder = .name
     @State private var items: [SortedItem]?
     @State private var pushed: URL?
@@ -117,35 +125,42 @@ struct SortedBrowserPage: View {
 
     @ViewBuilder private var content: some View {
         if let items {
-            let shown = order.sorted(items)
-            if shown.isEmpty {
+            if items.isEmpty {
                 ContentUnavailableView("Empty", systemImage: "folder", description: Text("Nothing is in this folder yet."))
-            } else if layout == .table {
-                FinderTable(items: items, order: $columnOrder) { pushed = $0 }
-            } else if layout == .icons {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 150), spacing: 16)], spacing: 20) {
-                        ForEach(shown) { item in
-                            itemLink(item) { GridTile(item: item) }
-                        }
-                    }
-                    .padding(20)
-                }
+            } else {
+                SortedItemsView(items: items, layout: layout, order: order) { pushed = $0 }
             }
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
 
-    /// Folders open as the next page; files open in their app.
-    @ViewBuilder private func itemLink<Label: View>(_ item: SortedItem, @ViewBuilder label: () -> Label) -> some View {
-        if item.isFolder {
-            NavigationLink(value: item.url) { label() }.buttonStyle(.plain)
+/// Items as a Finder-style list or an icon grid. Folders call `openFolder`; files open in their app.
+struct SortedItemsView: View {
+    let items: [SortedItem]
+    let layout: SortedLayout
+    var order: SortedOrder = .name
+    let openFolder: (URL) -> Void
+    @State private var columnOrder = [KeyPathComparator(\SortedItem.name, comparator: .localizedStandard)]
+
+    var body: some View {
+        if layout == .table {
+            FinderTable(items: items, order: $columnOrder, openFolder: openFolder)
         } else {
-            Button { NSWorkspace.shared.open(item.url) } label: { label() }
-                .buttonStyle(.plain)
-                .help("Open \(item.name)")
-                .accessibilityAction(named: "Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 92, maximum: 112), spacing: 12)], spacing: 14) {
+                    ForEach(order.sorted(items)) { item in
+                        Button {
+                            if item.isFolder { openFolder(item.url) } else { NSWorkspace.shared.open(item.url) }
+                        } label: { GridTile(item: item) }
+                        .buttonStyle(.plain)
+                        .help("Open \(item.name)")
+                        .accessibilityAction(named: "Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+                    }
+                }
+                .padding(20)
+            }
         }
     }
 }
@@ -155,10 +170,10 @@ private struct GridTile: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Thumbnail(url: item.url, side: 72)
-                .frame(width: 88, height: 80)
+            Thumbnail(url: item.url, side: 48)
+                .frame(width: 60, height: 54)
             Text(item.name)
-                .font(.callout)
+                .font(.caption)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .truncationMode(.middle)
@@ -203,7 +218,7 @@ private struct Thumbnail: View {
 }
 
 /// Finder's list view: native columns, click a header to sort, double-click to open.
-private struct FinderTable: View {
+struct FinderTable: View {
     let items: [SortedItem]
     @Binding var order: [KeyPathComparator<SortedItem>]
     let openFolder: (URL) -> Void
