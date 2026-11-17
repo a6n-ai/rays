@@ -52,10 +52,12 @@ const jsonLd = {
 		<meta name="twitter:card" content="summary_large_image" />
 		<link rel="alternate" type="text/plain" href="/llms.txt" title="LLM summary" />
 		<link rel="sitemap" href="/sitemap.xml" />
+		<link rel="ai-catalog" href="/.well-known/ai-catalog.json" />
 		<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 	</head>
 	<body>
 		<a class="skip-link" href="#main">Skip to content</a>
 		<slot />
+		<script src="../scripts/webmcp.ts"></script>
 	</body>
 </html>

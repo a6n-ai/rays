@@ -1,0 +1,14 @@
+{
+  "serverInfo": { "name": "rays", "title": "Rays", "version": "0.1.4" },
+  "description": "Download links and sort folders on macOS with Rays. Runs locally; install Rays first (brew install --cask a6n-ai/tap/rays).",
+  "transport": { "type": "stdio", "command": "dl", "args": ["mcp"] },
+  "capabilities": { "tools": {} },
+  "tools": [
+    { "name": "add_downloads", "description": "Download one or more http/https links with Rays." },
+    { "name": "list_downloads", "description": "List downloads with state, progress and file name." },
+    { "name": "sorter_status", "description": "Watched folders, categories, settings and recent moves." },
+    { "name": "sort_folder", "description": "Sort a folder into category folders; dry run unless dry_run is false." }
+  ],
+  "documentation": "https://rays.a6n.ai/docs/dl/",
+  "repository": "https://github.com/a6n-ai/rays"
+}

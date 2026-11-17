@@ -8,9 +8,9 @@ const SUBJECT = 'Subscribe to Rays updates';
 <section class="news" aria-labelledby="news-title">
 	<h2 id="news-title">Updates</h2>
 	<p>Get an email when a new version of Rays is out.</p>
-	<form class="form" data-newsletter action={`mailto:${TO}?subject=${encodeURIComponent(SUBJECT)}`} method="post" enctype="text/plain">
+	<form class="form" data-newsletter toolname="subscribe_to_rays_updates" tooldescription="Ask to receive an email when a new version of Rays is out. Opens the visitor's mail app with a message to hi@a6n.ai." action={`mailto:${TO}?subject=${encodeURIComponent(SUBJECT)}`} method="post" enctype="text/plain">
 		<label class="sr-only" for="news-email">Email address</label>
-		<input id="news-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" />
+		<input id="news-email" name="email" type="email" toolparamdescription="Email address to send Rays release emails to" required autocomplete="email" placeholder="you@example.com" />
 		<button type="submit">Subscribe</button>
 	</form>
 	<p class="hint" data-news-status role="status" aria-live="polite">

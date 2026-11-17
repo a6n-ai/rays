@@ -1,0 +1,27 @@
+{
+  "specVersion": "1.0",
+  "host": { "displayName": "Rays by a6n", "identifier": "did:web:rays.a6n.ai" },
+  "entries": [
+    {
+      "identifier": "urn:air:rays.a6n.ai:server:rays",
+      "displayName": "Rays MCP server",
+      "type": "application/mcp-server-card+json",
+      "url": "https://rays.a6n.ai/.well-known/mcp/server-card.json",
+      "representativeQueries": ["download this file on my Mac", "what is downloading right now", "sort my Downloads folder", "which folders does my Mac sort automatically"]
+    },
+    {
+      "identifier": "urn:air:rays.a6n.ai:skill:rays",
+      "displayName": "Rays agent skill",
+      "type": "text/markdown",
+      "url": "https://rays.a6n.ai/.well-known/agent-skills/rays/SKILL.md",
+      "representativeQueries": ["download a list of links from the terminal on macOS", "tidy up the Downloads folder into categories", "download manager command line for Mac"]
+    },
+    {
+      "identifier": "urn:air:rays.a6n.ai:docs:llms",
+      "displayName": "Rays summary for LLMs",
+      "type": "text/plain",
+      "url": "https://rays.a6n.ai/llms.txt",
+      "representativeQueries": ["what is Rays", "how to install Rays download manager", "free download manager for macOS with AI sorting"]
+    }
+  ]
+}

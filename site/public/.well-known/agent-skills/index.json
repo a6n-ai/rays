@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "rays",
+      "type": "skill-md",
+      "description": "Download files and sort folders on macOS with Rays through its dl command or MCP server.",
+      "url": "https://rays.a6n.ai/.well-known/agent-skills/rays/SKILL.md",
+      "digest": "sha256:8769f60965b8054b4d4227ef5ac54dc34f701034765218623b7d342bc1b014de"
+    }
+  ]
+}
