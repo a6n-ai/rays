@@ -1,14 +1,11 @@
 #!/bin/bash
-# Builds Rays-<version>.dmg: Rays.app next to an Applications shortcut, so users drag to install.
+# Builds Rays-<version>.dmg: Rays.app beside an Applications shortcut on a background that says to drag.
+# dmgbuild writes the window layout itself, so this works without Finder (CI included).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="${1:-$(plutil -extract CFBundleShortVersionString raw bin/Rays.app/Contents/Info.plist)}"
 OUT="Rays-${VERSION}.dmg"
-STAGE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"' EXIT
-
-ditto bin/Rays.app "$STAGE/Rays.app"
-ln -s /Applications "$STAGE/Applications"
 rm -f "$OUT"
-hdiutil create -volname "Rays" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$OUT" >/dev/null
+uvx --quiet --from "dmgbuild==1.6.5" dmgbuild -s scripts/dmg/settings.py \
+  -D app=bin/Rays.app -D background=scripts/dmg/background.tiff "Rays" "$OUT" >/dev/null
 echo "$OUT"

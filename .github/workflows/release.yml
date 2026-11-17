@@ -42,6 +42,9 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: uv (for dmgbuild)
+        run: brew install uv
+
       - name: Build Rays.app
         run: scripts/bundle-app.sh
 
@@ -61,10 +64,10 @@ jobs:
 
       - name: Update Homebrew cask
         env:
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
           if [ -z "$TAP_TOKEN" ]; then
-            echo "::notice::Set the TAP_TOKEN secret (contents:write on a6n-ai/homebrew-tap) to bump the cask automatically. sha256=${SHA256}"
+            echo "::notice::HOMEBREW_TAP_GITHUB_TOKEN is not shared with this repo; bump the cask by hand. sha256=${SHA256}"
             exit 0
           fi
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/a6n-ai/homebrew-tap.git" tap
