@@ -1,30 +1,207 @@
-/* Starlight in the Rays look: warm near-black, the site's orange accent, system fonts. */
+/* Rays docs in a Linear-like look: near-black, hairline borders, quiet sidebar with icons, white primary action. */
 :root {
-	--sl-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+	--sl-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
 	--sl-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
-	--sl-color-accent-low: #3a2414;
+	--sl-sidebar-width: 17.5rem;
+	--sl-content-width: 46rem;
+	--sl-nav-height: 4rem;
+	--sl-text-h1: 2.5rem;
+	--sl-text-h2: 1.5rem;
+	--sl-text-h3: 1.2rem;
+
+	--sl-color-accent-low: #2a1a10;
 	--sl-color-accent: #ffa36e;
 	--sl-color-accent-high: #ffd8bf;
-	--sl-color-white: #ecebe6;
-	--sl-color-gray-1: #dcd9d2;
-	--sl-color-gray-2: #b8b5ad;
-	--sl-color-gray-3: #9a978e;
-	--sl-color-gray-4: #5f5c55;
-	--sl-color-gray-5: #3a3b36;
-	--sl-color-gray-6: #1b1c19;
-	--sl-color-black: #111210;
+	--sl-color-white: #f7f8f8;
+	--sl-color-gray-1: #e2e4e6;
+	--sl-color-gray-2: #b4b8bd;
+	--sl-color-gray-3: #8a8f98;
+	--sl-color-gray-4: #4b4f55;
+	--sl-color-gray-5: #26282b;
+	--sl-color-gray-6: #141516;
+	--sl-color-black: #08090a;
+	--sl-color-hairline: #1c1d20;
+	--sl-color-hairline-light: #26282b;
+	--sl-color-bg-nav: #08090a;
+	--sl-color-bg-sidebar: #08090a;
+	--rays-card: #0f1011;
+	--rays-card-hover: #141516;
+	--rays-current: #161718;
 }
 :root[data-theme='light'] {
 	--sl-color-accent-low: #fde3d2;
 	--sl-color-accent: #c2410c;
 	--sl-color-accent-high: #6b2208;
-	--sl-color-white: #171714;
-	--sl-color-gray-1: #2a2a26;
-	--sl-color-gray-2: #45443f;
-	--sl-color-gray-3: #5f5c55;
-	--sl-color-gray-4: #8a877f;
-	--sl-color-gray-5: #d3cfc5;
-	--sl-color-gray-6: #ece9e2;
-	--sl-color-gray-7: #f3f1ec;
-	--sl-color-black: #f6f4ef;
+	--sl-color-white: #111214;
+	--sl-color-gray-1: #2a2b2e;
+	--sl-color-gray-2: #45474b;
+	--sl-color-gray-3: #6b6f76;
+	--sl-color-gray-4: #9a9ea5;
+	--sl-color-gray-5: #e3e4e7;
+	--sl-color-gray-6: #f3f4f5;
+	--sl-color-gray-7: #f7f8f8;
+	--sl-color-black: #ffffff;
+	--sl-color-hairline: #ececee;
+	--sl-color-hairline-light: #e3e4e7;
+	--sl-color-bg-nav: #ffffff;
+	--sl-color-bg-sidebar: #ffffff;
+	--rays-card: #fbfbfc;
+	--rays-card-hover: #f4f5f6;
+	--rays-current: #f0f1f2;
+}
+
+/* Headings: tight, white, medium weight. */
+.sl-markdown-content :is(h1, h2, h3, h4),
+h1#_top {
+	color: var(--sl-color-white);
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+.sl-markdown-content {
+	color: var(--sl-color-gray-2);
+	line-height: 1.7;
+}
+.sl-markdown-content img {
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.75rem;
+}
+.content-panel {
+	border-top-color: transparent;
+}
+
+/* Header and search: hairline bottom, icon-only search button next to the brand. */
+header.header {
+	border-bottom: 1px solid var(--sl-color-hairline);
+}
+.rh .search site-search button[data-open-modal] {
+	width: 2rem;
+	height: 2rem;
+	padding: 0;
+	justify-content: center;
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 999px;
+	background: transparent;
+}
+.rh .search site-search button[data-open-modal] > :not(svg) {
+	display: none;
+}
+.rh .search site-search button[data-open-modal] svg {
+	margin: 0;
+}
+
+/* Sidebar: small muted group labels, no carets, icons before links, soft current row. */
+.sidebar-pane {
+	border-inline-end: 1px solid var(--sl-color-hairline);
+}
+.sidebar-content summary .group-label .large {
+	color: var(--sl-color-gray-3);
+	font-size: 0.8125rem;
+	font-weight: 500;
+}
+.sidebar-content summary .caret {
+	display: none;
+}
+.sidebar-content ul ul {
+	border-inline-start: 0;
+	margin-inline-start: 0;
+}
+.sidebar-content a {
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
+	padding: 0.4rem 0.6rem;
+	border-radius: 0.5rem;
+	color: var(--sl-color-gray-2);
+	font-size: 0.9rem;
+}
+.sidebar-content a[data-icon]::before {
+	content: '';
+	flex: none;
+	width: 16px;
+	height: 16px;
+	background: currentColor;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-size: contain;
+	mask-size: contain;
+	opacity: 0.8;
+}
+.sidebar-content a:hover {
+	color: var(--sl-color-white);
+	background: var(--rays-current);
+}
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover {
+	background: var(--rays-current);
+	color: var(--sl-color-white);
+	font-weight: 500;
+}
+
+/* Table of contents: a line on the left, the current entry marked on it. */
+starlight-toc nav > ul {
+	border-inline-start: 1px solid var(--sl-color-hairline);
+}
+starlight-toc a {
+	padding-inline-start: calc(0.9rem + var(--depth, 0) * 0.75rem);
+	margin-inline-start: -1px;
+	border-inline-start: 1px solid transparent;
+	color: var(--sl-color-gray-3);
+	font-size: 0.8125rem;
+}
+starlight-toc a[aria-current='true'] {
+	border-inline-start-color: var(--sl-color-white);
+	color: var(--sl-color-white);
+}
+starlight-toc h2 {
+	color: var(--sl-color-gray-3);
+	font-size: 0.8125rem;
+	font-weight: 500;
+}
+
+/* Code blocks and inline code on the near-black ground. */
+.sl-markdown-content :not(pre) > code {
+	background: var(--sl-color-gray-6);
+	border: 1px solid var(--sl-color-hairline);
+	border-radius: 0.35rem;
+}
+.sl-markdown-content table {
+	border-collapse: collapse;
+}
+.sl-markdown-content :is(th, td) {
+	border-color: var(--sl-color-hairline);
+}
+
+/* Prev/next links as quiet cards. */
+.pagination-links a {
+	border-color: var(--sl-color-hairline);
+	border-radius: 0.75rem;
+	box-shadow: none;
+}
+.pagination-links a:hover {
+	border-color: var(--sl-color-gray-4);
+}
+
+/* Starlight indents nested lists and draws a line beside them; Linear keeps items flush under the label. */
+.sidebar-content ul.top-level > li > details > ul {
+	margin-inline-start: 0;
+	padding-inline-start: 0;
+	border-inline-start: 0;
+}
+.sidebar-content ul.top-level > li > details > ul > li {
+	margin-inline-start: 0;
+	padding-inline-start: 0;
+	border-inline-start: 0;
+}
+.sidebar-content summary {
+	padding-inline: 0.6rem;
+}
+
+/* Pages without a table of contents (the docs home) get the wider column the card grid needs. */
+:root:not([data-has-toc]) {
+	--sl-content-width: 62rem;
+}
+.sl-markdown-content .lead {
+	color: var(--sl-color-gray-3);
+	font-size: 1.05rem;
+	margin-top: -0.5rem;
 }

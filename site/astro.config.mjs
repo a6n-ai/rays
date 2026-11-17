@@ -10,16 +10,48 @@ export default defineConfig({
 			logo: { src: './src/assets/icon.png', alt: 'Rays' },
 			favicon: '/favicon.png',
 			customCss: ['./src/styles/starlight.css'],
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/a6n-ai/rays' }],
 			editLink: { baseUrl: 'https://github.com/a6n-ai/rays/edit/main/site/' },
 			lastUpdated: false,
 			disable404Route: true,
 			head: [{ tag: 'script', attrs: { src: '/scripts/open-search.js', defer: true } }],
+			components: {
+				Header: './src/components/docs/Header.astro',
+				Sidebar: './src/components/docs/Sidebar.astro',
+			},
 			sidebar: [
-				{ label: 'Getting started', items: ['docs', 'docs/install'] },
-				{ label: 'Using Rays', items: ['docs/app/downloads', 'docs/app/sorter', 'docs/app/browser', 'docs/app/settings'] },
-				{ label: 'Command line and AI', items: ['docs/dl', 'docs/mcp'] },
-				{ label: 'Help', items: ['docs/troubleshooting', { label: 'Release notes', link: '/releases/' }] },
+				{
+					label: 'Getting started',
+					items: [
+						{ label: 'Overview', link: '/docs/', attrs: { 'data-icon': 'home' } },
+						{ label: 'Start guide', link: '/docs/getting-started/', attrs: { 'data-icon': 'start' } },
+						{ label: 'Install', link: '/docs/install/', attrs: { 'data-icon': 'install' } },
+					],
+				},
+				{
+					label: 'Using Rays',
+					items: [
+						{ label: 'Downloads', link: '/docs/app/downloads/', attrs: { 'data-icon': 'download' } },
+						{ label: 'Sorter', link: '/docs/app/sorter/', attrs: { 'data-icon': 'sorter' } },
+						{ label: 'Browser extension', link: '/docs/app/browser/', attrs: { 'data-icon': 'browser' } },
+						{ label: 'Settings', link: '/docs/app/settings/', attrs: { 'data-icon': 'settings' } },
+					],
+				},
+				{
+					label: 'Command line and AI',
+					items: [
+						{ label: 'The dl command', link: '/docs/dl/', attrs: { 'data-icon': 'terminal' } },
+						{ label: 'MCP', link: '/docs/mcp/', attrs: { 'data-icon': 'mcp' } },
+					],
+				},
+				{
+					label: 'Help',
+					items: [
+						{ label: 'Troubleshooting', link: '/docs/troubleshooting/', attrs: { 'data-icon': 'help' } },
+						{ label: 'Release notes', link: '/releases/', attrs: { 'data-icon': 'notes' } },
+						{ label: 'GitHub', link: 'https://github.com/a6n-ai/rays', attrs: { 'data-icon': 'code' } },
+						{ label: 'Contact', link: 'mailto:hi@a6n.ai', attrs: { 'data-icon': 'mail' } },
+					],
+				},
 			],
 		}),
 	],

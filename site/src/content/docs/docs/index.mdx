@@ -1,0 +1,34 @@
+---
+title: Rays Docs
+description: Get an overview of Rays' features, the dl command and MCP, and how to use them.
+tableOfContents: false
+pagefind: true
+---
+
+import Cards from '../../../components/docs/Cards.astro';
+
+<p class="lead">Get an overview of what Rays does, how to set it up, and how to use it from Terminal and AI tools.</p>
+
+## Popular
+
+<Cards
+	items={[
+		{ title: 'Getting started', description: 'Install Rays, download a file and turn on sorting', href: '/docs/getting-started/', icon: 'start' },
+		{ title: 'Sorter', description: 'File every new download into the right folder', href: '/docs/app/sorter/', icon: 'sorter' },
+		{ title: 'The dl command', description: 'Download and sort from Terminal', href: '/docs/dl/', icon: 'terminal' },
+		{ title: 'MCP', description: 'Connect Rays to Claude and other AI tools', href: '/docs/mcp/', icon: 'mcp' },
+	]}
+/>
+
+## Explore Rays
+
+<Cards
+	items={[
+		{ title: 'Install', description: 'DMG or Homebrew, updates and uninstalling', href: '/docs/install/', icon: 'install' },
+		{ title: 'Downloads', description: 'Paste links, split files, pause and resume', href: '/docs/app/downloads/', icon: 'download' },
+		{ title: 'Browser extension', description: 'Download with Rays from Chrome and Firefox', href: '/docs/app/browser/', icon: 'browser' },
+		{ title: 'Settings', description: 'Every setting, tab by tab', href: '/docs/app/settings/', icon: 'settings' },
+		{ title: 'Troubleshooting', description: 'Common fixes and where Rays keeps files', href: '/docs/troubleshooting/', icon: 'help' },
+		{ title: 'Release notes', description: 'What changed in each version', href: '/releases/', icon: 'notes' },
+	]}
+/>

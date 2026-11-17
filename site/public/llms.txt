@@ -9,7 +9,7 @@
 
 ## Docs
 
-- [Getting started](https://rays.a6n.ai/docs/): install, first download, turn on sorting.
+- [Getting started](https://rays.a6n.ai/docs/getting-started/): install, first download, turn on sorting.
 - [Install](https://rays.a6n.ai/docs/install/), [Downloads](https://rays.a6n.ai/docs/app/downloads/), [Sorter](https://rays.a6n.ai/docs/app/sorter/), [Browser extension](https://rays.a6n.ai/docs/app/browser/), [Settings](https://rays.a6n.ai/docs/app/settings/), [MCP](https://rays.a6n.ai/docs/mcp/), [Troubleshooting](https://rays.a6n.ai/docs/troubleshooting/).
 - [The dl command](https://rays.a6n.ai/docs/dl/): `dl URL...`, `dl list`, `dl sort`, `dl watch`, `dl status`, `dl config`, `dl mcp`, exit codes and environment variables.
 - [Release notes](https://rays.a6n.ai/releases/): what changed in each version.

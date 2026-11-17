@@ -1,0 +1,12 @@
+---
+// Starlight's sidebar plus an icon per link, chosen by the item's data-icon attribute in astro.config.mjs.
+import Default from '@astrojs/starlight/components/Sidebar.astro';
+import { ICONS, maskUrl } from './icons';
+
+const css = Object.keys(ICONS)
+	.map((n) => `.sidebar-content a[data-icon='${n}']::before{-webkit-mask-image:${maskUrl(n)};mask-image:${maskUrl(n)}}`)
+	.join('\n');
+---
+
+<Default />
+<style is:global set:html={css}></style>

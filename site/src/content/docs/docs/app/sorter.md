@@ -18,6 +18,8 @@ The sorter watches the folders you choose. A few seconds after a new file arrive
 
 Sorting runs on your Mac with Apple's on-device model. Nothing is uploaded.
 
+![The Sorter Setup tab: on-device AI ready, sort new files after 10 seconds, rename files from their content, and the Documents and Downloads folders.](../../../../assets/sorter.png)
+
 ## Set up
 
 Open **Sorter** in the sidebar. The **Setup** tab (the sliders icon in the toolbar) has:
