@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.1.5 (18 Nov 2026)
+
+- One command, `dl`, now covers sorting too: `dl list`, `dl sort`, `dl watch`, `dl unwatch`, `dl status` and `dl config`.
+- `dl mcp` runs an MCP server, so AI assistants like Claude can download files and sort folders with Rays.
+- Settings > General > Command line tool installs the `dl` command that ships inside Rays.
+- Settings > General > Uninstall Rays removes the sorter, browser helpers and `dl`, then moves Rays to the Trash.
+- New website and docs at [rays.a6n.ai](https://rays.a6n.ai).
+- Rays is open source under the AGPL-3.0 licence.
+
 ## 0.1.4 (17 Nov 2026)
 
 - Rays checks for updates each time it opens (at most once an hour) and every 6 hours while it is open.
