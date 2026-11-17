@@ -9,7 +9,7 @@ const USAGE: &str = "usage:
   sorter unwatch FOLDER   stop watching FOLDER
   sorter status --json    folders, categories and recent moves as JSON (used by Rays)
   sorter config add|remove FOLDER
-  sorter config set-dest FOLDER CATEGORY PATH | clear-dest FOLDER CATEGORY | set-wait SECONDS";
+  sorter config set-dest FOLDER CATEGORY PATH | clear-dest FOLDER CATEGORY | set-wait SECONDS | set-rename on|off";
 mod config;
 mod status;
 use serde_json::{Value, json};
@@ -552,6 +552,7 @@ fn main() {
                 ["remove", f] => config::Edit::Remove(abs(f)),
                 ["set-dest", f, c, d] => config::Edit::SetDest { folder: abs(f), category: c.to_string(), dest: abs(d) },
                 ["clear-dest", f, c] => config::Edit::ClearDest { folder: abs(f), category: c.to_string() },
+                ["set-rename", v @ ("on" | "off")] => config::Edit::SetRename(*v == "on"),
                 ["set-wait", secs] => match secs.parse() {
                     Ok(n) => config::Edit::SetWait(n),
                     Err(_) => { eprintln!("set-wait needs a number of seconds"); std::process::exit(2) }
@@ -574,6 +575,7 @@ fn main() {
     let move_projects = args.iter().any(|a| a == "--projects") || downloads == home.join("Downloads");
     let root = downloads.clone();
     let config_doc = config::load(&config_path).unwrap_or_else(|e| { eprintln!("ignoring destinations: {e}"); json!({"folders": []}) });
+    let rename = config::rename_files(&config_doc);
     let layout = config::Layout::new(&root, &config_doc);
     let log_file = state_dir.join("sorter.log");
     let sorter_dir = downloads.join(".sorter"); // hidden, so the sorter never sorts it
@@ -659,7 +661,9 @@ fn main() {
             }
             // Rule fixes the folder; the model still names the file from its content/metadata.
             (None, Some((cat, sub))) => {
-                let stem = if NO_TEXT.contains(&ext(&p).as_str()) {
+                let stem = if !rename {
+                    orig_stem
+                } else if NO_TEXT.contains(&ext(&p).as_str()) {
                     tidy_name(&orig_stem)
                 } else {
                     match classify_cached(&p, &layout, &schema, &mut cache, &cfg) {
@@ -672,6 +676,7 @@ fn main() {
             }
             (None, None) => classify_cached(&p, &layout, &schema, &mut cache, &cfg).map(|((cat, sub, stem), timing)| {
                 log(&log_file, dry, &format!("timing {name}: {timing}"));
+                let stem = if rename { stem } else { orig_stem };
                 let cat_dir = layout.cat_dir(&cat);
                 let indexed = !layout.is_external(&cat);
                 (cat_dir.join(&sub), cat_dir, stem, format!("{cat}/{sub}"), indexed)

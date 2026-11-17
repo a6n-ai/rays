@@ -5,6 +5,7 @@ struct SorterStatus: Decodable, Equatable, Sendable {
     let categories: [SorterCategory]
     let recent: [SorterMove]
     let waitSeconds: Int?
+    let renameFiles: Bool?
 }
 
 struct SorterFolder: Decodable, Identifiable, Equatable, Sendable {
@@ -101,6 +102,10 @@ final class SorterModel {
         (10, "10 seconds (Recommended)"), (30, "30 seconds"), (60, "1 minute"),
         (300, "5 minutes"), (900, "15 minutes"), (3600, "1 hour"),
     ]
+
+    func setRename(_ on: Bool) async {
+        _ = await perform(["config", "set-rename", on ? "on" : "off"])
+    }
 
     func setWait(_ seconds: Int) async {
         _ = await perform(["config", "set-wait", String(seconds)])

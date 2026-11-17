@@ -10,6 +10,12 @@ pub enum Edit {
     SetDest { folder: String, category: String, dest: String },
     ClearDest { folder: String, category: String },
     SetWait(u64),
+    SetRename(bool),
+}
+
+/// Whether the model may give files new names from their content (on unless turned off).
+pub fn rename_files(doc: &Value) -> bool {
+    doc["rename_files"].as_bool().unwrap_or(true)
 }
 
 /// How long a watch run waits before sorting, so a new file has time to finish arriving.
@@ -50,9 +56,16 @@ fn find(folders: &[Value], path: &str) -> Option<usize> {
 }
 
 pub fn apply(doc: &mut Value, edit: &Edit) -> Result<(), String> {
-    if let Edit::SetWait(secs) = edit {
-        doc["wait_seconds"] = json!((*secs).min(MAX_WAIT_SECS));
-        return Ok(());
+    match edit {
+        Edit::SetWait(secs) => {
+            doc["wait_seconds"] = json!((*secs).min(MAX_WAIT_SECS));
+            return Ok(());
+        }
+        Edit::SetRename(on) => {
+            doc["rename_files"] = json!(on);
+            return Ok(());
+        }
+        _ => {}
     }
     let folders = doc["folders"].as_array_mut().ok_or("no folders array")?;
     match edit {
@@ -76,7 +89,7 @@ pub fn apply(doc: &mut Value, edit: &Edit) -> Result<(), String> {
             }
             dests[category.as_str()] = json!(dest);
         }
-        Edit::SetWait(_) => unreachable!("handled above"),
+        Edit::SetWait(_) | Edit::SetRename(_) => unreachable!("handled above"),
         Edit::ClearDest { folder, category } => {
             if let Some(i) = find(folders, folder)
                 && let Some(dests) = folders[i]["destinations"].as_object_mut()
@@ -182,5 +195,15 @@ mod tests {
         apply(&mut doc, &Edit::SetWait(99_999)).unwrap();
         assert_eq!(wait_secs(&doc), MAX_WAIT_SECS);
         assert!(doc["folders"].is_array());
+    }
+
+    #[test]
+    fn rename_defaults_on_and_round_trips() {
+        let mut doc = json!({"folders": []});
+        assert!(rename_files(&doc));
+        apply(&mut doc, &Edit::SetRename(false)).unwrap();
+        assert!(!rename_files(&doc));
+        apply(&mut doc, &Edit::SetRename(true)).unwrap();
+        assert!(rename_files(&doc));
     }
 }

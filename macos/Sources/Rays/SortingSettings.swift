@@ -30,6 +30,18 @@ struct SortingTab: View {
             }
 
             Section {
+                SettingRow(symbol: "character.cursor.ibeam", color: .purple, title: "Rename files from their content",
+                           hint: "Off keeps every file's original name. Files are still sorted into folders.") {
+                    Toggle("Rename files from their content", isOn: Binding(
+                        get: { sorter.status?.renameFiles ?? true },
+                        set: { on in Task { await sorter.setRename(on) } }))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(sorter.busy || sorter.loadFailed)
+                }
+            }
+
+            Section {
                 SettingRow(symbol: "folder.badge.gearshape", color: .blue,
                            title: watched == 1 ? "1 folder watched" : "\(watched) folders watched",
                            hint: folders.isEmpty ? "Add folders to sort in the Sorter page."

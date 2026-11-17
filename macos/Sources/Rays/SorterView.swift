@@ -60,6 +60,17 @@ struct SorterView: View {
                         Text("Rays waits this long after a file arrives, so you can open or move it first.")
                     }
 
+                    Section {
+                        Toggle(isOn: Binding(get: { model.status?.renameFiles ?? true },
+                                             set: { on in Task { await model.setRename(on) } })) {
+                            Label("Rename files from their content", systemImage: "character.cursor.ibeam")
+                        }
+                        .toggleStyle(.switch)
+                        .disabled(model.busy || model.loadFailed)
+                    } footer: {
+                        Text("Off keeps every file's original name. Files are still sorted into folders.")
+                    }
+
                     if !outdated.isEmpty {
                         Section {
                             UpdateAllRow(count: outdated.count, busy: model.busy) {

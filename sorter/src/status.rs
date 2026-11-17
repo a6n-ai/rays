@@ -113,7 +113,7 @@ pub fn status_json(home: &Path, doc: &Value, state_dir: &Path, categories: &[(&s
 
     let categories: Vec<Value> = categories.iter().map(|(n, d)| json!({"name": n, "description": d})).collect();
     json!({"folders": folders, "categories": categories, "recent": recent,
-           "wait_seconds": crate::config::wait_secs(doc)})
+           "wait_seconds": crate::config::wait_secs(doc), "rename_files": crate::config::rename_files(doc)})
 }
 
 #[cfg(test)]
