@@ -42,4 +42,9 @@ brew uninstall --cask rays          # removes the app and stops Rays' sorter hel
 brew uninstall --zap --cask rays    # also deletes settings, history and browser helpers
 ```
 
-For a DMG install, first open **Sorter** and choose **Remove Sorter…** so no folder keeps being sorted, then drag Rays from Applications to the Trash. Your settings and history live in `~/Library/Application Support/Rays`; delete that folder to remove them too.
+For a DMG install, open **Settings > General** and click **Uninstall Rays…**:
+
+- **Uninstall** stops sorting your folders, removes the browser helpers and the `dl` command, and moves Rays to the Trash.
+- **Uninstall and Delete Data** also removes your download history and settings (`~/Library/Application Support/Rays`).
+
+Your downloads and sorted files stay where they are either way.

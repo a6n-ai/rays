@@ -119,6 +119,8 @@ private struct GeneralTab: View {
 
             UpdateSettingsSection()
 
+            UninstallSection()
+
             SavedNote()
         }
         .scrollContentBackground(.hidden)
