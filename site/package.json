@@ -4,10 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
-    "deploy": "astro build && wrangler pages deploy dist --project-name rays"
+    "build": "astro build && node scripts/markdown.mjs",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name rays --branch main"
   },
   "dependencies": {
     "astro": "7.4.12"
+  },
+  "devDependencies": {
+    "turndown": "^7.2.5"
   }
 }
