@@ -10,7 +10,7 @@ Rays is a download manager for macOS 26 with an on-device AI sorter. Everything 
 ## Install
 
 - `brew install --cask a6n-ai/tap/rays` puts `dl` on PATH.
-- Or download https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg, drag Rays to Applications, then `ln -s /Applications/Rays.app/Contents/MacOS/dl /opt/homebrew/bin/dl`.
+- Or download https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg, drag Rays to Applications, then in Rays open Settings > General > Command line tool > Install.
 
 ## Commands
 

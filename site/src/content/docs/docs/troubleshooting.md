@@ -13,7 +13,11 @@ Rays is not notarized yet. Open **System Settings > Privacy & Security**, scroll
 
 ## `dl: sorter not found next to ...`
 
-The `dl` you ran is not the one inside Rays.app. Use the Homebrew `dl`, link the one in `/Applications/Rays.app/Contents/MacOS/dl`, or set `DL_SORTER`.
+The `dl` you ran is not the one inside Rays.app. Use the Homebrew `dl` or **Settings > General > Command line tool > Install**, or set `DL_SORTER`.
+
+## `dl: command not found`
+
+Open Rays, go to **Settings > General**, and click **Install** next to **Command line tool**. Homebrew installs add it already.
 
 ## A file was not sorted
 

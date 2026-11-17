@@ -3,7 +3,7 @@ title: The dl command
 description: "One command for Rays: download links, sort folders, and run the MCP server."
 ---
 
-`dl` talks to the running Rays app, and runs the sorter that ships inside it.
+`dl` comes inside Rays.app. It talks to the running app, and runs the sorter that ships with it.
 
 ## Install
 
@@ -13,11 +13,7 @@ Homebrew puts `dl` on your PATH:
 brew install --cask a6n-ai/tap/rays
 ```
 
-For a DMG install, link it once:
-
-```sh
-ln -s /Applications/Rays.app/Contents/MacOS/dl /opt/homebrew/bin/dl
-```
+With a DMG install, open **Settings > General** and click **Install** next to **Command line tool**.
 
 ## Commands
 

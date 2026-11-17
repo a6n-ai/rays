@@ -115,6 +115,8 @@ private struct GeneralTab: View {
                 }
             }
 
+            CommandLineSection()
+
             UpdateSettingsSection()
 
             SavedNote()

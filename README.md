@@ -19,7 +19,7 @@ brew uninstall --zap --cask rays         # uninstall and delete settings, histor
 
 Requires macOS 26. Rays isn't notarized yet: if macOS blocks Rays on first launch from the DMG, open
 System Settings > Privacy & Security and choose **Open Anyway** (Homebrew installs skip this).
-DMG installs can link the command once: `ln -s /Applications/Rays.app/Contents/MacOS/dl /opt/homebrew/bin/dl`.
+`dl` ships inside Rays.app: DMG installs add it to the PATH from Settings > General > Command line tool.
 
 ## Build
 

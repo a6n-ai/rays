@@ -6,7 +6,7 @@
       "type": "skill-md",
       "description": "Download files and sort folders on macOS with Rays through its dl command or MCP server.",
       "url": "https://rays.a6n.ai/.well-known/agent-skills/rays/SKILL.md",
-      "digest": "sha256:8769f60965b8054b4d4227ef5ac54dc34f701034765218623b7d342bc1b014de"
+      "digest": "sha256:835a2c2f1edba61385fc33dce8c7620d3dc0ab993a714c627abb1f192519a88c"
     }
   ]
 }
