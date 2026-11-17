@@ -1,0 +1,29 @@
+# Rays
+
+> Rays is a free, open-source (AGPL-3.0) download manager for macOS 26 by a6n. It downloads each file in parts over several connections, and its sorter moves new files into folders that fit them using Apple's on-device model. One command, `dl`, covers downloads, sorting and an MCP server for AI assistants.
+
+## Install
+
+- [Download Rays.dmg](https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg): open it and drag Rays to Applications. On first open, approve it in System Settings > Privacy & Security > Open Anyway.
+- Homebrew: `brew install --cask a6n-ai/tap/rays` (also puts `dl` on PATH; no Gatekeeper step).
+
+## Docs
+
+- [The dl command](https://rays.a6n.ai/docs/dl/): `dl URL...`, `dl list`, `dl sort`, `dl watch`, `dl status`, `dl config`, `dl mcp`, exit codes and environment variables.
+- [Release notes](https://rays.a6n.ai/releases/): what changed in each version.
+- [Source code](https://github.com/a6n-ai/rays): Rust engine, SwiftUI app, `dl` CLI, sorter, browser extension.
+
+## MCP
+
+- Start the server with `dl mcp` (stdio). Claude Code: `claude mcp add rays -- dl mcp`. Any client: `{"command": "dl", "args": ["mcp"]}`.
+- Tools: `add_downloads` (http/https URLs), `list_downloads`, `sorter_status`, `sort_folder` (dry run unless `dry_run` is false).
+
+## Facts
+
+- Requires macOS 26 or later. No account; sorting runs on the Mac and nothing is uploaded.
+- Files of 4 MB or more split over up to 16 connections; up to 5 automatic retries; downloads resume after pause or quit.
+- Sorter categories: Work, Personal, Images, Installers, Archives, Media, Code, Other.
+
+## Optional
+
+- [a6n](https://a6n.ai): the team that makes Rays. Contact hi@a6n.ai.
