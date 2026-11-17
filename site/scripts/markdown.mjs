@@ -1,9 +1,12 @@
 // After `astro build`: write dist/<page>/index.md from each page's <main>, for Accept: text/markdown (functions/[[path]].js).
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import TurndownService from 'turndown';
 
 const SITE = 'https://rays.a6n.ai';
-const PAGES = ['index.html', 'releases/index.html', 'docs/dl/index.html'];
+// Every HTML page except the 404 and Starlight's search bundle.
+const PAGES = (await readdir('dist', { recursive: true })).filter(
+	(f) => f.endsWith('index.html') && !f.startsWith('pagefind') && !f.startsWith('_astro'),
+);
 
 const td = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
 td.remove(['script', 'style', 'svg', 'form', 'button', 'header', 'footer']);

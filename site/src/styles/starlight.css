@@ -1,0 +1,30 @@
+/* Starlight in the Rays look: warm near-black, the site's orange accent, system fonts. */
+:root {
+	--sl-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+	--sl-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+	--sl-color-accent-low: #3a2414;
+	--sl-color-accent: #ffa36e;
+	--sl-color-accent-high: #ffd8bf;
+	--sl-color-white: #ecebe6;
+	--sl-color-gray-1: #dcd9d2;
+	--sl-color-gray-2: #b8b5ad;
+	--sl-color-gray-3: #9a978e;
+	--sl-color-gray-4: #5f5c55;
+	--sl-color-gray-5: #3a3b36;
+	--sl-color-gray-6: #1b1c19;
+	--sl-color-black: #111210;
+}
+:root[data-theme='light'] {
+	--sl-color-accent-low: #fde3d2;
+	--sl-color-accent: #c2410c;
+	--sl-color-accent-high: #6b2208;
+	--sl-color-white: #171714;
+	--sl-color-gray-1: #2a2a26;
+	--sl-color-gray-2: #45443f;
+	--sl-color-gray-3: #5f5c55;
+	--sl-color-gray-4: #8a877f;
+	--sl-color-gray-5: #d3cfc5;
+	--sl-color-gray-6: #ece9e2;
+	--sl-color-gray-7: #f3f1ec;
+	--sl-color-black: #f6f4ef;
+}

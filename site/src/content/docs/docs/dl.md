@@ -1,0 +1,136 @@
+---
+title: The dl command
+description: "One command for Rays: download links, sort folders, and run the MCP server."
+---
+
+`dl` talks to the running Rays app, and runs the sorter that ships inside it.
+
+## Install
+
+Homebrew puts `dl` on your PATH:
+
+```sh
+brew install --cask a6n-ai/tap/rays
+```
+
+For a DMG install, link it once:
+
+```sh
+ln -s /Applications/Rays.app/Contents/MacOS/dl /opt/homebrew/bin/dl
+```
+
+## Commands
+
+```text
+dl URL...                     download links with Rays
+dl list                       list downloads (also: dl --list)
+dl sort [FOLDER] [--all] [--dry-run] [--projects]
+dl watch FOLDER | dl unwatch FOLDER
+dl status [--json]            sorter settings, watched folders, recent moves
+dl config ...                 change sorter settings
+dl mcp                        MCP server on stdio
+dl --help
+```
+
+## Download files
+
+```sh
+dl https://example.com/file.zip https://example.com/talk.mp4
+```
+
+Each link is added to Rays and starts when a slot is free. One line per link:
+
+```text
+added 12 https://example.com/file.zip
+rejected ftp://example.com/x: only http and https URLs
+```
+
+## List downloads
+
+```sh
+dl list
+```
+
+One line per download: id, state, bytes done / total, file name, separated by tabs (shown as spaces here):
+
+```text
+12  running  52428800/104857600  file.zip
+11  done     7340032/7340032     report.pdf
+```
+
+The state is one of `queued`, `running`, `paused`, `retrying`, `done` or `failed`. The total is `?` when the server does not say how big the file is.
+
+## Sort a folder
+
+```sh
+dl sort [FOLDER] [--all] [--dry-run] [--projects]
+```
+
+Moves files into category folders such as Work, Images, Installers and Archives, inside FOLDER. Without a folder it sorts `~/Downloads`; `.` is the current folder.
+
+| Option | Effect |
+|---|---|
+| `--dry-run` | Print what would move and change nothing. |
+| `--all` | Also sort files that were there before the first run. |
+| `--projects` | Move code-project folders whole into Code/Projects. |
+
+Files changed in the last 10 seconds are skipped, so nothing moves while it is still being written.
+
+```text
+$ dl sort ~/Desktop --dry-run
+[dry] setup.dmg -> ~/Desktop/Installers/Apps/Setup.dmg (Installers/Apps rule)
+```
+
+## Watch a folder
+
+```sh
+dl watch ~/Downloads
+dl unwatch ~/Downloads
+```
+
+Rays sorts the folder by itself whenever a new file lands in it, even when the app is closed.
+
+## Status and settings
+
+```sh
+dl status
+dl status --json
+```
+
+```sh
+dl config set-wait 30
+dl config set-rename off
+dl config set-dest ~/Downloads Work ~/Documents/Work
+dl config clear-dest ~/Downloads Work
+dl config add ~/Desktop
+dl config remove ~/Desktop
+```
+
+`set-wait` is in seconds. `set-dest` sends one category somewhere else instead of a folder inside the sorted folder.
+
+## When Rays is not open
+
+`dl` opens Rays for you and waits up to 5 seconds for it to start. Set `DL_NO_LAUNCH=1` to stop it opening the app.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | The command worked. |
+| `1` | At least one link was rejected, or Rays returned an error. |
+| `2` | Wrong usage, or Rays or the sorter could not be reached. |
+
+## Environment
+
+| Variable | Effect |
+|---|---|
+| `DL_NO_LAUNCH` | Do not open Rays when it is not running. |
+| `DL_SORTER` | Path of the sorter to run, instead of the one inside Rays.app. |
+| `DL_SOCKET` | Socket to talk to, instead of `~/Library/Application Support/Rays/dl.sock`. Never opens the app. |
+
+## Scripts
+
+```sh
+xargs dl < links.txt                         # download every link in a file
+dl "$URL" || echo "Rays did not take $URL"   # react to a rejected link
+```
