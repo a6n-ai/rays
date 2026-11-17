@@ -41,13 +41,21 @@ final class Updater {
 
     private static let latest = URL(string: "https://api.github.com/repos/a6n-ai/rays/releases/latest")!
 
-    /// At launch: at most once a day, and only if automatic checks are on (the default).
+    /// At launch (at most once an hour) and then every 6 hours while Rays is open, if automatic checks are on.
     func checkIfDue() {
-        let automatic = UserDefaults.standard.object(forKey: Keys.automatic) as? Bool ?? true
-        guard automatic else { return }
-        if let lastChecked, Date.now.timeIntervalSince(lastChecked) < 24 * 3600 { return }
-        Task { await check() }
+        guard !started else { return }
+        started = true
+        Task {
+            while !Task.isCancelled {
+                let automatic = UserDefaults.standard.object(forKey: Keys.automatic) as? Bool ?? true
+                if automatic, lastChecked.map({ Date.now.timeIntervalSince($0) >= 3600 }) ?? true {
+                    await check()
+                }
+                try? await Task.sleep(for: .seconds(6 * 3600))
+            }
+        }
     }
+    private var started = false
 
     func check() async {
         status = .checking
@@ -166,7 +174,7 @@ struct UpdateSettingsSection: View {
         case .failed(let message): message
         case .idle:
             updater.lastChecked.map { "Last checked \($0.formatted(date: .abbreviated, time: .shortened))." }
-                ?? "Rays checks GitHub once a day."
+                ?? "Rays checks GitHub when it opens and every few hours."
         }
     }
 }
