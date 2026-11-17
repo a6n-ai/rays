@@ -1,0 +1,51 @@
+---
+// Pause/play for the word drum, kept outside the <h1> so the heading stays plain text.
+---
+<button type="button" class="pause" data-pagefind-ignore data-drum-toggle aria-pressed="false" aria-label="Pause animation">
+	<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>
+</button>
+
+<script>
+	const ring = document.querySelector<HTMLElement>('.drum .ring');
+	const toggle = document.querySelector<HTMLButtonElement>('[data-drum-toggle]');
+	let paused = false;
+	let visible = true;
+	const apply = () => ring && (ring.style.animationPlayState = paused || !visible ? 'paused' : 'running');
+	toggle?.addEventListener('click', () => {
+		paused = !paused;
+		toggle.setAttribute('aria-pressed', String(paused));
+		toggle.setAttribute('aria-label', paused ? 'Play animation' : 'Pause animation');
+		toggle.innerHTML = paused
+			? '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 2.5v11a1 1 0 0 0 1.5.86l9-5.5a1 1 0 0 0 0-1.72l-9-5.5A1 1 0 0 0 4 2.5Z"/></svg>'
+			: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>';
+		apply();
+	});
+	if (ring) new IntersectionObserver(([e]) => ((visible = e.isIntersecting), apply())).observe(ring.parentElement!);
+</script>
+
+<style>
+	.pause {
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--muted);
+		fill: currentColor;
+		cursor: pointer;
+		align-self: center;
+		transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+	}
+	.pause:hover {
+		color: var(--ink);
+		background: var(--faint);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pause {
+			display: none;
+		}
+	}
+</style>

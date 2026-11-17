@@ -1,6 +1,6 @@
 ---
-title: Getting started
-description: Install Rays, download your first file, and turn on sorting in a few minutes.
+title: "Get started with Rays"
+description: "Install Rays, the free download manager for Mac, download your first file, and let it organize your Downloads folder automatically in a few minutes."
 ---
 
 Rays is a download manager for macOS 26. It downloads each file in several parts at once, and its sorter moves new files into folders that fit them, using Apple's on-device model.

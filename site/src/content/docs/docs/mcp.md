@@ -1,6 +1,6 @@
 ---
-title: MCP for AI assistants
-description: Let Claude and other MCP clients download files and sort folders with Rays.
+title: "MCP server for downloads and file sorting"
+description: "Connect Claude and other MCP clients to Rays to download files and organize folders on your Mac: setup, the four tools, and safe dry-run sorting."
 ---
 
 `dl mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout. It runs on your Mac and talks to the Rays app; nothing goes through a server.

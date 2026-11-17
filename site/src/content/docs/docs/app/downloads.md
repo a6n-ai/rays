@@ -1,6 +1,6 @@
 ---
-title: Downloads
-description: Add links, watch progress, pause and resume, and limit speed.
+title: "Download files faster on Mac"
+description: "How Rays speeds up downloads on Mac: parallel connections, automatic retries, resume after quitting, speed limits, and pasting many links at once."
 ---
 
 ## Add links

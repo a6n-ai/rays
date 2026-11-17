@@ -1,6 +1,6 @@
 ---
-title: Install
-description: Install, update and uninstall Rays with the DMG or Homebrew.
+title: "Install Rays on Mac"
+description: "Install Rays on macOS 26 with the DMG or Homebrew, add the dl command to Terminal, get automatic updates, and uninstall Rays cleanly."
 ---
 
 Rays needs **macOS 26 or later**. It is free and open source under the AGPL-3.0 licence.

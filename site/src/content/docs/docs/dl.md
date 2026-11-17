@@ -1,6 +1,6 @@
 ---
-title: The dl command
-description: "One command for Rays: download links, sort folders, and run the MCP server."
+title: "dl: command-line download manager for Mac"
+description: "Download files and sort folders from Terminal with dl, the command that ships with Rays: every command, its output, exit codes, environment and scripts."
 ---
 
 `dl` comes inside Rays.app. It talks to the running app, and runs the sorter that ships with it.

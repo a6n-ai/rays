@@ -1,6 +1,6 @@
 ---
-title: Sorter
-description: Let Rays file new downloads into folders, rename them from their content, and browse what it sorted.
+title: "Organize your Downloads folder automatically"
+description: "Rays sorts new files on your Mac into Work, Images, Installers and more with on-device AI, and can rename them from their content. Set it up in a minute."
 ---
 
 The sorter watches the folders you choose. A few seconds after a new file arrives, it moves it into a folder that fits it, inside the watched folder:

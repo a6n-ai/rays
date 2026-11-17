@@ -1,6 +1,6 @@
 ---
-title: Browser extension
-description: Send links and downloads from Chrome, Brave, Edge, Firefox and Zen to Rays.
+title: "Browser extension for Chrome and Firefox"
+description: "Send links and downloads from Chrome, Brave, Edge, Firefox and Zen to Rays with a right-click, or hand every browser download to Rays."
 ---
 
 The extension adds **Download with Rays** to the menu when you right-click a link. It talks to Rays through a small helper that Rays installs for each browser.

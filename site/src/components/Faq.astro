@@ -1,0 +1,76 @@
+---
+// Visible questions plus the same text as FAQPage structured data. Every answer is checked against the app.
+const FAQ = [
+	{
+		q: 'Is Rays free?',
+		a: 'Yes. Rays is free and open source under the AGPL-3.0 licence, with no account and no ads.',
+	},
+	{
+		q: 'Does Rays upload my files to sort them?',
+		a: "No. Sorting runs on your Mac with Apple's on-device model, so file contents never leave your computer.",
+	},
+	{
+		q: 'Which Macs does Rays run on?',
+		a: 'Rays needs macOS 26 or later. Sorting by content and renaming need Apple Intelligence; simple rules, like disk images to Installers and screenshots to Images, work without it.',
+	},
+	{
+		q: 'How is Rays different from other download managers?',
+		a: 'Most download managers stop once the file is saved. Rays also moves it into a folder that fits, can rename it from its content, and can be scripted from Terminal with dl or by AI assistants over MCP.',
+	},
+	{
+		q: 'Can Rays organize folders other than Downloads?',
+		a: 'Yes. Add any folder, such as Desktop or Documents, and Rays sorts new files there too. Run dl sort to tidy files that were already there.',
+	},
+	{
+		q: 'Does Rays work with my browser?',
+		a: 'Yes. The Rays extension for Chrome, Brave, Edge, Firefox and Zen adds Download with Rays to the right-click menu. It is a developer install for now.',
+	},
+];
+const ld = {
+	'@context': 'https://schema.org',
+	'@type': 'FAQPage',
+	mainEntity: FAQ.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+};
+---
+
+<section class="faq" aria-labelledby="faq-title">
+	<h2 id="faq-title">Questions</h2>
+	{
+		FAQ.map((f) => (
+			<div class="item">
+				<h3>{f.q}</h3>
+				<p>{f.a}</p>
+			</div>
+		))
+	}
+</section>
+<script type="application/ld+json" set:html={JSON.stringify(ld)} />
+
+<style>
+	.faq {
+		display: grid;
+		gap: 12px;
+		padding-block: 40px;
+	}
+	h2 {
+		margin: 0;
+		color: var(--muted);
+		font: 400 var(--t-label) / 1.4 var(--font-text);
+	}
+	.item {
+		padding-block: 14px;
+		border-top: 1px solid var(--faint);
+		max-width: var(--measure);
+	}
+	h3 {
+		margin: 0 0 6px;
+		font: 500 1.0625rem / 1.4 var(--font-text);
+		color: var(--ink);
+	}
+	p {
+		margin: 0;
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.55;
+	}
+</style>

@@ -1,6 +1,6 @@
 ---
-title: Settings
-description: Every Rays setting, by tab.
+title: "Rays settings"
+description: "Every Rays setting explained: appearance, download folder, parallel downloads, speed limit, sorting, browser helpers, the dl command and uninstalling."
 ---
 
 Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make them.

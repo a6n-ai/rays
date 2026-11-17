@@ -1,6 +1,6 @@
 ---
-title: Troubleshooting
-description: Fixes for common problems, and where Rays keeps its files.
+title: "Troubleshooting Rays"
+description: "Fix common Rays problems on Mac: Gatekeeper blocks, dl command not found, files not sorted, browser extension not connecting, and where files live."
 ---
 
 ## macOS says it can't verify Rays

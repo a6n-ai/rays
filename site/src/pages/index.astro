@@ -2,19 +2,21 @@
 import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
 import WordDrum from '../components/WordDrum.astro';
+import DrumPause from '../components/DrumPause.astro';
 import InstallBar from '../components/InstallBar.astro';
 import Passage from '../components/Passage.astro';
 import Panel from '../components/Panel.astro';
 import Newsletter from '../components/Newsletter.astro';
+import Faq from '../components/Faq.astro';
 import icon from '../assets/icon.png';
 ---
 
 <Base
-	title="Rays by a6n: a download manager for Mac that sorts what you download"
-	description="Rays downloads files in parts at once and moves each one into a folder that fits, using Apple's on-device model. Free and open source for macOS 26."
+	title="Rays: Free Download Manager for Mac with AI File Sorting"
+	description="Free, open-source download manager for Mac. Rays splits downloads into parallel parts and sorts your Downloads folder automatically with on-device AI."
 >
 	<div class="page">
-		<main id="main" class="column" data-pagefind-body data-pagefind-meta="title:Rays: a download manager for Mac">
+		<main id="main" class="column" data-pagefind-body data-pagefind-meta="title:Rays: free download manager for Mac">
 			<header class="mark">
 				<Image src={icon} alt="" width={28} height={28} />
 				<span>Rays</span>
@@ -26,12 +28,15 @@ import icon from '../assets/icon.png';
 			</header>
 
 			<section class="hero" aria-labelledby="hero-title">
+				<div class="headline">
 				<h1 id="hero-title">
-					<span class="sr-only">Rays sorts your downloads into folders that fit them.</span>
+					<span class="sr-only">Rays sorts your downloads into folders automatically.</span>
 					<span aria-hidden="true" class="lead">Rays sorts your</span>
 					<WordDrum />
 				</h1>
-				<p class="sub">A download manager for Mac that files every download where it belongs.</p>
+				<DrumPause />
+				</div>
+				<p class="sub">A free download manager for Mac that organizes your Downloads folder automatically, with AI that runs on your Mac.</p>
 				<InstallBar />
 			</section>
 
@@ -99,6 +104,8 @@ import icon from '../assets/icon.png';
 				</p>
 			</Passage>
 
+			<Faq />
+
 			<Newsletter />
 
 			<footer class="foot">
@@ -157,6 +164,11 @@ import icon from '../assets/icon.png';
 		min-height: calc(100svh - 96px);
 		align-content: center;
 		padding-block: 48px;
+	}
+	.headline {
+		display: flex;
+		align-items: center;
+		gap: 16px;
 	}
 	h1 {
 		margin: 0;
