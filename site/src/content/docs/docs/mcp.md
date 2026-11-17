@@ -19,7 +19,7 @@ Any MCP client:
 { "mcpServers": { "rays": { "command": "dl", "args": ["mcp"] } } }
 ```
 
-`dl` must be on the PATH the client uses. See [Install](/docs/install/).
+`dl` must be on the PATH the client uses: in Rays, open **Settings > General** and click **Install** next to **Command line tool** (Homebrew installs have it already).
 
 ## Tools
 
@@ -36,6 +36,6 @@ Any MCP client:
 
 Ask your assistant:
 
-- "Download https://example.com/file.zip with Rays."
+- "Download https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg with Rays."
 - "What is downloading right now?"
 - "Show me how Rays would sort my Desktop." (a dry run)

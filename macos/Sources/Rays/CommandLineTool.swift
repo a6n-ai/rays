@@ -114,7 +114,7 @@ struct CommandLineSection: View {
         switch state {
         case .installed(let link): "dl is ready in Terminal (\(link.path))."
         case .otherDL(let link): "\(link.path) is another program named dl."
-        case .missing: "Use dl in Terminal to download, sort folders and connect AI tools."
+        case .missing: "Optional. Lets Terminal and AI agents (MCP) download and sort with Rays."
         }
     }
 

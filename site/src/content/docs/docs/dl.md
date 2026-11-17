@@ -3,7 +3,7 @@ title: "dl: command-line download manager for Mac"
 description: "Download files and sort folders from Terminal with dl, the command that ships with Rays: every command, its output, exit codes, environment and scripts."
 ---
 
-`dl` comes inside Rays.app. It talks to the running app, and runs the sorter that ships with it.
+`dl` is optional: Rays downloads and sorts without it. Install it when you want to use Rays from Terminal, scripts or AI agents over [MCP](/docs/mcp/). It comes inside Rays.app, talks to the running app, and runs the sorter that ships with it.
 
 ## Install
 
@@ -31,14 +31,15 @@ dl --help
 ## Download files
 
 ```sh
-dl https://example.com/file.zip https://example.com/talk.mp4
+dl https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg https://github.com/a6n-ai/rays/archive/refs/heads/main.zip
 ```
 
 Each link is added to Rays and starts when a slot is free. One line per link:
 
 ```text
-added 12 https://example.com/file.zip
-rejected ftp://example.com/x: only http and https URLs
+added 12 https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg
+added 13 https://github.com/a6n-ai/rays/archive/refs/heads/main.zip
+rejected file:///etc/hosts: only http and https URLs
 ```
 
 ## List downloads
@@ -50,7 +51,7 @@ dl list
 One line per download: id, state, bytes done / total, file name, separated by tabs (shown as spaces here):
 
 ```text
-12  running  52428800/104857600  file.zip
+12  running  6291456/12582912  Rays.dmg
 11  done     7340032/7340032     report.pdf
 ```
 

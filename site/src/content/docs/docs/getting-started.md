@@ -19,7 +19,7 @@ Or with Homebrew, which skips step 3:
 brew install --cask a6n-ai/tap/rays
 ```
 
-The `dl` command comes with the app. With a DMG install, turn it on in **Settings > General > Command line tool**. More options, updating and uninstalling: [Install](/docs/install/).
+More options, updating and uninstalling: [Install](/docs/install/).
 
 ## 2. Download a file
 
@@ -40,5 +40,4 @@ From now on, a few seconds after a file lands in that folder, Rays moves it into
 ## Next steps
 
 - Send links from your browser: [Browser extension](/docs/app/browser/).
-- Download and sort from Terminal: [The dl command](/docs/dl/).
-- Let an AI assistant use Rays: [MCP](/docs/mcp/).
+- Optional, for Terminal and AI agents: [the dl command](/docs/dl/) and [MCP](/docs/mcp/). Rays works without them.

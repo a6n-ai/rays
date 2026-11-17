@@ -13,7 +13,7 @@ Rays needs **macOS 26 or later**. It is free and open source under the AGPL-3.0 
 
 Rays is not notarized yet, so the first time you open it macOS may say it can't verify the app. Open **System Settings > Privacy & Security**, scroll down, and choose **Open Anyway**. You only do this once.
 
-The `dl` command comes inside the app. To use it in Terminal, open **Settings > General** and click **Install** next to **Command line tool**. macOS may ask for your password once, to add it to `/usr/local/bin`.
+The optional `dl` command, for Terminal and AI agents, comes inside the app. To use it, open **Settings > General** and click **Install** next to **Command line tool**. macOS may ask for your password once, to add it to `/usr/local/bin`.
 
 ## Homebrew
 

@@ -18,7 +18,10 @@ td.addRule('dd', { filter: 'dd', replacement: (c) => `${c.trim()}\n` });
 td.addRule('srOnly', { filter: (n) => n.classList?.contains('sr-only'), replacement: (c) => `${c} ` });
 
 for (const page of PAGES) {
-	const html = await readFile(`dist/${page}`, 'utf8');
+	let html = await readFile(`dist/${page}`, 'utf8');
+	// Expressive Code's copy buttons only have a title; give them an accessible name.
+	const labelled = html.replaceAll('<button title="Copy to clipboard"', '<button aria-label="Copy to clipboard" title="Copy to clipboard"');
+	if (labelled !== html) await writeFile(`dist/${page}`, (html = labelled));
 	const main = html.match(/<main[^>]*>([\s\S]*?)<\/main>/)?.[1];
 	if (!main) throw new Error(`no <main> in ${page}`);
 	const body = td
