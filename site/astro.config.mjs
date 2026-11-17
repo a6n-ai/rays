@@ -14,6 +14,7 @@ export default defineConfig({
 			editLink: { baseUrl: 'https://github.com/a6n-ai/rays/edit/main/site/' },
 			lastUpdated: false,
 			disable404Route: true,
+			head: [{ tag: 'script', attrs: { src: '/scripts/open-search.js', defer: true } }],
 			sidebar: [
 				{ label: 'Getting started', items: ['docs', 'docs/install'] },
 				{ label: 'Using Rays', items: ['docs/app/downloads', 'docs/app/sorter', 'docs/app/browser', 'docs/app/settings'] },

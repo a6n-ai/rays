@@ -14,7 +14,7 @@ const frames = PHRASES.map((_, i) => {
 const keyframes = `@keyframes drum-turn {\n${frames}\n100% { transform: rotateX(360deg); }\n}`;
 ---
 
-<span class="drum" aria-hidden="true" style={`--duration:${total}s;--radius:${(PHRASES.length * 1.2) / (2 * Math.PI)}em`}>
+<span class="drum" aria-hidden="true" data-pagefind-ignore style={`--duration:${total}s;--radius:${(PHRASES.length * 1.2) / (2 * Math.PI)}em`}>
 	<span class="stage">
 		<span class="ring">
 			{PHRASES.map((p, i) => <span class="face" style={`--angle:${-i * STEP}deg`}>{p}</span>)}
@@ -22,7 +22,7 @@ const keyframes = `@keyframes drum-turn {\n${frames}\n100% { transform: rotateX(
 	</span>
 </span>
 
-<button type="button" class="pause" data-drum-toggle aria-pressed="false" aria-label="Pause animation">
+<button type="button" class="pause" data-pagefind-ignore data-drum-toggle aria-pressed="false" aria-label="Pause animation">
 	<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>
 </button>
 

@@ -15,7 +15,7 @@ import sorter from '../assets/sorter.png';
 	description="Rays downloads files in parts at once and moves each one into a folder that fits, using Apple's on-device model. Free and open source for macOS 26."
 >
 	<div class="page">
-		<main id="main" class="column">
+		<main id="main" class="column" data-pagefind-body data-pagefind-meta="title:Rays: a download manager for Mac">
 			<header class="mark">
 				<Image src={icon} alt="" width={28} height={28} />
 				<span>Rays</span>
@@ -23,7 +23,20 @@ import sorter from '../assets/sorter.png';
 				<nav class="top" aria-label="Site">
 					<a href="/docs/">Docs</a>
 					<a href="/releases/">Release notes</a>
+					<a href="/docs/#search" class="search" aria-keyshortcuts="Meta+K Control+K">
+						<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+						Search <kbd>⌘K</kbd>
+					</a>
 				</nav>
+				<script>
+					// ⌘K / Ctrl+K on the home page opens the docs search, like it does on docs pages.
+					addEventListener('keydown', (e) => {
+						if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+							e.preventDefault();
+							location.href = '/docs/#search';
+						}
+					});
+				</script>
 			</header>
 
 			<section class="hero" aria-labelledby="hero-title">
@@ -141,6 +154,20 @@ import sorter from '../assets/sorter.png';
 	.top a {
 		color: var(--muted);
 		text-decoration: none;
+	}
+	.search {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 6px 4px 10px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+	}
+	.search kbd {
+		padding: 1px 6px;
+		border-radius: 999px;
+		background: var(--chip);
+		font: 0.75rem var(--font-text);
 	}
 	.top a:hover {
 		color: var(--ink);
