@@ -1,0 +1,52 @@
+/* hallmark · custom · Rays site: dark text column + sticky gradient panel (layout after superlogical.com) */
+/* critique: one idea per screen (install in the hero), two motions only (drum once, panel on scroll) */
+:root {
+	color-scheme: dark light;
+
+	--ground: #111210;
+	--ink: #ecebe6;
+	--muted: #9a978e;
+	--faint: #2a2b27;
+	--line: #3a3b36;
+	--accent: #ffa36e;
+	--accent-ink: #1b1209;
+	--chip: #1b1c19;
+	--focus: #ffd2b5;
+
+	/* Rays DMG palette (scripts/dmg/draw-background.swift lines 14-15) extended with depth for a dark page */
+	--g-lilac: #ede0fa;
+	--g-rose: #ffdbd6;
+	--g-peach: #ffb58a;
+	--g-cream: #ffedcc;
+	--g-sky: #9dc4f5;
+	--g-deep: #22304f;
+
+	--font-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+	--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+	--font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+	--t-body: 1.25rem;
+	--t-hero: clamp(1.75rem, 1.2rem + 1.6vw, 2.25rem);
+	--t-label: 1rem;
+	--t-small: 0.9375rem;
+
+	--measure: 60ch;
+	--gutter: clamp(16px, 4.4vw, 64px);
+	--panel-w: clamp(280px, 28vw, 440px);
+	--radius: 20px;
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--ground: #f6f4ef;
+		--ink: #171714;
+		--muted: #5f5c55;
+		--faint: #e4e1d9;
+		--line: #d3cfc5;
+		--accent: #c2410c;
+		--accent-ink: #ffffff;
+		--chip: #ece9e2;
+		--focus: #9a3412;
+	}
+}

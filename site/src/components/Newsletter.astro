@@ -1,0 +1,96 @@
+---
+// Static site, no backend: submitting opens the visitor's mail app with a request to hi@a6n.ai.
+// shortcut: no stored list or double opt-in; move to a mailing service when the list needs to send at scale.
+const TO = 'hi@a6n.ai';
+const SUBJECT = 'Subscribe to Rays updates';
+---
+
+<section class="news" aria-labelledby="news-title">
+	<h2 id="news-title">Updates</h2>
+	<p>Get an email when a new version of Rays is out.</p>
+	<form class="form" data-newsletter action={`mailto:${TO}?subject=${encodeURIComponent(SUBJECT)}`} method="post" enctype="text/plain">
+		<label class="sr-only" for="news-email">Email address</label>
+		<input id="news-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" />
+		<button type="submit">Subscribe</button>
+	</form>
+	<p class="hint" data-news-status role="status" aria-live="polite">
+		This opens your email app with a message to {TO}. Send it to join.
+	</p>
+</section>
+
+<script>
+	const form = document.querySelector<HTMLFormElement>('[data-newsletter]');
+	form?.addEventListener('submit', (event) => {
+		event.preventDefault();
+		const email = new FormData(form).get('email');
+		const subject = encodeURIComponent('Subscribe to Rays updates');
+		const body = encodeURIComponent(`Please add ${email} to Rays release emails.`);
+		location.href = `mailto:hi@a6n.ai?subject=${subject}&body=${body}`;
+		const status = document.querySelector('[data-news-status]');
+		if (status) status.textContent = 'Your email app should open now. Send the message to join.';
+	});
+</script>
+
+<style>
+	.news {
+		display: grid;
+		gap: 12px;
+		padding-block: 40px;
+	}
+	h2 {
+		margin: 0;
+		color: var(--muted);
+		font: 400 var(--t-label) / 1.4 var(--font-text);
+	}
+	p {
+		margin: 0;
+		max-width: var(--measure);
+	}
+	.form {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		max-width: 34rem;
+		border-bottom: 1px solid var(--line);
+		padding-bottom: 6px;
+	}
+	.form:focus-within {
+		border-color: var(--ink);
+	}
+	input {
+		flex: 1;
+		min-width: 0;
+		padding: 10px 0;
+		border: 0;
+		background: transparent;
+		color: var(--ink);
+		font: inherit;
+	}
+	input::placeholder {
+		color: var(--muted);
+	}
+	input:focus-visible {
+		outline: none;
+	}
+	button {
+		flex: none;
+		padding: 8px 16px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--ink);
+		font: 500 0.9375rem var(--font-text);
+		cursor: pointer;
+		transition: background-color 160ms var(--ease-out);
+	}
+	button:hover {
+		background: var(--faint);
+	}
+	button:active {
+		transform: scale(0.97);
+	}
+	.hint {
+		color: var(--muted);
+		font-size: var(--t-small);
+	}
+</style>

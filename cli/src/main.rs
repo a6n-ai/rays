@@ -1,4 +1,6 @@
 mod framing;
+mod mcp;
+mod sorter;
 
 use dl_engine::protocol::{Request, Response};
 use serde_json::{Value, json};
@@ -9,7 +11,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::time::{Duration, Instant};
 
-const USAGE: &str = "usage: dl URL... | dl --list";
+const USAGE: &str = "usage:
+  dl URL...                     download links with Rays
+  dl list                       list downloads (also: dl --list)
+  dl sort [FOLDER] [--all] [--dry-run] [--projects]
+                                sort FOLDER into category folders (default ~/Downloads)
+  dl watch FOLDER | dl unwatch FOLDER
+                                sort FOLDER automatically whenever a file lands in it
+  dl status [--json]            watched folders, categories and recent moves
+  dl config add|remove FOLDER
+  dl config set-dest FOLDER CATEGORY PATH | clear-dest FOLDER CATEGORY | set-wait SECONDS | set-rename on|off
+  dl mcp                        run the MCP server on stdio (for AI assistants)";
 
 fn socket_path() -> PathBuf {
     if let Some(p) = std::env::var_os("DL_SOCKET") {
@@ -58,19 +70,21 @@ fn main() -> ExitCode {
     }
     let req = match args.as_slice() {
         [] => return usage(),
-        [a] if a == "--list" => Request::List,
+        [a] if a == "-h" || a == "--help" || a == "help" => {
+            println!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        [a] if a == "mcp" => return mcp::serve(),
+        [a] if a == "--list" || a == "list" => Request::List,
+        // Sorter commands run the sorter bundled beside dl; `dl sort` is the sorter's default command.
+        [cmd, rest @ ..] if cmd == "sort" => return sorter::run(rest),
+        [cmd, rest @ ..] if cmd == "status" => return sorter::status(rest),
+        [cmd, ..] if ["watch", "unwatch", "config"].contains(&cmd.as_str()) => return sorter::run(&args),
         [a, ..] if a.starts_with('-') => return usage(),
         urls => Request::Add { urls: urls.to_vec() },
     };
 
-    let stream = match connect(&socket_path()) {
-        Ok(stream) => stream,
-        Err(e) => {
-            eprintln!("dl: app not reachable: {e}");
-            return ExitCode::from(2);
-        }
-    };
-    let reply = match exchange(stream, &req) {
+    let reply = match ask_rays(&req) {
         Ok(reply) => reply,
         Err(e) => {
             eprintln!("dl: {e}");
@@ -93,6 +107,12 @@ fn main() -> ExitCode {
         println!("{}\t{}\t{}/{}\t{}", j.id, j.state, j.done, total, j.name);
     }
     if reply.rejected.is_empty() { ExitCode::SUCCESS } else { ExitCode::from(1) }
+}
+
+/// One request to Rays, opening the app if needed. Shared by the CLI and `dl mcp`.
+pub(crate) fn ask_rays(req: &Request) -> Result<Response, String> {
+    let stream = connect(&socket_path()).map_err(|e| format!("app not reachable: {e}"))?;
+    exchange(stream, req).map_err(|e| e.to_string())
 }
 
 /// Chrome passes its origin as an argument; Firefox passes the manifest path and the extension id.
@@ -152,8 +172,7 @@ fn host_add(payload: &[u8]) -> Result<Value, String> {
         return Ok(json!({"ok": true, "added": 0, "rejected": []}));
     }
 
-    let stream = connect(&socket_path()).map_err(|e| format!("app not reachable: {e}"))?;
-    let resp = exchange(stream, &Request::Add { urls }).map_err(|e| e.to_string())?;
+    let resp = ask_rays(&Request::Add { urls })?;
     if !resp.ok {
         return Err(resp.error.unwrap_or_else(|| "Rays rejected the request".into()));
     }

@@ -1,0 +1,13 @@
+{
+  "name": "rays-site",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "deploy": "astro build && wrangler pages deploy dist --project-name rays"
+  },
+  "dependencies": {
+    "astro": "7.4.12"
+  }
+}

@@ -1,0 +1,273 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../../layouts/Base.astro';
+import Panel from '../../components/Panel.astro';
+import icon from '../../assets/icon.png';
+// Source of truth: cli/src/main.rs and engine/src/ipc.rs. Update this page when they change.
+---
+
+<Base title="The dl command | Rays by a6n" description="Start and list Rays downloads from Terminal with the dl command.">
+	<div class="page">
+		<main id="main" class="column">
+			<header class="mark">
+				<a href="/" class="home">
+					<Image src={icon} alt="" width={28} height={28} />
+					<span>Rays</span>
+				</a>
+				<span class="by">by <a href="https://a6n.ai">a6n</a></span>
+			</header>
+
+			<article class="doc">
+				<h1>The <code>dl</code> command</h1>
+				<p class="lead">One command for Rays: download links, sort folders, and connect AI assistants over MCP.</p>
+
+				<h2>Install</h2>
+				<p>The Homebrew install puts <code>dl</code> on your PATH:</p>
+				<pre><code>brew install --cask a6n-ai/tap/rays</code></pre>
+				<p>
+					If you installed from the DMG, the command is inside the app. Link it once:
+				</p>
+				<pre><code>ln -s /Applications/Rays.app/Contents/MacOS/dl /opt/homebrew/bin/dl</code></pre>
+
+				<h2>Download files</h2>
+				<pre><code>dl URL...</code></pre>
+				<p>Give one or more links. Each one is added to Rays and starts when a slot is free.</p>
+				<pre><code>dl https://example.com/file.zip https://example.com/talk.mp4</code></pre>
+				<p>For each link, <code>dl</code> prints one line:</p>
+				<pre><code>added 12 https://example.com/file.zip
+rejected ftp://example.com/x: only http and https URLs</code></pre>
+				<p>Only <code>http</code> and <code>https</code> links are accepted.</p>
+
+				<h2>List downloads</h2>
+				<pre><code>dl list</code></pre>
+				<p>One line per download: id, state, bytes done / total, file name. Fields are separated by tabs (shown as spaces here).</p>
+				<pre><code>12  running  52428800/104857600  file.zip
+11  done     7340032/7340032     report.pdf</code></pre>
+				<p>
+					The state is one of <code>queued</code>, <code>running</code>, <code>paused</code>,{' '}
+					<code>retrying</code>, <code>done</code> or <code>failed</code>. The total shows <code>?</code> when the
+					server does not say how big the file is.
+				</p>
+
+				<h2>Sort a folder</h2>
+				<pre><code>dl sort [FOLDER] [--all] [--dry-run] [--projects]</code></pre>
+				<p>
+					Moves files into category folders such as Work, Images, Installers and Archives, inside FOLDER. Without a
+					folder it sorts <code>~/Downloads</code>; <code>.</code> is the current folder.
+				</p>
+				<table>
+					<tbody>
+						<tr><td><code>--dry-run</code></td><td>Print what would move and change nothing.</td></tr>
+						<tr><td><code>--all</code></td><td>Also sort files that were there before the first run.</td></tr>
+						<tr><td><code>--projects</code></td><td>Move code-project folders whole into Code/Projects.</td></tr>
+					</tbody>
+				</table>
+				<p>Files changed in the last 10 seconds are skipped, so nothing moves while it is still being written.</p>
+				<pre><code>dl sort ~/Desktop --dry-run
+[dry] setup.dmg -&gt; ~/Desktop/Installers/Apps/Setup.dmg (Installers/Apps rule)</code></pre>
+
+				<h2>Watch a folder</h2>
+				<pre><code>dl watch ~/Downloads
+dl unwatch ~/Downloads</code></pre>
+				<p>Rays sorts the folder by itself whenever a new file lands in it, even when the app is closed.</p>
+
+				<h2>Sorter status and settings</h2>
+				<pre><code>dl status
+dl status --json</code></pre>
+				<p>Shows the wait time, whether renaming is on, the folders Rays sorts, and the last moves.</p>
+				<pre><code>dl config set-wait 30
+dl config set-rename off
+dl config set-dest ~/Downloads Work ~/Documents/Work
+dl config clear-dest ~/Downloads Work</code></pre>
+				<p>
+					<code>set-wait</code> is in seconds. <code>set-dest</code> sends one category somewhere else instead of a
+					folder inside the sorted folder.
+				</p>
+
+				<h2>AI assistants (MCP)</h2>
+				<pre><code>dl mcp</code></pre>
+				<p>
+					Runs a Model Context Protocol server on stdin and stdout, so assistants like Claude can use Rays. Add it
+					to Claude Code:
+				</p>
+				<pre><code>claude mcp add rays -- dl mcp</code></pre>
+				<p>Or to any MCP client config:</p>
+				<pre><code>{'{"mcpServers": {"rays": {"command": "dl", "args": ["mcp"]}}}'}</code></pre>
+				<table>
+					<thead>
+						<tr><th scope="col">Tool</th><th scope="col">What it does</th></tr>
+					</thead>
+					<tbody>
+						<tr><td><code>add_downloads</code></td><td>Download one or more http or https links.</td></tr>
+						<tr><td><code>list_downloads</code></td><td>Downloads with state, progress and file name.</td></tr>
+						<tr><td><code>sorter_status</code></td><td>Watched folders, categories, settings and recent moves.</td></tr>
+						<tr>
+							<td><code>sort_folder</code></td>
+							<td>Sort a folder. A dry run unless the assistant sets <code>dry_run</code> to false.</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<h2>When Rays is not open</h2>
+				<p>
+					<code>dl</code> opens Rays for you and waits up to 5 seconds for it to start. Set
+					<code>DL_NO_LAUNCH=1</code> to stop it opening the app.
+				</p>
+
+				<h2>Exit codes</h2>
+				<table>
+					<thead>
+						<tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
+					</thead>
+					<tbody>
+						<tr><td><code>0</code></td><td>The command worked: every link was added, or the list, status or sort finished.</td></tr>
+						<tr><td><code>1</code></td><td>At least one link was rejected, or Rays returned an error.</td></tr>
+						<tr><td><code>2</code></td><td>Wrong usage, or Rays or the sorter could not be reached.</td></tr>
+					</tbody>
+				</table>
+
+				<h2>Environment</h2>
+				<table>
+					<thead>
+						<tr><th scope="col">Variable</th><th scope="col">Effect</th></tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>DL_NO_LAUNCH</code></td>
+							<td>If set, <code>dl</code> does not open Rays when it is not running.</td>
+						</tr>
+						<tr>
+							<td><code>DL_SORTER</code></td>
+							<td>Path of the sorter to run, instead of the one inside Rays.app.</td>
+						</tr>
+						<tr>
+							<td><code>DL_SOCKET</code></td>
+							<td>
+								Path of the socket to talk to, instead of
+								<code>~/Library/Application Support/Rays/dl.sock</code>. Never opens the app.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<h2>Scripts</h2>
+				<p>Download every link in a file, one per line:</p>
+				<pre><code>xargs dl &lt; links.txt</code></pre>
+				<p>Stop a script when a link is rejected:</p>
+				<pre><code>dl "$URL" || echo "Rays did not take $URL"</code></pre>
+			</article>
+
+			<footer class="foot">
+				<a href="/">Rays home</a>
+				<span class="rule" aria-hidden="true"></span>
+				<a href="/releases/">Release notes</a>
+				<a href="https://github.com/a6n-ai/rays">GitHub</a>
+			</footer>
+		</main>
+		<Panel />
+	</div>
+</Base>
+
+<style>
+	.mark {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding-top: 48px;
+		font: 600 1.125rem var(--font-display);
+	}
+	.home {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		text-decoration: none;
+	}
+	.home :global(img) {
+		width: 28px;
+		height: 28px;
+	}
+	.by {
+		color: var(--muted);
+		font-weight: 400;
+	}
+	.by a {
+		color: inherit;
+		text-underline-offset: 3px;
+	}
+	.doc {
+		padding-block: 56px 24px;
+		max-width: var(--measure);
+	}
+	h1 {
+		margin: 0 0 12px;
+		font: 500 var(--t-hero) / 1.2 var(--font-display);
+		letter-spacing: -0.02em;
+	}
+	.lead {
+		color: var(--muted);
+	}
+	h2 {
+		margin: 48px 0 12px;
+		padding-top: 20px;
+		border-top: 1px solid var(--line);
+		font: 500 var(--t-label) / 1.4 var(--font-text);
+	}
+	p {
+		margin: 0 0 12px;
+	}
+	code {
+		font: 0.9em var(--font-mono);
+	}
+	pre {
+		margin: 0 0 16px;
+		padding: 14px 16px;
+		border-radius: 14px;
+		background: var(--chip);
+		overflow-x: auto;
+		tab-size: 12;
+	}
+	pre code {
+		font-size: 0.875rem;
+		line-height: 1.6;
+	}
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: var(--t-small);
+	}
+	th,
+	td {
+		padding: 10px 12px 10px 0;
+		border-bottom: 1px solid var(--faint);
+		text-align: left;
+		vertical-align: top;
+	}
+	th {
+		color: var(--muted);
+		font-weight: 400;
+	}
+	.foot {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		padding: 48px 0 40px;
+		font: 0.875rem var(--font-mono);
+	}
+	.foot a {
+		text-decoration: none;
+	}
+	.foot a:hover {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.rule {
+		flex: 1;
+		height: 1px;
+		background: var(--line);
+	}
+	@media (max-width: 899px) {
+		.mark {
+			padding-top: 8px;
+		}
+	}
+</style>

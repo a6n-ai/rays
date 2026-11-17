@@ -1,0 +1,66 @@
+---
+// Decorative. The gradient lives on a layer three panels tall; scrolling the page moves it up with a transform.
+---
+
+<div class="panel" aria-hidden="true">
+	<div class="wash"></div>
+	<div class="grain"></div>
+</div>
+
+<style>
+	.panel {
+		position: sticky;
+		top: 12px;
+		height: calc(100svh - 24px);
+		margin-top: 12px;
+		border-radius: var(--radius);
+		overflow: clip;
+		background: var(--g-lilac);
+	}
+	.wash {
+		position: absolute;
+		inset: 0 0 auto;
+		height: 300%;
+		background: linear-gradient(
+			180deg,
+			var(--g-lilac) 0%,
+			var(--g-rose) 20%,
+			var(--g-peach) 40%,
+			var(--g-cream) 55%,
+			var(--g-sky) 75%,
+			var(--g-deep) 100%
+		);
+	}
+	@supports (animation-timeline: scroll()) {
+		.wash {
+			will-change: transform;
+			animation: drift linear both;
+			animation-duration: auto;
+			animation-timeline: scroll(root block);
+		}
+	}
+	.grain {
+		position: absolute;
+		inset: 0;
+		background: url('/grain.png') repeat;
+		background-size: 256px;
+		opacity: 0.08;
+		mix-blend-mode: overlay;
+	}
+	@keyframes drift {
+		to {
+			transform: translateY(-66.6667%);
+		}
+	}
+	@media (max-width: 899px) {
+		.panel {
+			position: relative;
+			top: 0;
+			margin: 0 0 24px;
+			height: 30svh;
+		}
+		.wash {
+			animation: none;
+		}
+	}
+</style>

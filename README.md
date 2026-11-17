@@ -1,7 +1,8 @@
 # Rays
 
-Small macOS download manager: a Rust engine (`engine/`) behind a SwiftUI app (`macos/`), plus a
-terminal client (`cli/`). Design: [docs/designs/rays.md](docs/designs/rays.md).
+Small macOS download manager: a Rust engine (`engine/`) behind a SwiftUI app (`macos/`), plus one
+terminal command, `dl` (`cli/`), for downloads, sorting and MCP. Website: [rays.a6n.ai](https://rays.a6n.ai)
+(source in `site/`). Design: [docs/designs/rays.md](docs/designs/rays.md).
 
 ## Install
 
@@ -16,8 +17,9 @@ brew uninstall --cask rays               # uninstall (stops Rays' sorter helpers
 brew uninstall --zap --cask rays         # uninstall and delete settings, history and browser helpers
 ```
 
-Requires macOS 26. Rays isn't notarized yet: if macOS says it can't verify Rays on first launch,
-right-click Rays in Applications and choose **Open** (Homebrew installs skip this).
+Requires macOS 26. Rays isn't notarized yet: if macOS blocks Rays on first launch from the DMG, open
+System Settings > Privacy & Security and choose **Open Anyway** (Homebrew installs skip this).
+DMG installs can link the command once: `ln -s /Applications/Rays.app/Contents/MacOS/dl /opt/homebrew/bin/dl`.
 
 ## Build
 
@@ -35,16 +37,30 @@ The app requires macOS 26.
 
 ```sh
 open bin/Rays.app
-bin/dl https://example.com/file.zip ...   # adds to the running app (starts it if needed)
-bin/dl --list
+dl https://example.com/file.zip ...   # adds to the running app (starts it if needed)
+dl list                               # id, state, done/total, name (also: dl --list)
+dl sort ~/Desktop --dry-run           # sort a folder into category folders; --all, --projects
+dl watch ~/Downloads                  # sort automatically whenever a file lands (dl unwatch to stop)
+dl status                             # wait time, renaming, watched folders, recent moves (--json)
+dl config set-wait 30                 # also set-rename on|off, set-dest, clear-dest, add|remove
+dl mcp                                # MCP server on stdio for AI assistants
 ```
+
+The sorter commands run the `sorter` bundled next to `dl` in Rays.app (`DL_SORTER` overrides).
+Full reference: [rays.a6n.ai/docs/dl](https://rays.a6n.ai/docs/dl/).
+
+### MCP
+
+`dl mcp` speaks the Model Context Protocol on stdio. Add it to Claude Code with
+`claude mcp add rays -- dl mcp`, or to any client as `{"command": "dl", "args": ["mcp"]}`. Tools:
+`add_downloads`, `list_downloads`, `sorter_status`, and `sort_folder` (a dry run unless `dry_run` is false).
 
 In the app, paste links into the bottom bar (⌘L), or drop links, text containing links, or `.webloc`
 files on the window. Drag a finished download out of the window to copy it elsewhere. The toolbar's
 Speed Limit menu sets bandwidth, and the [Settings](#settings) section below covers the rest.
 View > Appearance chooses System, Light or Dark.
 
-Exit codes: `0` all added, `1` a URL was rejected, `2` app not reachable.
+Exit codes: `0` success, `1` a URL was rejected or Rays returned an error, `2` wrong usage or Rays/the sorter not reachable.
 
 ## Browser extension
 
@@ -72,7 +88,7 @@ Settings (⌘,) saves every change as you make it. It has three tabs:
 
 - **General**: appearance and the download folder. Downloads in progress finish where they started.
 - **Downloads**: simultaneous downloads (1 to 10), connections per download (1 to 16), and the speed limit.
-- **Sorting**: runs `sorter` on each finished download. Turning it on adds a launchd agent for the download folder, so it can be turned off from here or with `sorter unwatch`. The tab looks for `sorter` at `~/local-scripts/sorter/bin/sorter` unless you choose another path.
+- **Sorting**: runs `sorter` on each finished download. Turning it on adds a launchd agent for the download folder, so it can be turned off from here or with `sorter unwatch`. The `sorter` binary ships inside Rays.app.
 
 ## Files
 
@@ -96,3 +112,7 @@ access to the Downloads folder.
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+## License
+
+AGPL-3.0. See [LICENSE](LICENSE).

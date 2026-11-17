@@ -1,0 +1,36 @@
+---
+interface Props {
+	label: string;
+	id: string;
+}
+const { label, id } = Astro.props;
+---
+
+<section class="passage" aria-labelledby={id}>
+	<h2 id={id}>{label}</h2>
+	<slot />
+</section>
+
+<style>
+	.passage {
+		display: grid;
+		gap: 12px;
+		padding-block: 40px;
+	}
+	h2 {
+		margin: 0;
+		color: var(--muted);
+		font: 400 var(--t-label) / 1.4 var(--font-text);
+	}
+	.passage :global(p) {
+		margin: 0;
+		max-width: var(--measure);
+		text-wrap: pretty;
+	}
+	.passage :global(p + p) {
+		margin-top: 0.6em;
+	}
+	.passage :global(code) {
+		font: 0.9em var(--font-mono);
+	}
+</style>

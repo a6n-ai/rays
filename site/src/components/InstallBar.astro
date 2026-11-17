@@ -1,0 +1,143 @@
+---
+import { Image } from 'astro:assets';
+import icon from '../assets/icon.png';
+
+const DMG = 'https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg';
+const NOTES = '/releases/';
+const BREW = 'brew install --cask a6n-ai/tap/rays';
+---
+
+<div class="install">
+	<div class="bar">
+		<Image src={icon} alt="" width={48} height={48} loading="eager" fetchpriority="high" class="icon" />
+		<div class="what">
+			<span>Rays for macOS 26</span>
+			<a href={NOTES} class="notes">Release notes</a>
+		</div>
+		<a class="download" href={DMG}>Download for Mac</a>
+	</div>
+
+	<div class="brew">
+		<code id="brew-cmd">{BREW}</code>
+		<button type="button" class="copy" data-copy="brew-cmd">Copy</button>
+		<span class="sr-only" role="status" aria-live="polite" data-copy-status></span>
+	</div>
+
+	<p class="note">
+		DMG: on first open, go to System Settings, Privacy &amp; Security, Open Anyway. Homebrew installs skip this.
+	</p>
+	<p class="note mac-only">Rays runs on Macs with macOS 26 or later.</p>
+</div>
+
+<script src="../scripts/copy.ts"></script>
+
+<style>
+	.install {
+		display: grid;
+		gap: 14px;
+		max-width: 40rem;
+	}
+	.bar {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		padding: 12px 12px 12px 14px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+	}
+	.icon {
+		width: 48px;
+		height: 48px;
+		flex: none;
+	}
+	.what {
+		display: grid;
+		flex: 1;
+		min-width: 0;
+		font-size: var(--t-small);
+		line-height: 1.3;
+	}
+	.notes {
+		color: var(--muted);
+		text-underline-offset: 3px;
+	}
+	.notes:hover {
+		color: var(--ink);
+	}
+	.download {
+		flex: none;
+		padding: 12px 20px;
+		border-radius: 999px;
+		background: var(--accent);
+		color: var(--accent-ink);
+		font-weight: 600;
+		font-size: var(--t-small);
+		text-decoration: none;
+		transition: transform 160ms var(--ease-out), filter 160ms var(--ease-out);
+	}
+	.download:hover {
+		filter: brightness(1.08);
+	}
+	.download:active {
+		transform: scale(0.97);
+	}
+	.brew {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 10px 10px 16px;
+		border-radius: 14px;
+		background: var(--chip);
+	}
+	.brew code {
+		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
+		font: 0.9375rem / 1.4 var(--font-mono);
+	}
+	.brew code::before {
+		content: '$ ';
+		color: var(--muted);
+	}
+	.copy {
+		flex: none;
+		min-width: 4.5rem;
+		padding: 8px 12px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--ink);
+		font: 500 0.875rem var(--font-text);
+		cursor: pointer;
+		transition: background-color 160ms var(--ease-out);
+	}
+	.copy:hover {
+		background: var(--faint);
+	}
+	.copy:active {
+		transform: scale(0.97);
+	}
+	.note {
+		margin: 0;
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.45;
+	}
+	.mac-only {
+		display: none;
+	}
+	@media (max-width: 899px) {
+		.mac-only {
+			display: block;
+		}
+	}
+	@media (max-width: 480px) {
+		.bar {
+			flex-wrap: wrap;
+		}
+		.download {
+			width: 100%;
+			text-align: center;
+		}
+	}
+</style>

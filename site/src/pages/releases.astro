@@ -1,0 +1,108 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../layouts/Base.astro';
+import Panel from '../components/Panel.astro';
+import icon from '../assets/icon.png';
+// The repo's CHANGELOG.md is the one source for release notes.
+import { Content } from '../../../CHANGELOG.md';
+---
+
+<Base title="Release notes | Rays by a6n" description="What changed in each version of Rays, the download manager for Mac.">
+	<div class="page">
+		<main id="main" class="column">
+			<header class="mark">
+				<a href="/" class="home">
+					<Image src={icon} alt="" width={28} height={28} />
+					<span>Rays</span>
+				</a>
+				<span class="by">by <a href="https://a6n.ai">a6n</a></span>
+			</header>
+			<article class="notes">
+				<Content />
+			</article>
+			<footer class="foot">
+				<a href="/">Download Rays</a>
+				<span class="rule" aria-hidden="true"></span>
+				<a href="https://github.com/a6n-ai/rays/releases">All releases on GitHub</a>
+			</footer>
+		</main>
+		<Panel />
+	</div>
+</Base>
+
+<style>
+	.mark {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding-top: 48px;
+		font: 600 1.125rem var(--font-display);
+	}
+	.home {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		text-decoration: none;
+	}
+	.home :global(img) {
+		width: 28px;
+		height: 28px;
+	}
+	.by {
+		color: var(--muted);
+		font-weight: 400;
+	}
+	.by a {
+		color: inherit;
+		text-underline-offset: 3px;
+	}
+	.notes {
+		padding-block: 56px 24px;
+		max-width: var(--measure);
+	}
+	.notes :global(h1) {
+		margin: 0 0 24px;
+		font: 500 var(--t-hero) / 1.2 var(--font-display);
+		letter-spacing: -0.02em;
+	}
+	.notes :global(h2) {
+		margin: 48px 0 12px;
+		padding-top: 20px;
+		border-top: 1px solid var(--line);
+		font: 400 var(--t-label) / 1.4 var(--font-text);
+		color: var(--muted);
+	}
+	.notes :global(ul) {
+		margin: 0;
+		padding-left: 1.1em;
+		display: grid;
+		gap: 10px;
+	}
+	.notes :global(code) {
+		font: 0.9em var(--font-mono);
+	}
+	.foot {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		padding: 48px 0 40px;
+		font: 0.875rem var(--font-mono);
+	}
+	.foot a {
+		text-decoration: none;
+	}
+	.foot a:hover {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.rule {
+		flex: 1;
+		height: 1px;
+		background: var(--line);
+	}
+	@media (max-width: 899px) {
+		.mark {
+			padding-top: 8px;
+		}
+	}
+</style>

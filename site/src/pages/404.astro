@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Not found | Rays" description="This page does not exist.">
+	<main id="main" class="missing">
+		<h1>This page does not exist.</h1>
+		<a href="/">Go to the Rays home page</a>
+	</main>
+</Base>
+
+<style>
+	.missing {
+		display: grid;
+		gap: 16px;
+		place-content: center;
+		min-height: 100svh;
+		padding: var(--gutter);
+	}
+	h1 {
+		margin: 0;
+		font: 500 var(--t-hero) / 1.2 var(--font-display);
+	}
+</style>

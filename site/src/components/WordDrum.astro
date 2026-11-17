@@ -1,0 +1,107 @@
+---
+// Kinds of files Rays sorts. Loops; the pause button next to it satisfies WCAG 2.2.2.
+const PHRASES = ['installers.', 'invoices.', 'screenshots.', 'podcasts.', 'passport scans.', 'zip files.', 'design docs.', 'photos.'];
+const STEP = 360 / PHRASES.length;
+const HOLD = 1.8; // seconds per phrase
+const total = HOLD * PHRASES.length;
+
+// One keyframe pair per step: hold for 75 % of the slot, then turn to the next face.
+const frames = PHRASES.map((_, i) => {
+	const start = ((i * HOLD) / total) * 100;
+	const settle = (((i + 0.75) * HOLD) / total) * 100;
+	return `${start.toFixed(2)}%,${settle.toFixed(2)}% { transform: rotateX(${i * STEP}deg); }`;
+}).join('\n');
+const keyframes = `@keyframes drum-turn {\n${frames}\n100% { transform: rotateX(360deg); }\n}`;
+---
+
+<span class="drum" aria-hidden="true" style={`--duration:${total}s;--radius:${(PHRASES.length * 1.2) / (2 * Math.PI)}em`}>
+	<span class="stage">
+		<span class="ring">
+			{PHRASES.map((p, i) => <span class="face" style={`--angle:${-i * STEP}deg`}>{p}</span>)}
+		</span>
+	</span>
+</span>
+
+<button type="button" class="pause" data-drum-toggle aria-pressed="false" aria-label="Pause animation">
+	<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>
+</button>
+
+<style set:html={keyframes}></style>
+
+<script>
+	const ring = document.querySelector<HTMLElement>('.drum .ring');
+	const toggle = document.querySelector<HTMLButtonElement>('[data-drum-toggle]');
+	let paused = false;
+	let visible = true;
+	const apply = () => ring && (ring.style.animationPlayState = paused || !visible ? 'paused' : 'running');
+	toggle?.addEventListener('click', () => {
+		paused = !paused;
+		toggle.setAttribute('aria-pressed', String(paused));
+		toggle.setAttribute('aria-label', paused ? 'Play animation' : 'Pause animation');
+		toggle.innerHTML = paused
+			? '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 2.5v11a1 1 0 0 0 1.5.86l9-5.5a1 1 0 0 0 0-1.72l-9-5.5A1 1 0 0 0 4 2.5Z"/></svg>'
+			: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>';
+		apply();
+	});
+	if (ring) new IntersectionObserver(([e]) => ((visible = e.isIntersecting), apply())).observe(ring.parentElement!);
+</script>
+
+<style>
+	.drum {
+		position: relative;
+		display: inline-block;
+		height: 6em;
+		width: 9.5em;
+		perspective: 900px;
+		mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+		vertical-align: middle;
+	}
+	/* Pull the ring back by its radius so the front face sits at depth 0 and keeps the heading's size. */
+	.stage {
+		position: absolute;
+		inset: 0;
+		transform-style: preserve-3d;
+		transform: translateZ(calc(var(--radius) * -1));
+	}
+	.ring {
+		position: absolute;
+		inset: 0;
+		transform-style: preserve-3d;
+		animation: drum-turn var(--duration) var(--ease-out) 0.6s infinite both;
+	}
+	.pause {
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--muted);
+		fill: currentColor;
+		cursor: pointer;
+		align-self: center;
+		transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+	}
+	.pause:hover {
+		color: var(--ink);
+		background: var(--faint);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pause {
+			display: none;
+		}
+	}
+	.face {
+		position: absolute;
+		left: 0;
+		top: calc(50% - 0.6em);
+		height: 1.2em;
+		line-height: 1.2;
+		white-space: nowrap;
+		color: var(--accent);
+		backface-visibility: hidden;
+		transform: rotateX(var(--angle)) translateZ(var(--radius));
+	}
+</style>

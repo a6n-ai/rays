@@ -1,0 +1,233 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../layouts/Base.astro';
+import WordDrum from '../components/WordDrum.astro';
+import InstallBar from '../components/InstallBar.astro';
+import Passage from '../components/Passage.astro';
+import Panel from '../components/Panel.astro';
+import Newsletter from '../components/Newsletter.astro';
+import icon from '../assets/icon.png';
+import sorter from '../assets/sorter.png';
+---
+
+<Base
+	title="Rays by a6n: a download manager for Mac that sorts what you download"
+	description="Rays downloads files in parts at once and moves each one into a folder that fits, using Apple's on-device model. Free and open source for macOS 26."
+>
+	<div class="page">
+		<main id="main" class="column">
+			<header class="mark">
+				<Image src={icon} alt="" width={28} height={28} />
+				<span>Rays</span>
+				<span class="by">by <a href="https://a6n.ai">a6n</a></span>
+			</header>
+
+			<section class="hero" aria-labelledby="hero-title">
+				<h1 id="hero-title">
+					<span class="sr-only">Rays sorts your downloads into folders that fit them.</span>
+					<span aria-hidden="true" class="lead">Rays sorts your</span>
+					<WordDrum />
+				</h1>
+				<p class="sub">A download manager for Mac that files every download where it belongs.</p>
+				<InstallBar />
+			</section>
+
+			<Passage label="Downloads" id="downloads">
+				<p>Paste links in any format: one per line, separated by commas, or a whole CSV. Rays finds every link.</p>
+				<dl class="features">
+					<div>
+						<dt>Smart splitting</dt>
+						<dd>
+							Files of 4 MB or more come down in parts over up to 16 connections. Rays adds connections while the
+							speed keeps rising, and a finished part takes over half of the slowest part's work.
+						</dd>
+					</div>
+					<div>
+						<dt>Learns slow servers</dt>
+						<dd>
+							When a server pushes back or drops connections, Rays remembers it and uses fewer next time. A server
+							that cannot send parts gets one connection.
+						</dd>
+					</div>
+					<div>
+						<dt>Retries and resume</dt>
+						<dd>
+							Up to 5 automatic retries, waiting 2 seconds at first and up to a minute. Pause, quit, come back: the
+							download continues from the bytes already saved.
+						</dd>
+					</div>
+					<div>
+						<dt>Your limits</dt>
+						<dd>Set a speed limit and how many files download at once, from 1 to 10.</dd>
+					</div>
+					<div>
+						<dt>Safe names</dt>
+						<dd>
+							Rays takes the name the server suggests and cleans it, so a file can never land outside your folder.
+						</dd>
+					</div>
+				</dl>
+			</Passage>
+
+			<Passage label="Sorting" id="sorting">
+				<p>
+					Rays watches Downloads and any folder you add. A few seconds after a file arrives, it moves it into a folder
+					that fits, like Installers, Archives, Images or Work.
+				</p>
+				<p>It can also rename files from what is inside them. Turn that off to keep every original name.</p>
+				<figure class="shot">
+					<Image
+						src={sorter}
+						alt="The Rays sorter settings: on-device AI is ready, sort new files after 10 seconds, rename files from their content, and two watched folders, Documents and Downloads."
+						widths={[800, 1600]}
+						sizes="(max-width: 899px) 100vw, 60ch"
+					/>
+				</figure>
+			</Passage>
+
+			<Passage label="Private" id="private">
+				<p>Sorting runs on your Mac with Apple's on-device model. Nothing is uploaded, and there is no account.</p>
+			</Passage>
+
+			<Passage label="Anywhere" id="anywhere">
+				<p>
+					The Homebrew install adds the <a href="/docs/dl/"><code>dl</code> command</a>, so you can start downloads from Terminal. A browser
+					extension for Chrome and Firefox sends downloads to Rays; it is a developer install for now.
+				</p>
+				<p>When a new version is out, Rays shows a small note so you can update.</p>
+			</Passage>
+
+			<Passage label="Made by a6n" id="a6n">
+				<p>
+					Rays is open source under the AGPL-3.0 licence. The code, issues and releases live on{' '}
+					<a href="https://github.com/a6n-ai/rays">GitHub</a>.
+				</p>
+			</Passage>
+
+			<Newsletter />
+
+			<footer class="foot">
+				<a href="https://github.com/a6n-ai/rays">GitHub</a>
+				<span class="rule" aria-hidden="true"></span>
+				<a href="/docs/dl/">dl docs</a>
+				<a href="/releases/">Release notes</a>
+				<a href="https://a6n.ai">a6n.ai</a>
+				<span>AGPL-3.0</span>
+			</footer>
+		</main>
+		<Panel />
+	</div>
+</Base>
+
+<style>
+	.mark {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding-top: 48px;
+		font: 600 1.125rem var(--font-display);
+		letter-spacing: -0.01em;
+	}
+	.by {
+		color: var(--muted);
+		font-weight: 400;
+	}
+	.by a {
+		color: inherit;
+		text-underline-offset: 3px;
+	}
+	.by a:hover {
+		color: var(--ink);
+	}
+	.mark :global(img) {
+		width: 28px;
+		height: 28px;
+	}
+	.hero {
+		display: grid;
+		gap: 22px;
+		min-height: calc(100svh - 96px);
+		align-content: center;
+		padding-block: 48px;
+	}
+	h1 {
+		margin: 0;
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		column-gap: 0.3em;
+		font: 500 var(--t-hero) / 1.2 var(--font-display);
+		letter-spacing: -0.02em;
+		overflow-wrap: break-word;
+		min-width: 0;
+	}
+	.sub {
+		margin: 0;
+		max-width: 34ch;
+		color: var(--muted);
+	}
+	.features {
+		display: grid;
+		gap: 0;
+		margin: 12px 0 0;
+		max-width: var(--measure);
+	}
+	.features div {
+		display: grid;
+		grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+		gap: 4px 20px;
+		padding-block: 14px;
+		border-top: 1px solid var(--faint);
+	}
+	.features dt {
+		font-weight: 500;
+	}
+	.features dd {
+		margin: 0;
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.5;
+	}
+	@media (max-width: 600px) {
+		.features div {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+	.shot {
+		margin: 12px 0 0;
+	}
+	.shot :global(img) {
+		border-radius: 14px;
+		border: 1px solid var(--line);
+	}
+	.foot {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		padding: 48px 0 40px;
+		font: 0.875rem var(--font-mono);
+		color: var(--muted);
+	}
+	.foot a {
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.foot a:hover {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.rule {
+		flex: 1;
+		height: 1px;
+		background: var(--line);
+	}
+	@media (max-width: 899px) {
+		.mark {
+			padding-top: 8px;
+		}
+		.hero {
+			min-height: 0;
+			padding-block: 24px 40px;
+		}
+	}
+</style>

@@ -1,0 +1,212 @@
+//! `dl mcp`: a Model Context Protocol server on stdio (JSON-RPC 2.0, one message per line).
+//! Tools reach Rays through the same socket as `dl` and the bundled sorter through `sorter.rs`.
+use crate::sorter;
+use dl_engine::protocol::{Request, Response};
+use serde_json::{Value, json};
+use std::io::{BufRead, Write};
+use std::process::ExitCode;
+
+const PROTOCOL: &str = "2025-06-18";
+
+pub fn serve() -> ExitCode {
+    let stdin = std::io::stdin();
+    let mut out = std::io::stdout().lock();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { return ExitCode::from(1) };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Some(reply) = handle_line(&line, &mut crate::ask_rays) else { continue };
+        if writeln!(out, "{reply}").and_then(|_| out.flush()).is_err() {
+            return ExitCode::from(1);
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// Returns the reply line, or None for notifications. `ask` sends one request to Rays (swapped out in tests).
+fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Value> {
+    let msg: Value = match serde_json::from_str(line) {
+        Ok(v) => v,
+        Err(e) => return Some(error(Value::Null, -32700, &format!("parse error: {e}"))),
+    };
+    let id = msg.get("id").cloned()?; // no id: a notification, never answered
+    let method = msg.get("method").and_then(Value::as_str).unwrap_or_default();
+    let params = msg.get("params").cloned().unwrap_or(Value::Null);
+    let result = match method {
+        "initialize" => json!({
+            "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL),
+            "capabilities": { "tools": {} },
+            "serverInfo": { "name": "rays", "version": env!("CARGO_PKG_VERSION") },
+            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links, list_downloads to check progress, sorter_status and sort_folder to file downloads into folders."
+        }),
+        "ping" => json!({}),
+        "tools/list" => json!({ "tools": tools() }),
+        "tools/call" => {
+            let name = params.get("name").and_then(Value::as_str).unwrap_or_default();
+            let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            match call(name, &args, ask) {
+                Some(Ok(text)) => json!({ "content": [{ "type": "text", "text": text }], "isError": false }),
+                Some(Err(text)) => json!({ "content": [{ "type": "text", "text": text }], "isError": true }),
+                None => return Some(error(id, -32602, &format!("unknown tool: {name}"))),
+            }
+        }
+        _ => return Some(error(id, -32601, &format!("method not found: {method}"))),
+    };
+    Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+}
+
+fn error(id: Value, code: i64, message: &str) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}
+
+fn tools() -> Value {
+    json!([
+        {
+            "name": "add_downloads",
+            "description": "Download one or more http/https links with Rays. Returns the new download ids and any rejected links.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 } },
+                "required": ["urls"]
+            }
+        },
+        {
+            "name": "list_downloads",
+            "description": "List Rays downloads with id, state (queued, running, paused, retrying, done, failed), bytes done and total, and file name.",
+            "inputSchema": { "type": "object", "properties": {} },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "sorter_status",
+            "description": "Watched folders, sorter categories, settings and recent moves, as JSON.",
+            "inputSchema": { "type": "object", "properties": {} },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "sort_folder",
+            "description": "Sort a folder into category folders (Work, Images, Installers, ...). Dry run by default: set dry_run to false to move files.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folder": { "type": "string", "description": "Folder to sort. Default ~/Downloads." },
+                    "dry_run": { "type": "boolean", "default": true, "description": "Only report what would move." },
+                    "all": { "type": "boolean", "default": false, "description": "Also sort files that were there before the first run." }
+                }
+            },
+            "annotations": { "destructiveHint": true }
+        }
+    ])
+}
+
+/// None means no such tool. Errors are tool errors the model can read, not protocol errors.
+fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Result<String, String>> {
+    Some(match name {
+        "add_downloads" => urls(args).and_then(|urls| reply_text(ask(&Request::Add { urls }))),
+        "list_downloads" => reply_text(ask(&Request::List)),
+        "sorter_status" => sorter::output(&["status".into(), "--json".into()]),
+        "sort_folder" => sort_args(args).and_then(|a| sorter::output(&a)),
+        _ => return None,
+    })
+}
+
+fn urls(args: &Value) -> Result<Vec<String>, String> {
+    let list = args.get("urls").and_then(Value::as_array).ok_or("urls must be an array of strings")?;
+    let urls: Vec<String> = list.iter().filter_map(|u| u.as_str().map(str::to_owned)).collect();
+    if urls.is_empty() || urls.len() != list.len() {
+        return Err("urls must be a non-empty array of strings".into());
+    }
+    Ok(urls)
+}
+
+fn sort_args(args: &Value) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    if let Some(folder) = args.get("folder").and_then(Value::as_str) {
+        if folder.starts_with('-') {
+            return Err("folder must be a path".into());
+        }
+        out.push(folder.to_owned());
+    }
+    if args.get("dry_run").and_then(Value::as_bool).unwrap_or(true) {
+        out.push("--dry-run".into());
+    }
+    if args.get("all").and_then(Value::as_bool).unwrap_or(false) {
+        out.push("--all".into());
+    }
+    Ok(out)
+}
+
+fn reply_text(reply: Result<Response, String>) -> Result<String, String> {
+    let reply = reply?;
+    if !reply.ok {
+        return Err(reply.error.unwrap_or_else(|| "Rays rejected the request".into()));
+    }
+    serde_json::to_string_pretty(&reply).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dl_engine::protocol::{Added, JobLine};
+
+    fn fake(req: &Request) -> Result<Response, String> {
+        Ok(match req {
+            Request::Add { urls } => Response {
+                ok: true,
+                added: urls.iter().enumerate().map(|(i, u)| Added { url: u.clone(), id: i as u64 + 1 }).collect(),
+                ..Default::default()
+            },
+            Request::List => Response {
+                ok: true,
+                jobs: vec![JobLine { id: 1, name: "a.zip".into(), state: "done".into(), done: 3, total: Some(3) }],
+                ..Default::default()
+            },
+        })
+    }
+
+    fn ask(line: &str) -> Option<Value> {
+        handle_line(line, &mut fake)
+    }
+
+    #[test]
+    fn initialize_echoes_version_and_lists_tools() {
+        let r = ask(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}"#).unwrap();
+        assert_eq!(r["result"]["protocolVersion"], "2025-03-26");
+        assert_eq!(r["result"]["serverInfo"]["name"], "rays");
+        let r = ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap();
+        let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["add_downloads", "list_downloads", "sorter_status", "sort_folder"]);
+    }
+
+    #[test]
+    fn notifications_get_no_reply() {
+        assert!(ask(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#).is_none());
+    }
+
+    #[test]
+    fn add_and_list_go_through_rays() {
+        let r = ask(r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_downloads","arguments":{"urls":["https://a.com/x.zip"]}}}"#).unwrap();
+        assert_eq!(r["result"]["isError"], false);
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("https://a.com/x.zip"));
+        let r = ask(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"list_downloads"}}"#).unwrap();
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("a.zip"));
+    }
+
+    #[test]
+    fn bad_input_is_a_tool_error_unknown_is_protocol_error() {
+        let r = ask(r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"add_downloads","arguments":{"urls":[]}}}"#).unwrap();
+        assert_eq!(r["result"]["isError"], true);
+        let r = ask(r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"nope"}}"#).unwrap();
+        assert_eq!(r["error"]["code"], -32602);
+        let r = ask(r#"{"jsonrpc":"2.0","id":7,"method":"nope"}"#).unwrap();
+        assert_eq!(r["error"]["code"], -32601);
+        assert_eq!(ask("not json").unwrap()["error"]["code"], -32700);
+    }
+
+    #[test]
+    fn sort_defaults_to_dry_run_and_rejects_flag_folders() {
+        assert_eq!(sort_args(&json!({})).unwrap(), ["--dry-run"]);
+        assert_eq!(sort_args(&json!({"folder": "/x", "dry_run": false, "all": true})).unwrap(), ["/x", "--all"]);
+        assert!(sort_args(&json!({"folder": "--all"})).is_err());
+    }
+}
