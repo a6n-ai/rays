@@ -6,3 +6,4 @@ macos/Sources/Rays/Generated/
 .DS_Store
 sorter/data/
 *.dmg
+.jury/
