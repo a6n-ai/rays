@@ -12,6 +12,11 @@
 	--accent-ink: #1b1209;
 	--chip: #1b1c19;
 	--focus: #ffd2b5;
+	/* Recessed glass well (the landscape panel): shade from the top edge, a light lip at the bottom. */
+	--well: #080908;
+	--well-shade: rgb(0 0 0 / 0.6);
+	--well-lip: rgb(255 255 255 / 0.07);
+	--well-sheen: rgb(255 255 255 / 0.05);
 
 	/* Rays DMG palette (scripts/dmg/draw-background.swift lines 14-15) extended with depth for a dark page */
 	--g-lilac: #ede0fa;
@@ -49,4 +54,8 @@
 	--accent-ink: #ffffff;
 	--chip: #ece9e2;
 	--focus: #9a3412;
+	--well: #efede6;
+	--well-shade: rgb(70 50 30 / 0.16);
+	--well-lip: rgb(255 255 255 / 0.9);
+	--well-sheen: rgb(255 255 255 / 0.45);
 }
