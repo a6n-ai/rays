@@ -205,3 +205,58 @@ starlight-toc h2 {
 	font-size: 1.05rem;
 	margin-top: -0.5rem;
 }
+
+/* Crossfade between pages; the Rays mark is shared with the home page. */
+@view-transition {
+	navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 220ms;
+}
+@media (prefers-reduced-motion: reduce) {
+	@view-transition {
+		navigation: none;
+	}
+}
+.rh .logo img {
+	view-transition-name: rays-logo;
+}
+
+/* Hover is more than a colour change: the logo lifts, sidebar links slide a hair, cards rise. */
+.rh .logo,
+.rh .section {
+	transition: opacity 160ms ease;
+}
+.rh .logo:hover,
+.rh .section:hover {
+	opacity: 0.75;
+}
+.rh .logo img {
+	transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rh .logo:hover img {
+	transform: rotate(-6deg) scale(1.06);
+}
+.sidebar-content a > span {
+	transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sidebar-content a:hover > span {
+	transform: translateX(2px);
+}
+.sl-markdown-content a:not(.card):hover {
+	text-decoration-thickness: 2px;
+}
+
+/* Heading anchors and small controls meet a 24px target. */
+.sl-anchor-link {
+	padding: 0.3rem;
+	margin-inline-start: 0.1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.rh .logo img,
+	.sidebar-content a > span {
+		transition: none;
+	}
+}

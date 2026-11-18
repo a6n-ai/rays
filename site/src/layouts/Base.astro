@@ -35,6 +35,15 @@ const jsonLd = {
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="dark light" />
+		<script is:inline>
+			// Before first paint: same theme choice as the docs (localStorage 'starlight-theme').
+			(() => {
+				let t;
+				try { t = localStorage.getItem('starlight-theme'); } catch {}
+				const light = t === 'light' || (t !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+				document.documentElement.dataset.theme = light ? 'light' : 'dark';
+			})();
+		</script>
 		<meta name="theme-color" content="#111210" media="(prefers-color-scheme: dark)" />
 		<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)" />
 		<title>{title}</title>

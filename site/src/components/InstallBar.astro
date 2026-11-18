@@ -12,7 +12,7 @@ const BREW = 'brew install --cask a6n-ai/tap/rays';
 		<Image src={icon} alt="" width={48} height={48} loading="eager" fetchpriority="high" class="icon" />
 		<div class="what">
 			<span>Rays for macOS 26</span>
-			<a href={NOTES} class="notes">Release notes</a>
+			<a href={NOTES} class="notes slide">Release notes</a>
 		</div>
 		<a class="download" href={DMG}>Download for Mac</a>
 	</div>
@@ -23,9 +23,10 @@ const BREW = 'brew install --cask a6n-ai/tap/rays';
 		<span class="sr-only" role="status" aria-live="polite" data-copy-status></span>
 	</div>
 
-	<p class="note">
-		DMG: on first open, go to System Settings, Privacy &amp; Security, Open Anyway. Homebrew installs skip this.
-	</p>
+	<details class="note">
+		<summary>Opening the DMG for the first time?</summary>
+		<p>If macOS blocks Rays, go to System Settings, Privacy &amp; Security, and choose Open Anyway. Homebrew installs skip this.</p>
+	</details>
 	<p class="note mac-only">Rays runs on Macs with macOS 26 or later.</p>
 </div>
 
@@ -59,7 +60,8 @@ const BREW = 'brew install --cask a6n-ai/tap/rays';
 	}
 	.notes {
 		color: var(--muted);
-		text-underline-offset: 3px;
+		min-height: 24px;
+		width: fit-content;
 	}
 	.notes:hover {
 		color: var(--ink);
@@ -116,6 +118,19 @@ const BREW = 'brew install --cask a6n-ai/tap/rays';
 	}
 	.copy:active {
 		transform: scale(0.97);
+	}
+	.note summary {
+		cursor: pointer;
+		min-height: 32px;
+		display: flex;
+		align-items: center;
+		width: fit-content;
+	}
+	.note summary:hover {
+		color: var(--ink);
+	}
+	.note p {
+		margin: 4px 0 0;
 	}
 	.note {
 		margin: 0;

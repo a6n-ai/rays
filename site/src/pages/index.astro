@@ -8,6 +8,7 @@ import Passage from '../components/Passage.astro';
 import Panel from '../components/Panel.astro';
 import Newsletter from '../components/Newsletter.astro';
 import Faq from '../components/Faq.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
 import icon from '../assets/icon.png';
 ---
 
@@ -20,10 +21,11 @@ import icon from '../assets/icon.png';
 			<header class="mark">
 				<Image src={icon} alt="" width={28} height={28} />
 				<span>Rays</span>
-				<span class="by">by <a href="https://a6n.ai">a6n</a></span>
+				<span class="by">by <a class="slide" href="https://a6n.ai">a6n</a></span>
 				<nav class="top" aria-label="Site">
-					<a href="/docs/">Docs</a>
-					<a href="/releases/">Release notes</a>
+					<a class="slide" href="/docs/">Docs</a>
+					<a class="slide" href="/releases/">Release notes</a>
+					<ThemeToggle />
 				</nav>
 			</header>
 
@@ -109,11 +111,11 @@ import icon from '../assets/icon.png';
 			<Newsletter />
 
 			<footer class="foot">
-				<a href="https://github.com/a6n-ai/rays">GitHub</a>
+				<a class="slide" href="https://github.com/a6n-ai/rays">GitHub</a>
 				<span class="rule" aria-hidden="true"></span>
-				<a href="/docs/">Docs</a>
-				<a href="/releases/">Release notes</a>
-				<a href="https://a6n.ai">a6n.ai</a>
+				<a class="slide" href="/docs/">Docs</a>
+				<a class="slide" href="/releases/">Release notes</a>
+				<a class="slide" href="https://a6n.ai">a6n.ai</a>
 				<span>AGPL-3.0</span>
 			</footer>
 		</main>
@@ -132,6 +134,7 @@ import icon from '../assets/icon.png';
 	}
 	.top {
 		display: flex;
+		align-items: center;
 		gap: 18px;
 		margin-left: auto;
 		font: 400 var(--t-small) var(--font-text);
@@ -153,6 +156,9 @@ import icon from '../assets/icon.png';
 	}
 	.by a:hover {
 		color: var(--ink);
+	}
+	.mark > :global(img) {
+		view-transition-name: rays-logo;
 	}
 	.mark :global(img) {
 		width: 28px;
@@ -225,10 +231,7 @@ import icon from '../assets/icon.png';
 		color: var(--ink);
 		text-decoration: none;
 	}
-	.foot a:hover {
-		text-decoration: underline;
-		text-underline-offset: 3px;
-	}
+
 	.rule {
 		flex: 1;
 		height: 1px;

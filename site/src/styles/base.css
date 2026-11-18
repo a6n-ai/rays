@@ -92,3 +92,56 @@ img {
 		transition: none !important;
 	}
 }
+
+/* Page changes crossfade, and the Rays mark stays in place between the home page and the docs. */
+@view-transition {
+	navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 220ms;
+}
+@media (prefers-reduced-motion: reduce) {
+	@view-transition {
+		navigation: none;
+	}
+}
+
+/* Text links: the underline thickens and takes the accent, so hover is more than a colour change. */
+.column p a {
+	color: var(--ink);
+	text-decoration-color: var(--line);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 4px;
+	transition: color 160ms var(--ease-out), text-decoration-color 160ms var(--ease-out);
+}
+.column p a:hover {
+	color: var(--accent);
+	text-decoration-color: currentColor;
+	text-decoration-thickness: 2px;
+}
+
+/* Nav-style links: an underline that draws in from the left. */
+.slide {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	text-decoration: none;
+}
+.slide::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 4px;
+	height: 1px;
+	background: currentColor;
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform 220ms var(--ease-out);
+}
+.slide:hover::after,
+.slide:focus-visible::after {
+	transform: scaleX(1);
+}
