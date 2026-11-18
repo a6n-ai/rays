@@ -1,6 +1,6 @@
 // Topography by David Haz, from React Bits (https://reactbits.dev), MIT + Commons Clause licence.
 // Modified for Rays: ported from React to a plain function (mountTopography), a three-colour palette blended by
-// height (palette), and travel that follows page scroll (scrollTravel). The WebGL and shaders are otherwise unchanged.
+// height (palette), and travel that moves forward with every scroll (scrollTravel). The WebGL and shaders are otherwise unchanged.
 
 const FOV = 0.32;
 const ORBIT = 9;
@@ -102,6 +102,8 @@ interface TopographyState {
   travelX: number;
   travelZ: number;
   scrollZ: number;
+  scrolled: number;
+  lastScrollY: number;
   morph: number;
   yaw: number;
   pitch: number;
@@ -1015,6 +1017,8 @@ export function mountTopography(container: HTMLElement, options: TopographyProps
       travelX: 0,
       travelZ: 0,
       scrollZ: 0,
+      scrolled: 0,
+      lastScrollY: window.scrollY,
       morph: 0,
       yaw: 0,
       pitch: 0,
@@ -1495,8 +1499,11 @@ export function mountTopography(container: HTMLElement, options: TopographyProps
         } else glitchData.fill(0);
       } else glitchData.fill(0);
 
-      // Scrolling the page walks the camera forward (down) or back (up), eased so it glides.
-      const scrollTarget = window.scrollY * s.scrollTravel;
+      // Any scroll, down or up, walks the camera forward: the target is the total distance scrolled. Eased so it glides.
+      const scrolledNow = window.scrollY;
+      state.scrolled += Math.abs(scrolledNow - state.lastScrollY);
+      state.lastScrollY = scrolledNow;
+      const scrollTarget = state.scrolled * s.scrollTravel;
       if (!reduce) {
         const before = state.scrollZ;
         state.scrollZ += (scrollTarget - state.scrollZ) * (1 - Math.exp(-dt / 0.35));
