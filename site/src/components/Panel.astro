@@ -2,10 +2,44 @@
 // Decorative. The gradient lives on a layer three panels tall; scrolling the page moves it up with a transform.
 ---
 
-<div class="panel" aria-hidden="true">
+<div class="panel" aria-hidden="true" data-panel>
 	<div class="wash"></div>
+	<!-- Hover: sun rays fan down from the top and lean toward the pointer; colour drains out on the way down. -->
+	<div class="fade"></div>
+	<div class="rays" data-rays></div>
 	<div class="grain"></div>
 </div>
+
+<script>
+	// Only for a real mouse, and never under reduced motion: the rays lean toward the pointer with a damped follow.
+	const panel = document.querySelector<HTMLElement>('[data-panel]');
+	const rays = panel?.querySelector<HTMLElement>('[data-rays]');
+	const fine = matchMedia('(hover: hover) and (pointer: fine)');
+	const calm = matchMedia('(prefers-reduced-motion: reduce)');
+	if (panel && rays && fine.matches && !calm.matches) {
+		let target = 0;
+		let angle = 0;
+		let frame = 0;
+		const step = () => {
+			angle += (target - angle) * 0.12;
+			rays.style.transform = `rotate(${angle.toFixed(2)}deg)`;
+			frame = Math.abs(target - angle) > 0.02 ? requestAnimationFrame(step) : 0;
+		};
+		const kick = () => {
+			if (!frame) frame = requestAnimationFrame(step);
+		};
+		panel.addEventListener('pointermove', (e) => {
+			const r = panel.getBoundingClientRect();
+			// -1 at the left edge, 1 at the right: lean up to 9 degrees toward the pointer.
+			target = ((e.clientX - r.left) / r.width - 0.5) * -18;
+			kick();
+		});
+		panel.addEventListener('pointerleave', () => {
+			target = 0;
+			kick();
+		});
+	}
+</script>
 
 <style>
 	.panel {
@@ -37,6 +71,64 @@
 			animation: drift linear both;
 			animation-duration: auto;
 			animation-timeline: scroll(root block);
+		}
+	}
+	/* Rays: a fan of soft beams from just above the top edge, fading to nothing before the bottom. */
+	.rays {
+		position: absolute;
+		left: -40%;
+		right: -40%;
+		top: -6%;
+		height: 120%;
+		transform-origin: 50% 0;
+		background:
+			radial-gradient(ellipse 55% 22% at 50% 0, rgb(255 200 90 / 0.95), rgb(255 160 80 / 0.45) 45%, transparent 75%),
+			conic-gradient(
+				at 50% 0,
+				transparent 0deg 112deg,
+				rgb(255 196 92 / 0.90) 114deg 117deg,
+				transparent 120deg 126deg,
+				rgb(255 140 105 / 0.75) 128deg 133deg,
+				transparent 136deg 141deg,
+				rgb(255 222 140 / 0.95) 143deg 146deg,
+				transparent 149deg 155deg,
+				rgb(246 120 150 / 0.70) 157deg 163deg,
+				transparent 166deg 170deg,
+				rgb(255 238 170 / 0.95) 172deg 176deg,
+				transparent 179deg 183deg,
+				rgb(190 140 255 / 0.70) 185deg 190deg,
+				transparent 193deg 198deg,
+				rgb(255 170 80 / 0.90) 200deg 203deg,
+				transparent 206deg 212deg,
+				rgb(120 190 255 / 0.65) 214deg 219deg,
+				transparent 222deg 228deg,
+				rgb(255 150 120 / 0.80) 230deg 233deg,
+				transparent 236deg 360deg
+			);
+		-webkit-mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 0.7) 35%, transparent 80%);
+		mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 0.7) 35%, transparent 80%);
+		filter: blur(7px) saturate(1.35);
+		opacity: 0;
+		transition: opacity 450ms ease;
+		will-change: transform, opacity;
+	}
+	/* The colour drains out lower down, as if the light loses it on the way to the ground. */
+	.fade {
+		position: absolute;
+		inset: 0;
+		-webkit-backdrop-filter: saturate(0.25) brightness(1.04);
+		backdrop-filter: saturate(0.25) brightness(1.04);
+		-webkit-mask-image: linear-gradient(to bottom, transparent 25%, rgb(0 0 0 / 0.6) 65%, #000 100%);
+		mask-image: linear-gradient(to bottom, transparent 25%, rgb(0 0 0 / 0.6) 65%, #000 100%);
+		opacity: 0;
+		transition: opacity 600ms ease;
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.panel:hover .rays {
+			opacity: 1;
+		}
+		.panel:hover .fade {
+			opacity: 1;
 		}
 	}
 	.grain {

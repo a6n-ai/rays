@@ -20,7 +20,12 @@ td.addRule('srOnly', { filter: (n) => n.classList?.contains('sr-only'), replacem
 for (const page of PAGES) {
 	let html = await readFile(`dist/${page}`, 'utf8');
 	// Expressive Code's copy buttons only have a title; give them an accessible name.
-	const labelled = html.replaceAll('<button title="Copy to clipboard"', '<button aria-label="Copy to clipboard" title="Copy to clipboard"');
+	let labelled = html.replaceAll('<button title="Copy to clipboard"', '<button aria-label="Copy to clipboard" title="Copy to clipboard"');
+	// Cloudflare's email obfuscation turns mailto links into /cdn-cgi/l/email-protection (a 404 for crawlers);
+	// it skips everything between these two comments.
+	if (!labelled.includes('<!--email_off-->')) {
+		labelled = labelled.replace(/(<body[^>]*>)/, '$1<!--email_off-->').replace('</body>', '<!--email_on--></body>');
+	}
 	if (labelled !== html) await writeFile(`dist/${page}`, (html = labelled));
 	const main = html.match(/<main[^>]*>([\s\S]*?)<\/main>/)?.[1];
 	if (!main) throw new Error(`no <main> in ${page}`);
