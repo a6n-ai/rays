@@ -19,11 +19,11 @@
 	--sl-color-gray-4: #4b4f55;
 	--sl-color-gray-5: #26282b;
 	--sl-color-gray-6: #141516;
-	--sl-color-black: #08090a;
+	--sl-color-black: #0b0c0b;
 	--sl-color-hairline: #1c1d20;
 	--sl-color-hairline-light: #26282b;
-	--sl-color-bg-nav: #08090a;
-	--sl-color-bg-sidebar: #08090a;
+	--sl-color-bg-nav: #0b0c0b;
+	--sl-color-bg-sidebar: #0b0c0b;
 	--rays-card: #0f1011;
 	--rays-card-hover: #141516;
 	--rays-current: #161718;
@@ -40,14 +40,14 @@
 	--sl-color-gray-5: #e3e4e7;
 	--sl-color-gray-6: #f3f4f5;
 	--sl-color-gray-7: #f7f8f8;
-	--sl-color-black: #ffffff;
+	--sl-color-black: #f7f6f2;
 	--sl-color-hairline: #ececee;
 	--sl-color-hairline-light: #e3e4e7;
-	--sl-color-bg-nav: #ffffff;
-	--sl-color-bg-sidebar: #ffffff;
-	--rays-card: #fbfbfc;
-	--rays-card-hover: #f4f5f6;
-	--rays-current: #f0f1f2;
+	--sl-color-bg-nav: #f7f6f2;
+	--sl-color-bg-sidebar: #f7f6f2;
+	--rays-card: #fbfaf7;
+	--rays-card-hover: #f1efe9;
+	--rays-current: #ecebe5;
 }
 
 /* Headings: tight, white, medium weight. */
@@ -257,6 +257,41 @@ starlight-toc h2 {
 @media (prefers-reduced-motion: reduce) {
 	.rh .logo img,
 	.sidebar-content a > span {
+		transition: none;
+	}
+}
+
+/* Header actions and page links answer the pointer with movement, not only colour. */
+.rh .copy,
+.rh .get,
+.rh .search site-search button[data-open-modal],
+.pagination-links a {
+	transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms, color 150ms, opacity 150ms;
+}
+.rh .copy:hover,
+.rh .search site-search button[data-open-modal]:hover {
+	transform: translateY(-1px);
+	border-color: var(--sl-color-gray-3);
+}
+.rh .get:hover {
+	transform: translateY(-1px);
+}
+.rh .copy:active,
+.rh .get:active,
+.rh .search site-search button[data-open-modal]:active {
+	transform: scale(0.97);
+}
+.pagination-links a:hover {
+	transform: translateY(-2px);
+}
+/* Inline links in prose reach a 24px target. */
+.sl-markdown-content p a {
+	padding-block: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.rh .copy,
+	.rh .get,
+	.pagination-links a {
 		transition: none;
 	}
 }

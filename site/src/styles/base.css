@@ -109,6 +109,7 @@ img {
 
 /* Text links: the underline thickens and takes the accent, so hover is more than a colour change. */
 .column p a {
+	padding-block: 3px;
 	color: var(--ink);
 	text-decoration-color: var(--line);
 	text-decoration-thickness: 1px;

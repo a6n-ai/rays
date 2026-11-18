@@ -3,7 +3,7 @@
 :root {
 	color-scheme: dark;
 
-	--ground: #111210;
+	--ground: #0b0c0b;
 	--ink: #ecebe6;
 	--muted: #9a978e;
 	--faint: #2a2b27;
@@ -40,7 +40,7 @@
 /* Light theme: set by the theme switch (shared with the docs via localStorage 'starlight-theme'). */
 :root[data-theme='light'] {
 	color-scheme: light;
-	--ground: #f6f4ef;
+	--ground: #f7f6f2;
 	--ink: #171714;
 	--muted: #5f5c55;
 	--faint: #e4e1d9;
