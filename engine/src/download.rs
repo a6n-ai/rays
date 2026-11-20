@@ -32,8 +32,9 @@ const MIN_SEGMENT: u64 = 1 << 20;
 const SPLIT_ALIGN: u64 = 64 << 10;
 /// The connection count is judged on 2 s windows of total throughput, sampled every `TICK`.
 const TICK: Duration = Duration::from_secs(1);
-/// Ticks ignored after a change, then the ticks whose throughput judges it.
-const WARM_TICKS: u8 = 2;
+/// Ticks ignored after a change, then the ticks whose throughput judges it. One warm tick lets a new connection
+/// get past its TLS handshake and slow start before it is judged; each probe then takes 3 s instead of 4 s.
+const WARM_TICKS: u8 = 1;
 const WINDOW_TICKS: u8 = 2;
 /// A held connection count is re-checked this often.
 const HOLD_TICKS: u8 = 15;
@@ -259,7 +260,9 @@ async fn run_attempt(
         drop(resp);
         // The plan must be on disk before preallocating: a full-size .part without a saved plan would be
         // mistaken for a finished single-stream download after a crash.
-        let segments = plan(total);
+        // Under a speed limit extra parts can't help, so the plan stays at two.
+        let start_cap = if env.limiter.is_limited() { 2 } else { u64::from(cap) };
+        let segments = plan(total, start_cap);
         let job = with_job(&env.live, |j| {
             j.segments = segments;
             j.clone()
@@ -309,10 +312,19 @@ async fn run_attempt(
     finish(env).await
 }
 
-/// Two equal halves; `MIN_SPLIT` keeps each at least `MIN_SEGMENT`. Growth adds segments later.
-fn plan(total: u64) -> Vec<Segment> {
-    let half = total / 2;
-    vec![Segment { start: 0, end: half, done: 0 }, Segment { start: half, end: total, done: 0 }]
+/// Large files start on this many parts, so growth doesn't spend its first probes reaching them.
+const BIG_PLAN: u64 = 4;
+/// Files at least this big get `BIG_PLAN` parts; smaller ones start on two.
+const BIG_PLAN_MIN: u64 = 64 << 20;
+
+/// Equal parts, two of them, or `BIG_PLAN` for files of `BIG_PLAN_MIN` and more, never more than `cap`.
+/// `MIN_SPLIT` keeps each at least `MIN_SEGMENT`. Growth adds and removes parts later.
+fn plan(total: u64, cap: u64) -> Vec<Segment> {
+    let parts = if total >= BIG_PLAN_MIN { BIG_PLAN } else { 2 }.min(cap).max(2);
+    let step = total / parts / SPLIT_ALIGN * SPLIT_ALIGN;
+    (0..parts)
+        .map(|i| Segment { start: i * step, end: if i + 1 == parts { total } else { (i + 1) * step }, done: 0 })
+        .collect()
 }
 
 /// Sets the connection count of a split run. It probes one connection up, keeps it only if the next 2 s window
@@ -970,6 +982,22 @@ fn retry_wait(attempt: u8) -> Duration {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn plan_starts_big_files_on_more_parts() {
+        let check = |total: u64, cap: u64, parts: usize| {
+            let p = plan(total, cap);
+            assert_eq!(p.len(), parts, "total {total} cap {cap}");
+            assert_eq!(p[0].start, 0);
+            assert_eq!(p.last().unwrap().end, total);
+            assert!(p.windows(2).all(|w| w[0].end == w[1].start && w[0].end % SPLIT_ALIGN == 0));
+        };
+        check(20 << 20, 16, 2);
+        check(BIG_PLAN_MIN, 16, BIG_PLAN as usize);
+        check(100 << 20, 3, 3);
+        check(100 << 20, 2, 2);
+        check((100 << 20) + 12345, 16, 4);
+    }
+
     use super::*;
 
     fn seg(start: u64, end: u64, done: u64) -> Segment {
