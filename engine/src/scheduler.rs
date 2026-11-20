@@ -73,7 +73,15 @@ impl Scheduler {
                 })
             })
             .collect();
-        let client = reqwest::Client::builder()
+        // HTTP/3's QUIC endpoint binds its UDP socket on the runtime, so the client is built inside it.
+        let _in_runtime = rt.enter();
+        let builder = reqwest::Client::builder();
+        // Experimental, build-time `http3` feature: RAYS_HTTP3=1 sends every request over HTTP/3 (fails on servers without it).
+        #[cfg(feature = "http3")]
+        let builder = if std::env::var_os("RAYS_HTTP3").is_some() { builder.tls_backend_rustls().http3_prior_knowledge() } else { builder };
+        let client = builder
+            // Some servers and CDNs reject requests that carry no User-Agent (speed.cloudflare.com answers 403).
+            .user_agent(concat!("Rays/", env!("CARGO_PKG_VERSION"), " (+https://rays.a6n.ai)"))
             .connect_timeout(Duration::from_secs(15))
             .read_timeout(Duration::from_secs(30))
             .build()

@@ -12,6 +12,8 @@ crate-type = ["staticlib", "lib"]
 default = ["full"]
 # shortcut: `full` off builds only `protocol` (for the CLI); split into a separate crate if more is shared.
 full = ["dep:tokio", "dep:reqwest", "dep:rusqlite", "dep:uniffi"]
+# Experimental: HTTP/3 (QUIC over UDP) when RAYS_HTTP3=1. Needs RUSTFLAGS="--cfg reqwest_unstable"; off in releases.
+http3 = ["full", "reqwest/http3"]
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
