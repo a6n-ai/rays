@@ -14,7 +14,7 @@ Downloads go to `~/Downloads` unless you choose another folder in **Settings > G
 
 ## How Rays downloads
 
-- **Smart splitting.** Files of 4 MB or more come down in parts over up to 16 connections. Rays adds connections while the speed keeps rising, and a finished part takes over half of the slowest part's work.
+- **Smart splitting.** A download starts on one connection. For files of 4 MB or more, Rays adds connections, up to 16, only while each one makes the file faster, and a finished part takes over half of the largest part left. See [How the engine works](/docs/engine/).
 - **Slow servers.** When a server pushes back or drops connections, Rays remembers it and uses fewer connections next time. A server that cannot send parts gets one connection.
 - **Retries.** Up to 5 automatic retries, waiting 2 seconds at first and up to a minute.
 - **Resume.** Pause a download, or quit Rays, and it continues later from the bytes already saved. While a file is downloading it is named `<name>.<id>.part` and renamed only when it is complete.
