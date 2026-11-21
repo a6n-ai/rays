@@ -312,6 +312,9 @@ async fn run_attempt(
     finish(env).await
 }
 
+/// Each extra connection must bring this much more speed to be worth its cost (the 1.02^n in speed / 1.02^n).
+const PENALTY: f64 = 1.02;
+
 /// Large files start on this many parts, so growth doesn't spend its first probes reaching them.
 const BIG_PLAN: u64 = 4;
 /// Files at least this big get `BIG_PLAN` parts; smaller ones start on two.
@@ -327,8 +330,10 @@ fn plan(total: u64, cap: u64) -> Vec<Segment> {
         .collect()
 }
 
-/// Sets the connection count of a split run. It probes one connection up, keeps it only if the next 2 s window
-/// beats the best by 10%, and otherwise removes it. While holding, it steps down when throughput falls 25%.
+/// Sets the connection count of a split run. It probes one connection up and keeps it only if the next 2 s window
+/// beats the best by 10%. When a probe fails it removes it and then tries one fewer, keeping the lower count while
+/// it is within `PENALTY` of the best (each count scored as speed / 1.02^n, after Falcon and FastBioDL), so a link
+/// where extra connections don't help settles low. While holding, it steps down when throughput falls 25%.
 struct Grow {
     /// Throughput of the best count so far, bytes per second.
     best: f64,
@@ -351,8 +356,10 @@ enum Stage {
 enum Change {
     /// A connection was added: keep it only if the window beats `best` by 10%.
     Probe,
-    /// The window becomes `best`; a probe follows when `probe` is set.
-    Rebase { probe: bool },
+    /// A connection was removed: keep the lower count if the window is within `PENALTY` of `best`.
+    Shrink,
+    /// The window becomes `best`; then one fewer is tried when `shrink` is set, else a probe up when `probe` is.
+    Rebase { probe: bool, shrink: bool },
 }
 
 /// What the caller must do to the connection count after a tick.
@@ -369,7 +376,7 @@ impl Grow {
         Grow {
             best: 0.0,
             samples: VecDeque::from([(now, done)]),
-            stage: Stage::Warm(WARM_TICKS, Change::Rebase { probe: true }),
+            stage: Stage::Warm(WARM_TICKS, Change::Rebase { probe: true, shrink: false }),
         }
     }
 
@@ -395,7 +402,7 @@ impl Grow {
             Stage::Hold(_) => {
                 self.stage = Stage::Hold(0);
                 if target > 1 && self.window() < self.best * 0.75 {
-                    self.stage = Stage::Warm(WARM_TICKS, Change::Rebase { probe: false });
+                    self.stage = Stage::Warm(WARM_TICKS, Change::Rebase { probe: false, shrink: false });
                     Act::Remove
                 } else if growable && target < cap {
                     self.stage = Stage::Warm(WARM_TICKS, Change::Probe);
@@ -419,18 +426,29 @@ impl Grow {
     fn judge(&mut self, change: Change, growable: bool, target: usize, cap: usize) -> Act {
         let window = self.window();
         match change {
+            // The probe didn't pay: remove it, re-measure, then see whether even fewer is as good.
             Change::Probe if window < self.best * 1.1 => {
-                self.stage = Stage::Hold(0);
+                self.stage = Stage::Warm(WARM_TICKS, Change::Rebase { probe: false, shrink: true });
                 Act::Remove
             }
-            Change::Probe => self.advance(window, true, growable, target, cap),
-            Change::Rebase { probe } => self.advance(window, probe, growable, target, cap),
+            Change::Probe => self.advance(window, true, false, growable, target, cap),
+            // Fewer is as good: keep it, and try one fewer again.
+            Change::Shrink if window * PENALTY >= self.best => self.advance(window, false, true, growable, target, cap),
+            // Fewer is worse: put the connection back and hold (a periodic probe re-checks later).
+            Change::Shrink => {
+                self.stage = Stage::Warm(WARM_TICKS, Change::Rebase { probe: false, shrink: false });
+                Act::Add
+            }
+            Change::Rebase { probe, shrink } => self.advance(window, probe, shrink, growable, target, cap),
         }
     }
 
-    fn advance(&mut self, window: f64, probe: bool, growable: bool, target: usize, cap: usize) -> Act {
+    fn advance(&mut self, window: f64, probe: bool, shrink: bool, growable: bool, target: usize, cap: usize) -> Act {
         self.best = window;
-        if probe && growable && target < cap {
+        if shrink && target > 1 {
+            self.stage = Stage::Warm(WARM_TICKS, Change::Shrink);
+            Act::Remove
+        } else if probe && growable && target < cap {
             self.stage = Stage::Warm(WARM_TICKS, Change::Probe);
             Act::Add
         } else {
@@ -638,7 +656,10 @@ async fn run_split(env: &Env, cancel: &mut watch::Receiver<bool>, probed: bool) 
                     Act::Add => {
                         shared.target.fetch_add(1, Ordering::Relaxed);
                         let before = set.len();
-                        steal(&mut set, &shared);
+                        // A segment parked by an earlier step down resumes before a new one is split off.
+                        if !hand_off(&mut set, &shared) {
+                            steal(&mut set, &shared);
+                        }
                         // No segment left to split: undo the probe and hold.
                         if set.len() == before {
                             shared.target.fetch_sub(1, Ordering::Relaxed);
@@ -982,6 +1003,38 @@ fn retry_wait(attempt: u8) -> Duration {
 
 #[cfg(test)]
 mod tests {
+    /// Drives `Grow` on a synthetic link: `speed(n)` bytes/s with `n` connections. Returns the count after `ticks`.
+    fn settle(start: usize, cap: usize, ticks: u32, speed: impl Fn(usize) -> f64) -> usize {
+        let t0 = Instant::now();
+        let mut grow = Grow::new(t0, 0);
+        let (mut n, mut done) = (start, 0.0);
+        for k in 1..=ticks {
+            done += speed(n);
+            match grow.tick(t0 + Duration::from_secs(u64::from(k)), done as u64, true, n, cap) {
+                Act::Add => n += 1,
+                Act::Remove => n -= 1,
+                Act::None => {}
+            }
+        }
+        n
+    }
+
+    #[test]
+    fn grow_steps_down_when_more_connections_dont_help() {
+        // One connection already fills the link: extra ones are dropped.
+        assert_eq!(settle(4, 8, 30, |_| 10e6), 1);
+        // Extra connections make it slower: dropped too.
+        assert_eq!(settle(4, 8, 30, |n| 10e6 / n as f64), 1);
+    }
+
+    #[test]
+    fn grow_climbs_when_each_connection_adds_speed() {
+        // Each connection adds 5 MB/s up to 8: the count reaches the cap and stays.
+        assert_eq!(settle(4, 8, 60, |n| 5e6 * n.min(8) as f64), 8);
+        // Gains stop at 6: it settles there, not at the cap.
+        assert_eq!(settle(4, 8, 60, |n| 5e6 * n.min(6) as f64), 6);
+    }
+
     #[test]
     fn plan_starts_big_files_on_more_parts() {
         let check = |total: u64, cap: u64, parts: usize| {
