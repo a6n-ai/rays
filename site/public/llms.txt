@@ -24,7 +24,7 @@
 ## Facts
 
 - Requires macOS 26 or later. No account; sorting runs on the Mac and nothing is uploaded.
-- Files of 4 MB or more split over up to 16 connections; up to 5 automatic retries; downloads resume after pause or quit.
+- Each download starts on one connection; files of 4 MB or more add connections, up to 16, only while each makes the download faster (details: https://rays.a6n.ai/docs/engine/); up to 5 automatic retries; downloads resume after pause or quit.
 - Sorter categories: Work, Personal, Images, Installers, Archives, Media, Code, Other.
 
 ## Optional
