@@ -325,7 +325,7 @@ impl Scheduler {
             let limiter = Arc::clone(&self.limiter);
             let store = Arc::clone(&self.store);
             self.rt.spawn(async move {
-                let outcome = download::run(live, client, &dir, hub, rx, connections, limiter, Some(store)).await;
+                let outcome = download::run(live, client, &dir, hub, rx, connections, 1, limiter, Some(store)).await;
                 sched.finish(id, outcome);
             });
         }

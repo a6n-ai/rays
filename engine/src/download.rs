@@ -53,6 +53,7 @@ pub async fn run(
     hub: Arc<EventHub>,
     mut cancel: watch::Receiver<bool>,
     connections: u32,
+    start: u32,
     limiter: Arc<RateLimiter>,
     store: Option<Arc<crate::store::Store>>,
 ) -> Outcome {
@@ -62,6 +63,7 @@ pub async fn run(
         dir: downloads_dir.to_path_buf(),
         hub,
         connections,
+        start,
         limiter,
         store,
         retry_hint: Arc::new(AtomicU64::new(0)),
@@ -140,6 +142,8 @@ struct Env {
     dir: PathBuf,
     hub: Arc<EventHub>,
     connections: u32,
+    /// Parts a fresh split starts on (the app uses 1); growth adds more only when they pay.
+    start: u32,
     limiter: Arc<RateLimiter>,
     store: Option<Arc<crate::store::Store>>,
     /// Server-requested wait (Retry-After), in ms, consumed by the next retry sleep.
@@ -190,7 +194,7 @@ async fn run_attempt(
         )
     });
     if has_plan {
-        return run_split(env, cancel, false).await;
+        return run_split(env, cancel, false, None).await;
     }
     let have = tokio::fs::metadata(&part).await.map(|m| m.len()).unwrap_or(0);
 
@@ -257,12 +261,9 @@ async fn run_attempt(
     let cap = env.connections.min(MAX_PARTS).min(host_cap.unwrap_or(MAX_PARTS));
     let split = total.filter(|&t| have == 0 && split_allowed && cap > 1 && (ranged || accept_ranges) && t >= MIN_SPLIT);
     if let Some(total) = split {
-        drop(resp);
         // The plan must be on disk before preallocating: a full-size .part without a saved plan would be
         // mistaken for a finished single-stream download after a crash.
-        // Under a speed limit extra parts can't help, so the plan stays at two.
-        let start_cap = if env.limiter.is_limited() { 2 } else { u64::from(cap) };
-        let segments = plan(total, start_cap);
+        let segments = plan(total, u64::from(env.start.min(cap)));
         let job = with_job(&env.live, |j| {
             j.segments = segments;
             j.clone()
@@ -275,7 +276,7 @@ async fn run_attempt(
         drop(file);
         env.hub.state_changed(id);
         let split_env = Env { connections: cap, ..env.clone() };
-        return run_split(&split_env, cancel, true).await;
+        return run_split(&split_env, cancel, true, Some(resp)).await;
     }
 
     let mut opts = tokio::fs::OpenOptions::new();
@@ -315,15 +316,10 @@ async fn run_attempt(
 /// Each extra connection must bring this much more speed to be worth its cost (the 1.02^n in speed / 1.02^n).
 const PENALTY: f64 = 1.02;
 
-/// Large files start on this many parts, so growth doesn't spend its first probes reaching them.
-const BIG_PLAN: u64 = 4;
-/// Files at least this big get `BIG_PLAN` parts; smaller ones start on two.
-const BIG_PLAN_MIN: u64 = 64 << 20;
-
-/// Equal parts, two of them, or `BIG_PLAN` for files of `BIG_PLAN_MIN` and more, never more than `cap`.
-/// `MIN_SPLIT` keeps each at least `MIN_SEGMENT`. Growth adds and removes parts later.
-fn plan(total: u64, cap: u64) -> Vec<Segment> {
-    let parts = if total >= BIG_PLAN_MIN { BIG_PLAN } else { 2 }.min(cap).max(2);
+/// `parts` equal segments, aligned. Segment 0 streams on the probe's own connection, so starting on one part
+/// costs no extra request and a link one connection already fills never pays for splitting.
+fn plan(total: u64, parts: u64) -> Vec<Segment> {
+    let parts = parts.max(1);
     let step = total / parts / SPLIT_ALIGN * SPLIT_ALIGN;
     (0..parts)
         .map(|i| Segment { start: i * step, end: if i + 1 == parts { total } else { (i + 1) * step }, done: 0 })
@@ -485,6 +481,8 @@ struct Shared {
     host: Option<String>,
     /// True when this split came right after a successful probe, so the server has answered us once.
     probed: bool,
+    /// The probe's still-open response, streamed as segment 0 so the first request isn't thrown away.
+    first: Mutex<Option<reqwest::Response>>,
     /// When each recent connection failure happened, and on which segment.
     conn_fails: Mutex<Vec<(Instant, usize)>>,
     blocked_noted: AtomicBool,
@@ -600,7 +598,12 @@ impl Shared {
 }
 
 /// Fetches every unfinished segment on its own connection, then finishes the file.
-async fn run_split(env: &Env, cancel: &mut watch::Receiver<bool>, probed: bool) -> Result<Outcome, Stop> {
+async fn run_split(
+    env: &Env,
+    cancel: &mut watch::Receiver<bool>,
+    probed: bool,
+    first: Option<reqwest::Response>,
+) -> Result<Outcome, Stop> {
     let (id, url, part, validator, segments) = with_job(&env.live, |j| {
         (
             j.id,
@@ -627,6 +630,7 @@ async fn run_split(env: &Env, cancel: &mut watch::Receiver<bool>, probed: bool) 
         target: AtomicUsize::new(unfinished),
         running: Mutex::new(Vec::new()),
         probed,
+        first: Mutex::new(first),
         conn_fails: Mutex::new(Vec::new()),
         blocked_noted: AtomicBool::new(false),
     });
@@ -839,44 +843,53 @@ async fn segment_attempt(
     if from >= end {
         return Ok(SegEnd::Complete);
     }
-    let mut req = shared.env.client.get(&shared.url).header(RANGE, format!("bytes={from}-{}", end - 1));
-    if let Some(v) = &shared.validator {
-        req = req.header(IF_RANGE, v.as_str());
-    }
-    let mut resp = match or_cancel(cancel, tokio::time::timeout(STALL, req.send())).await? {
-        Ok(Ok(resp)) => resp,
-        Ok(Err(e)) => {
-            shared.conn_failed(idx);
-            return Err(Stop::Retry(format!("request: {e}")));
-        }
-        Err(_) => {
-            shared.conn_failed(idx);
-            return Err(Stop::Retry("timeout waiting for response".to_string()));
+    // Segment 0 of a fresh split keeps reading the probe's response (a 200 or 206 from byte 0); the loop below
+    // stops it at the segment end, which a split may lower while it streams.
+    let first = if idx == 0 && from == 0 { shared.first.lock().unwrap_or_else(PoisonError::into_inner).take() } else { None };
+    let mut resp = match first {
+        Some(resp) => resp,
+        None => {
+            let mut req = shared.env.client.get(&shared.url).header(RANGE, format!("bytes={from}-{}", end - 1));
+            if let Some(v) = &shared.validator {
+                req = req.header(IF_RANGE, v.as_str());
+            }
+            let resp = match or_cancel(cancel, tokio::time::timeout(STALL, req.send())).await? {
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => {
+                    shared.conn_failed(idx);
+                    return Err(Stop::Retry(format!("request: {e}")));
+                }
+                Err(_) => {
+                    shared.conn_failed(idx);
+                    return Err(Stop::Retry("timeout waiting for response".to_string()));
+                }
+            };
+            match resp.status().as_u16() {
+                206 => {}
+                // A whole-file answer: the file changed, or the server stopped honouring ranges.
+                200 | 416 => return Err(Stop::Fallback),
+                status if retryable(status) => {
+                    if matches!(status, 429 | 503) {
+                        // The server is counting our connections: stop opening new ones for this run, and
+                        // remember the lower count (our other transfers are still open, so `active` counts them).
+                        shared.throttled.store(true, Ordering::Relaxed);
+                        shared.env.dirty.store(true, Ordering::Relaxed);
+                        let active = shared.env.live.connections.load(Ordering::Relaxed);
+                        if active >= 2 {
+                            shared.note_host(active - 1, "rate limited");
+                        }
+                        if shared.park() {
+                            return Ok(SegEnd::Parked);
+                        }
+                    }
+                    shared.env.note_retry_after(&resp);
+                    return Err(Stop::Retry(format!("HTTP {status}")));
+                }
+                status => return Err(Stop::Failed(format!("HTTP {status}"))),
+            }
+            resp
         }
     };
-    match resp.status().as_u16() {
-        206 => {}
-        // A whole-file answer: the file changed, or the server stopped honouring ranges.
-        200 | 416 => return Err(Stop::Fallback),
-        status if retryable(status) => {
-            if matches!(status, 429 | 503) {
-                // The server is counting our connections: stop opening new ones for this run, and
-                // remember the lower count (our other transfers are still open, so `active` counts them).
-                shared.throttled.store(true, Ordering::Relaxed);
-                shared.env.dirty.store(true, Ordering::Relaxed);
-                let active = shared.env.live.connections.load(Ordering::Relaxed);
-                if active >= 2 {
-                    shared.note_host(active - 1, "rate limited");
-                }
-                if shared.park() {
-                    return Ok(SegEnd::Parked);
-                }
-            }
-            shared.env.note_retry_after(&resp);
-            return Err(Stop::Retry(format!("HTTP {status}")));
-        }
-        status => return Err(Stop::Failed(format!("HTTP {status}"))),
-    }
 
     let mut file = tokio::fs::OpenOptions::new().write(true).open(&shared.part).await?;
     file.seek(SeekFrom::Start(from)).await?;
@@ -1036,19 +1049,12 @@ mod tests {
     }
 
     #[test]
-    fn plan_starts_big_files_on_more_parts() {
-        let check = |total: u64, cap: u64, parts: usize| {
-            let p = plan(total, cap);
-            assert_eq!(p.len(), parts, "total {total} cap {cap}");
-            assert_eq!(p[0].start, 0);
-            assert_eq!(p.last().unwrap().end, total);
-            assert!(p.windows(2).all(|w| w[0].end == w[1].start && w[0].end % SPLIT_ALIGN == 0));
-        };
-        check(20 << 20, 16, 2);
-        check(BIG_PLAN_MIN, 16, BIG_PLAN as usize);
-        check(100 << 20, 3, 3);
-        check(100 << 20, 2, 2);
-        check((100 << 20) + 12345, 16, 4);
+    fn plan_splits_into_aligned_parts() {
+        let total = (100 << 20) + 12345;
+        assert_eq!(plan(total, 1), vec![Segment { start: 0, end: total, done: 0 }]);
+        let p = plan(total, 4);
+        assert_eq!((p.len(), p[0].start, p[3].end), (4, 0, total));
+        assert!(p.windows(2).all(|w| w[0].end == w[1].start && w[0].end % SPLIT_ALIGN == 0));
     }
 
     use super::*;
