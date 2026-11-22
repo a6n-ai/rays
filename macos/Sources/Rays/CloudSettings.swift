@@ -14,7 +14,7 @@ struct BucketsForm: View {
     @State private var adding = false
     @State private var error: String?
     @AppStorage("cloudTab") private var cloudTab: CloudTab = .browse
-    @AppStorage("cloudBucket") private var browseBucket = ""
+    @AppStorage("cloudPlace") private var cloudPlace = ""
 
     private var preset: ProviderPreset? { model.providers.first { $0.id == providerID } }
     private var trimmed: (String, String, String) {
@@ -36,7 +36,7 @@ struct BucketsForm: View {
                 ForEach(model.buckets, id: \.name) { bucket in
                     CloudRow(provider: bucket.provider, title: bucket.name, detail: detail(bucket)) {
                         RowIcon("folder", "Browse \(bucket.name)", tint: .blue) {
-                            browseBucket = bucket.name
+                            cloudPlace = "b:" + bucket.name
                             cloudTab = .browse
                         }
                         RowIcon("trash", "Remove \(bucket.name)", tint: .red) { remove(bucket.name) }

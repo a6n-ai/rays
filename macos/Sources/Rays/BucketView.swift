@@ -4,27 +4,23 @@ import UniformTypeIdentifiers
 
 enum CloudTab: String { case browse, buckets, downloads }
 
-/// The Cloud page: browse a bucket, manage buckets, and the downloads that came from buckets.
+/// The Cloud page: browse providers and buckets like Finder, manage buckets, and cloud downloads.
 struct CloudView: View {
     @Environment(EngineModel.self) private var model
     @AppStorage("cloudTab") private var tab: CloudTab = .browse
-    @AppStorage("cloudBucket") private var bucket = ""
+    /// "" is the top level, "p:<provider>" a provider's buckets, "b:<bucket>" inside a bucket.
+    @AppStorage("cloudPlace") private var place = ""
+    @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @State private var reload = 0
 
-    private var current: String? {
-        model.buckets.first { $0.name == bucket }?.name ?? model.buckets.first?.name
-    }
     private var shown: CloudTab { model.buckets.isEmpty ? .buckets : tab }
 
     var body: some View {
         Group {
             switch shown {
-            case .browse:
-                if let current { BucketBrowser(bucket: current, reload: reload).id(current) }
-            case .buckets:
-                BucketsForm()
-            case .downloads:
-                CloudDownloads()
+            case .browse: CloudBrowser(place: $place, layout: layout, reload: reload)
+            case .buckets: BucketsForm()
+            case .downloads: CloudDownloads()
             }
         }
         .navigationTitle("Rays")
@@ -48,19 +44,13 @@ struct CloudView: View {
             .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .primaryAction) {
                 ToolbarIconGroup {
-                    if shown == .browse, model.buckets.count > 1 {
-                        Menu {
-                            Picker("Bucket", selection: Binding(get: { current ?? "" }, set: { bucket = $0 })) {
-                                ForEach(model.buckets, id: \.name) { Text($0.name).tag($0.name) }
-                            }
-                            .pickerStyle(.inline)
-                        } label: {
-                            ToolbarIcon(symbol: "cloud", title: "Choose bucket")
+                    if shown == .browse {
+                        Button { layout = layout == .table ? .icons : .table } label: {
+                            ToolbarIcon(symbol: layout == .table ? "square.grid.2x2" : "list.bullet",
+                                        title: layout == .table ? "Show as icons" : "Show as list")
                         }
-                        .menuStyle(.button)
                         .buttonStyle(.plain)
-                        .menuIndicator(.hidden)
-                        .help("Choose bucket")
+                        .help(layout == .table ? "Show as icons" : "Show as list")
                     }
                     Button {
                         if shown == .buckets { Task { await model.loadCloudLogins(force: true) } } else { reload += 1 }
@@ -77,23 +67,78 @@ struct CloudView: View {
 
     private var subtitle: String {
         switch shown {
-        case .browse: "Cloud: \(current ?? "")"
+        case .browse: "Cloud"
         case .buckets: model.buckets.count == 1 ? "Cloud: 1 bucket" : "Cloud: \(model.buckets.count) buckets"
         case .downloads: "Cloud downloads"
         }
     }
 }
 
-/// One row in a bucket listing: a folder (a common prefix) or an object.
-private struct BucketEntry: Identifiable {
+/// A provider name for the path bar and tiles, from the presets.
+@MainActor
+private func providerName(_ model: EngineModel, _ id: String) -> String {
+    model.providers.first { $0.id == id }?.name ?? id
+}
+
+/// Top level: the connected providers as folders; then a provider's buckets; then inside a bucket.
+private struct CloudBrowser: View {
+    @Environment(EngineModel.self) private var model
+    @Binding var place: String
+    let layout: SortedLayout
+    let reload: Int
+
+    private var providers: [String] {
+        var seen = Set<String>()
+        return model.buckets.map(\.provider).filter { seen.insert($0).inserted }
+    }
+
+    var body: some View {
+        if place.hasPrefix("b:"), let bucket = model.buckets.first(where: { "b:" + $0.name == place }) {
+            BucketBrowser(bucket: bucket.name, provider: bucket.provider, layout: layout, reload: reload) {
+                place = "p:" + bucket.provider
+            }
+            .id(bucket.name)
+        } else if place.hasPrefix("p:"), providers.contains(String(place.dropFirst(2))) {
+            let provider = String(place.dropFirst(2))
+            let buckets = model.buckets.filter { $0.provider == provider }
+            CloudItems(
+                entries: buckets.map { BucketEntry(id: $0.name, name: $0.name, isFolder: true, size: nil, modified: nil,
+                                                   badge: provider, note: $0.region) },
+                layout: layout,
+                path: ["Cloud", providerName(model, provider)],
+                back: { place = "" },
+                open: { place = "b:" + $0.id })
+        } else {
+            CloudItems(
+                entries: providers.map { id in
+                    let count = model.buckets.filter { $0.provider == id }.count
+                    return BucketEntry(id: id, name: providerName(model, id), isFolder: true, size: nil, modified: nil,
+                                       badge: id, note: count == 1 ? "1 bucket" : "\(count) buckets")
+                },
+                layout: layout,
+                path: ["Cloud"],
+                back: nil,
+                open: { place = "p:" + $0.id })
+        }
+    }
+}
+
+/// One row or tile: a provider, a bucket, a folder (a common prefix) or an object.
+struct BucketEntry: Identifiable {
     let id: String
     let name: String
     let isFolder: Bool
     let size: UInt64?
     let modified: Date?
+    /// A provider id for providers and buckets, which show the brand badge instead of a Finder icon.
+    var badge: String? = nil
+    var note: String? = nil
 
     var type: UTType { isFolder ? .folder : UTType(filenameExtension: (name as NSString).pathExtension) ?? .data }
-    var kind: String { type.localizedDescription ?? (isFolder ? "Folder" : "Document") }
+    var kind: String {
+        if badge != nil { return note ?? "" }
+        return type.localizedDescription ?? (isFolder ? "Folder" : "Document")
+    }
 
     nonisolated(unsafe) private static let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -102,38 +147,41 @@ private struct BucketEntry: Identifiable {
     }()
 
     static func rows(folders: [String], objects: [BucketObject]) -> [BucketEntry] {
-        folders.map { BucketEntry(id: $0, name: BucketBrowser.leaf($0), isFolder: true, size: nil, modified: nil) }
+        folders.map { BucketEntry(id: $0, name: leaf($0), isFolder: true, size: nil, modified: nil) }
             + objects.map { o in
-                BucketEntry(id: o.key, name: BucketBrowser.leaf(o.key), isFolder: false, size: o.size,
+                BucketEntry(id: o.key, name: leaf(o.key), isFolder: false, size: o.size,
                             modified: iso.date(from: o.modified) ?? ISO8601DateFormatter().date(from: o.modified))
             }
     }
+
+    static func leaf(_ key: String) -> String {
+        let trimmed = key.hasSuffix("/") ? String(key.dropLast()) : key
+        return trimmed.split(separator: "/").last.map(String.init) ?? trimmed
+    }
 }
 
-/// One level of a bucket in the same table as the folder views: folders open in place, files download.
-private struct BucketBrowser: View {
-    @Environment(EngineModel.self) private var model
-    let bucket: String
-    let reload: Int
-    @State private var prefix = ""
-    @State private var folders: [String] = []
-    @State private var objects: [BucketObject] = []
-    @State private var nextToken: String?
-    @State private var loading = false
-    @State private var error: String?
-    @State private var added = Set<String>()
+/// A path bar, then the entries as the Sorter shows files: a Finder table or an icon grid.
+private struct CloudItems: View {
+    let entries: [BucketEntry]
+    let layout: SortedLayout
+    let path: [String]
+    let back: (() -> Void)?
+    let open: (BucketEntry) -> Void
+    var added: Set<String> = []
+    var loading = false
+    var error: String?
+    var download: ((String) -> Void)?
+    var copyLinks: ((Set<String>) -> Void)?
     @State private var selection = Set<String>()
-
-    private var entries: [BucketEntry] { BucketEntry.rows(folders: folders, objects: objects) }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Button { prefix = Self.parent(prefix) } label: { Image(systemName: "chevron.left") }
+                Button { back?() } label: { Image(systemName: "chevron.left") }
                     .buttonStyle(.borderless)
-                    .disabled(prefix.isEmpty)
-                    .help("Up one folder")
-                Text(prefix.isEmpty ? bucket : bucket + "/" + prefix)
+                    .disabled(back == nil)
+                    .help("Back")
+                Text(path.joined(separator: " › "))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -146,26 +194,73 @@ private struct BucketBrowser: View {
             if let error {
                 ContentUnavailableView("Couldn't list this bucket", systemImage: "exclamationmark.triangle", description: Text(error))
             } else if !loading && entries.isEmpty {
-                ContentUnavailableView(prefix.isEmpty ? "This bucket is empty" : "This folder is empty", systemImage: "folder")
+                ContentUnavailableView("Empty", systemImage: "folder", description: Text("Nothing is in this folder yet."))
+            } else if layout == .icons {
+                grid
             } else {
                 table
             }
-            if let nextToken, !loading {
-                Button("Load More") { Task { await load(token: nextToken) } }
-                    .padding(8)
-            }
         }
-        .task(id: "\(prefix)|\(reload)") { await load(token: nil) }
+    }
+
+    @ViewBuilder private func icon(_ entry: BucketEntry, side: CGFloat) -> some View {
+        if let badge = entry.badge {
+            let (symbol, color) = ProviderIcon.style(badge)
+            Image(systemName: entry.id == badge ? symbol : "cloud.fill")
+                .font(.system(size: side * 0.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: side, height: side)
+                .background(color, in: RoundedRectangle(cornerRadius: side * 0.24, style: .continuous))
+                .accessibilityHidden(true)
+        } else {
+            Image(nsImage: NSWorkspace.shared.icon(for: entry.type))
+                .resizable()
+                .frame(width: side, height: side)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92, maximum: 112), spacing: 12)], spacing: 14) {
+                ForEach(entries) { entry in
+                    Button { open(entry) } label: {
+                        VStack(spacing: 6) {
+                            icon(entry, side: entry.badge == nil ? 48 : 44).frame(width: 60, height: 54)
+                            Text(entry.name)
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                            Text(entry.badge != nil ? (entry.note ?? "") : entry.isFolder ? "Folder" : entry.size.map(byteText) ?? "")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .monospacedDigit()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(8)
+                        .overlay(alignment: .topTrailing) {
+                            if added.contains(entry.id) {
+                                Image(systemName: "arrow.down.circle.fill").foregroundStyle(.tint).padding(6)
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .help(entry.isFolder ? "Open \(entry.name)" : "Download \(entry.name)")
+                    .contextMenu { menu([entry.id]) }
+                }
+            }
+            .padding(20)
+        }
     }
 
     private var table: some View {
         Table(entries, selection: $selection) {
             TableColumn("Name") { entry in
                 HStack(spacing: 6) {
-                    Image(nsImage: NSWorkspace.shared.icon(for: entry.type))
-                        .resizable()
-                        .frame(width: 16, height: 16)
-                        .accessibilityHidden(true)
+                    icon(entry, side: 16)
                     Text(entry.name).lineLimit(1).truncationMode(.middle)
                     if added.contains(entry.id) {
                         Image(systemName: "arrow.down.circle")
@@ -193,24 +288,70 @@ private struct BucketBrowser: View {
         .scrollContentBackground(.hidden)
         .alternatingRowBackgrounds(.disabled)
         .contextMenu(forSelectionType: String.self) { ids in
-            let files = ids.filter { !$0.hasSuffix("/") }
-            if ids.count == 1, let folder = ids.first, folder.hasSuffix("/") {
-                Button("Open") { prefix = folder }
-            }
-            Button(files.count > 1 ? "Download \(files.count) Files" : "Download") { files.forEach(download) }
-                .disabled(files.isEmpty)
-            Button("Copy Link") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(ids.sorted().map { "s3://\(bucket)/\($0)" }.joined(separator: "\n"), forType: .string)
-            }
-            .disabled(ids.isEmpty)
+            menu(ids)
         } primaryAction: { ids in
-            if ids.count == 1, let folder = ids.first, folder.hasSuffix("/") {
-                prefix = folder
+            let picked = entries.filter { ids.contains($0.id) }
+            if picked.count == 1, let one = picked.first, one.isFolder {
+                open(one)
             } else {
-                ids.filter { !$0.hasSuffix("/") }.forEach(download)
+                picked.filter { !$0.isFolder }.forEach(open)
             }
         }
+    }
+
+    @ViewBuilder private func menu(_ ids: Set<String>) -> some View {
+        let picked = entries.filter { ids.contains($0.id) }
+        if picked.count == 1, let one = picked.first, one.isFolder {
+            Button("Open") { open(one) }
+        }
+        if let download {
+            let files = picked.filter { !$0.isFolder }
+            Button(files.count > 1 ? "Download \(files.count) Files" : "Download") { files.forEach { download($0.id) } }
+                .disabled(files.isEmpty)
+        }
+        if let copyLinks {
+            Button("Copy Link") { copyLinks(ids) }.disabled(ids.isEmpty)
+        }
+    }
+}
+
+/// One level of a bucket: folders open in place, files download with the normal engine.
+private struct BucketBrowser: View {
+    @Environment(EngineModel.self) private var model
+    let bucket: String
+    let provider: String
+    let layout: SortedLayout
+    let reload: Int
+    let up: () -> Void
+    @State private var prefix = ""
+    @State private var folders: [String] = []
+    @State private var objects: [BucketObject] = []
+    @State private var nextToken: String?
+    @State private var loading = false
+    @State private var error: String?
+    @State private var added = Set<String>()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            CloudItems(
+                entries: BucketEntry.rows(folders: folders, objects: objects),
+                layout: layout,
+                path: ["Cloud", providerName(model, provider), bucket] + prefix.split(separator: "/").map(String.init),
+                back: { if prefix.isEmpty { up() } else { prefix = Self.parent(prefix) } },
+                open: { entry in if entry.isFolder { prefix = entry.id } else { download(entry.id) } },
+                added: added,
+                loading: loading,
+                error: error,
+                download: download,
+                copyLinks: { ids in
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(ids.sorted().map { "s3://\(bucket)/\($0)" }.joined(separator: "\n"), forType: .string)
+                })
+            if let nextToken, !loading {
+                Button("Load More") { Task { await load(token: nextToken) } }.padding(8)
+            }
+        }
+        .task(id: "\(prefix)|\(reload)") { await load(token: nil) }
     }
 
     private func download(_ key: String) {
@@ -227,7 +368,6 @@ private struct BucketBrowser: View {
             if token == nil {
                 folders = page.folders
                 objects = page.objects
-                selection = []
             } else {
                 folders += page.folders
                 objects += page.objects
@@ -237,11 +377,6 @@ private struct BucketBrowser: View {
         } catch {
             self.error = EngineModel.message(for: error)
         }
-    }
-
-    static func leaf(_ key: String) -> String {
-        let trimmed = key.hasSuffix("/") ? String(key.dropLast()) : key
-        return trimmed.split(separator: "/").last.map(String.init) ?? trimmed
     }
 
     /// "a/b/" goes up to "a/"; a top-level folder goes back to the bucket root.
