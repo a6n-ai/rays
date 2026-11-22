@@ -49,8 +49,8 @@ import icon from '../assets/icon.png';
 					<div>
 						<dt>Smart splitting</dt>
 						<dd>
-							Every download starts on one connection. For files of 4 MB or more, Rays adds connections, up to 16,
-							only while each one makes the file faster, and a finished part takes over half of the largest part left.
+							Big files start on 4 connections and double, up to 16, only while each step makes the file faster. A
+							finished part takes over half of the largest part left, and a slow connection is replaced.
 						</dd>
 					</div>
 					<div>
@@ -83,15 +83,15 @@ import icon from '../assets/icon.png';
 			<Passage label="Engine" id="engine">
 				<p>
 					Most download managers open a fixed number of connections for every file. On a line one connection already
-					fills, the extra connections compete and the file arrives slower. Rays measures instead: it keeps a new
-					connection only if the download gets 10% faster, and steps back down when more stop helping.
+					fills, the extra connections compete and the file arrives slower. Rays measures instead: it keeps more
+					connections only if the download gets at least 10% faster, and steps back down when more stop helping.
 				</p>
 				<dl class="features">
 					<div>
 						<dt>Measured, not guessed</dt>
 						<dd>
-							In our A/B benchmark, a fixed 8 connections ran at 61% of one connection's speed on a clean line. On a
-							congested line, where more connections help, the adaptive engine reached 148%.
+							On a test server that caps each connection, a 64 MB file now takes 5.8 s instead of 12.9 s; on a clean
+							link, where one connection is enough, the time is unchanged.
 						</dd>
 					</div>
 					<div>

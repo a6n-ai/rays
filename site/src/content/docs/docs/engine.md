@@ -1,6 +1,6 @@
 ---
 title: "How the Rays download engine works"
-description: "Inside the Rays download engine: one connection first, more only when they make the file faster, crash-safe resume, and the benchmarks behind each choice."
+description: "Inside the Rays download engine: connections that double while they make the file faster, slow connections replaced, crash-safe resume, and the benchmarks behind each choice."
 ---
 
 Rays downloads with its own engine, written in Rust. It has one goal: finish each file as fast as your line allows, without wasting requests or leaving a broken file behind. The same engine runs the Mac app, the [`dl` command](/docs/dl/) and the [MCP server](/docs/mcp/).
@@ -11,8 +11,9 @@ Most download managers split every file into a fixed number of connections that 
 
 | | Typical download manager | Rays |
 |---|---|---|
-| Connections per file | Fixed number you set | Measured live: starts at 1, adds one only if it makes the file 10% faster |
+| Connections per file | Fixed number you set | Measured live: doubles while each step makes the file 25% faster, keeps a step only if it is 10% faster |
 | Too many connections | Keeps them | Steps back down while speed stays within 2% |
+| One slow connection | Waits for it | Reconnects a connection running below a quarter of its fair share |
 | First request | Used to read the size, then closed | Keeps downloading on it |
 | A server that pushes back | Retries with the same count | Remembers that server's limit for 7 days |
 | Speed limit set | Still splits | One connection, since more add requests, not bandwidth |
@@ -21,7 +22,7 @@ Most download managers split every file into a fixed number of connections that 
 
 The setting you choose is a ceiling, not a target: Rays never uses more connections than **parts per file** allows, and often uses fewer.
 
-## One connection first
+## The first request keeps downloading
 
 Every download starts with a single request. That request tells Rays the file's size, its name and whether the server can send parts (HTTP `Range`). Rays keeps that same connection open and downloads the file on it, so no request is wasted.
 
@@ -31,15 +32,16 @@ Splitting a file over several connections helps when a server limits each connec
 
 So Rays measures instead of guessing. Every second it checks the speed:
 
-1. **Probe up.** After a 1 second warm-up and a 2 second measurement, Rays adds one connection. It keeps it only if the next 2 seconds are at least **10% faster**.
-2. **Step down.** If the extra connection did not pay, Rays removes it and tries one fewer. It keeps the lower count while speed stays within **2%**. That is the `speed / 1.02ⁿ` score from download-tuning research (Falcon, FastBioDL): each connection must earn its cost.
-3. **Hold and re-check.** Rays then holds the count. It probes again every 15 seconds, and steps down if the speed drops by a quarter.
+1. **Start.** Files of 32 MB or more start on 4 connections (or fewer, if your **parts per file** setting is lower); smaller files start on one.
+2. **Double while it pays.** Rays doubles the count (4, 8, 16) while each step makes the file at least **25% faster**, judging each step after a second. It keeps a step only if it is at least **10% faster**.
+3. **Trim and step down.** When doubling stops, Rays removes connections one at a time while speed stays within **2%**. That is the `speed / 1.02ⁿ` score from download-tuning research (Falcon, FastBioDL): each connection must earn its cost. On a line one connection fills, it settles on one.
+4. **Hold and re-check.** Rays then holds the count. It probes one more every 15 seconds, and steps down if the speed drops by a quarter.
 
-When a part finishes early, its connection takes half of the largest part that is left, so no connection sits idle at the end. Files under 4 MB, and servers that cannot send parts, always use one connection. The **parts per file** setting (1 to 16) is the most Rays will ever use.
+When a part finishes early, its connection takes half of the largest part that is left, so no connection sits idle at the end. A connection that runs below a quarter of its fair share for 2 seconds (one bad route, or a slow server behind a load balancer) is reconnected, continuing from its last written byte. Files under 4 MB, and servers that cannot send parts, always use one connection. The **parts per file** setting (1 to 16) is the most Rays will ever use.
 
 ## Servers that push back
 
-- A `429` or `503` answer stops new connections for that download. Rays remembers the lower count for that server for 7 days.
+- A `429` or `503` answer stops Rays adding connections for that download. It keeps as many as the server accepted, splits the rest of the file only within that count, and tries one more after 3 quiet seconds. It remembers the count for that server for 7 days.
 - Connections that fail close together on different parts look like a server that blocks extra connections. Rays drops to one connection for that server.
 - A part that gets a whole-file answer instead of a part makes Rays fall back to a single stream.
 - Under a speed limit, Rays never splits, because more connections add requests, not bandwidth.
@@ -68,6 +70,25 @@ It downloads a 100 MB file from a Hetzner speed-test server with a cap of 1, 4 a
 | Start on one connection, add only when it pays | 111% | 148% |
 
 *100% = the speed of one connection on the same run. One wired line in Asia to Hetzner Singapore. The last run was on a congested line, where extra connections helped; on a line one connection fills, Rays now stays near one connection instead of slowing down.*
+
+### On a test server with known faults
+
+A real line changes from minute to minute, and on a line one connection fills, every engine looks the same. So we also test on a local server that injects one fault at a time (`engine/examples/lab.rs`), with the script that runs it:
+
+```sh
+scripts/bench-lab.sh 5 64
+```
+
+| Scenario, 64 MB file | Before | Now |
+|---|---|---|
+| Clean 50 MB/s link | 1.40 s | 1.41 s |
+| Each connection capped at 2 MB/s | 12.9 s | 5.8 s |
+| One connection in three slow (256 KB/s) | 15.7 s | 6.5 s |
+| 150 ms before each response, 4 MB/s per connection | 9.2 s | 4.1 s |
+| Server allows 2 connections (503 above) | 12.0 s | 10.4 s |
+| Connection dropped every 8 MB | 9.8 s | 3.7 s |
+
+*Median of 5 runs after a warm-up, order rotated each run, on 23 Nov 2026. "Before" is the engine that added one connection at a time and never reconnected a slow one.*
 
 What we measured and kept:
 

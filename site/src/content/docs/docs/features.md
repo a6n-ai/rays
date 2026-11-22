@@ -22,7 +22,7 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 ## Downloads
 
 - **Paste anything.** Links one per line, separated by commas, a whole CSV, or text with links in it. Rays finds every link. Or drop links and `.webloc` files on the window.
-- **Smart splitting.** Every file starts on one connection. Rays adds connections only while they make the file faster, and steps back down when they stop helping. [How it works](/docs/engine/).
+- **Smart splitting.** Big files start on 4 connections. Rays doubles them only while they make the file faster, steps back down when they stop helping, and replaces a connection that is far slower than the others. [How it works](/docs/engine/).
 - **Pause, resume, quit.** Downloads continue from the bytes already saved, after a pause, a quit or a crash.
 - **Speed limit** and how many files download at once.
 - **Safe names.** The server's suggested name is cleaned, so a file can never land outside your folder.
