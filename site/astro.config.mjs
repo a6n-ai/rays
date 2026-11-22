@@ -55,6 +55,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Downloads', link: '/docs/app/downloads/', attrs: { 'data-icon': 'download' } },
 						{ label: 'How the engine works', link: '/docs/engine/', attrs: { 'data-icon': 'engine' } },
+						{ label: 'S3 buckets', link: '/docs/s3/', attrs: { 'data-icon': 'cloud' } },
 						{ label: 'Sorter', link: '/docs/app/sorter/', attrs: { 'data-icon': 'sorter' } },
 						{ label: 'Browser extension', link: '/docs/app/browser/', attrs: { 'data-icon': 'browser' } },
 						{ label: 'Settings', link: '/docs/app/settings/', attrs: { 'data-icon': 'settings' } },

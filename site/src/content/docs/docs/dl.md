@@ -19,7 +19,10 @@ With a DMG install, open **Settings > General** and click **Install** next to **
 
 ```text
 dl URL...                     download links with Rays
+dl s3://BUCKET/KEY            download an object from a bucket added to Rays
 dl list                       list downloads (also: dl --list)
+dl bucket providers|list|add|remove
+dl ls s3://BUCKET/[PREFIX/]   list one level of a bucket
 dl sort [FOLDER] [--all] [--dry-run] [--projects]
 dl watch FOLDER | dl unwatch FOLDER
 dl status [--json]            sorter settings, watched folders, recent moves
@@ -39,7 +42,7 @@ Each link is added to Rays and starts when a slot is free. One line per link:
 ```text
 added 12 https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg
 added 13 https://github.com/a6n-ai/rays/archive/refs/heads/main.zip
-rejected file:///etc/hosts: only http and https URLs
+rejected file:///etc/hosts: only http, https and s3 links
 ```
 
 ## List downloads
@@ -56,6 +59,21 @@ One line per download: id, state, bytes done / total, file name, separated by ta
 ```
 
 The state is one of `queued`, `running`, `paused`, `retrying`, `done` or `failed`. The total is `?` when the server does not say how big the file is.
+
+## S3 buckets
+
+```sh
+dl bucket providers
+dl bucket add NAME --provider ID --key-id KEY [--region R] [--account-id A | --namespace N |
+              --project-ref P] [--endpoint URL] [--path-style | --virtual-host]
+dl bucket list
+dl bucket remove NAME
+dl ls s3://BUCKET/[PREFIX/]
+```
+
+`dl bucket add` reads the secret key from standard input: typed with echo off in a terminal, or piped in a script. Rays lists the bucket once to check the keys, then saves the secret to your Keychain. `--provider` takes an id from `dl bucket providers`; with `--endpoint` and no provider it uses Generic S3.
+
+`dl bucket providers` prints each id, its name, and the endpoint it fills in. `dl ls` prints one line per folder (`DIR`) and per object (size in bytes, modified time, link), and pages through large folders. Download an object with `dl s3://BUCKET/KEY`. More in [S3 buckets](/docs/s3/).
 
 ## Sort a folder
 

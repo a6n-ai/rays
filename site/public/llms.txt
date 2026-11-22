@@ -11,20 +11,21 @@
 ## Docs
 
 - [Getting started](https://rays.a6n.ai/docs/getting-started/): install, first download, turn on sorting.
-- [Install](https://rays.a6n.ai/docs/install/), [Downloads](https://rays.a6n.ai/docs/app/downloads/), [Sorter](https://rays.a6n.ai/docs/app/sorter/), [Browser extension](https://rays.a6n.ai/docs/app/browser/), [Settings](https://rays.a6n.ai/docs/app/settings/), [MCP](https://rays.a6n.ai/docs/mcp/), [Troubleshooting](https://rays.a6n.ai/docs/troubleshooting/).
-- [The dl command](https://rays.a6n.ai/docs/dl/): `dl URL...`, `dl list`, `dl sort`, `dl watch`, `dl status`, `dl config`, `dl mcp`, exit codes and environment variables.
+- [Install](https://rays.a6n.ai/docs/install/), [Downloads](https://rays.a6n.ai/docs/app/downloads/), [Sorter](https://rays.a6n.ai/docs/app/sorter/), [Browser extension](https://rays.a6n.ai/docs/app/browser/), [Settings](https://rays.a6n.ai/docs/app/settings/), [S3 buckets](https://rays.a6n.ai/docs/s3/), [MCP](https://rays.a6n.ai/docs/mcp/), [Troubleshooting](https://rays.a6n.ai/docs/troubleshooting/).
+- [The dl command](https://rays.a6n.ai/docs/dl/): `dl URL...`, `dl s3://BUCKET/KEY`, `dl bucket`, `dl ls`, `dl list`, `dl sort`, `dl watch`, `dl status`, `dl config`, `dl mcp`, exit codes and environment variables.
 - [Release notes](https://rays.a6n.ai/releases/): what changed in each version.
 - [Source code](https://github.com/a6n-ai/rays): Rust engine, SwiftUI app, `dl` CLI, sorter, browser extension.
 
 ## MCP
 
 - Start the server with `dl mcp` (stdio). Claude Code: `claude mcp add rays -- dl mcp`. Any client: `{"command": "dl", "args": ["mcp"]}`.
-- Tools: `add_downloads` (http/https URLs), `list_downloads`, `sorter_status`, `sort_folder` (dry run unless `dry_run` is false).
+- Tools: `add_downloads` (http/https/s3 links), `list_downloads`, `list_buckets`, `browse_bucket`, `sorter_status`, `sort_folder` (dry run unless `dry_run` is false).
 
 ## Facts
 
 - Requires macOS 26 or later. No account; sorting runs on the Mac and nothing is uploaded.
 - Each download starts on one connection; files of 4 MB or more add connections, up to 16, only while each makes the download faster (details: https://rays.a6n.ai/docs/engine/); up to 5 automatic retries; downloads resume after pause or quit.
+- S3 buckets: AWS S3, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces, Google Cloud Storage (HMAC), Hetzner, Linode, Scaleway, OVHcloud, Oracle, Alibaba OSS, Supabase, Tigris, MinIO and any S3-compatible endpoint. Secret keys stay in the macOS Keychain; MCP cannot add buckets.
 - Sorter categories: Work, Personal, Images, Installers, Archives, Media, Code, Other.
 
 ## Optional

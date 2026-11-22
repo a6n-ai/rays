@@ -264,7 +264,7 @@ impl Scheduler {
         if web && parsed.host_str().is_some_and(|h| !h.is_empty()) {
             Ok(())
         } else {
-            Err("only http and https URLs".to_owned())
+            Err("only http, https and s3 links".to_owned())
         }
     }
 
