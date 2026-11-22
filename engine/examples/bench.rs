@@ -22,6 +22,9 @@ fn once(url: &str, connections: u32) -> Result<(f64, usize), String> {
     let result = loop {
         std::thread::sleep(Duration::from_millis(100));
         let job = engine.snapshot().into_iter().find(|j| j.id == id).ok_or("job vanished")?;
+        if std::env::var_os("RAYS_BENCH_TRACE").is_some() {
+            eprintln!("{:5.1}s {:>4} MB {} connections", start.elapsed().as_secs_f64(), job.done >> 20, job.connections);
+        }
         match job.state {
             JobState::Done { .. } => break Ok((job.done as f64 / start.elapsed().as_secs_f64() / 1e6, job.parts.len())),
             JobState::Failed { reason } => break Err(reason),
