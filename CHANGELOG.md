@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.7 (22 Nov 2026)
+
+- Updates install themselves: click Update and Rays downloads the new version, checks it, replaces itself and reopens. From this version on, no more dragging to Applications.
+- The Downloads list follows the sorter: when a file is sorted into a folder, its row shows where it went, and Show in Finder opens it there.
+- Get the browser extension from the Chrome Web Store or Firefox Add-ons. Settings > Browsers opens the right store.
+
 ## 0.1.6 (22 Nov 2026)
 
 - Download from S3 buckets: Amazon S3, Cloudflare R2, Backblaze B2, Wasabi, MinIO and any S3-compatible service. Add a bucket in Settings > Cloud, then browse it in the sidebar. `dl` and MCP can download from buckets too. Secret keys stay in your Keychain.
