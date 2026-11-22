@@ -1,0 +1,117 @@
+---
+// One card per store: every Chromium browser installs from the Chrome Web Store, Firefox and Zen from AMO.
+const stores = [
+	{
+		store: 'Chrome Web Store',
+		href: 'https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail',
+		browsers: [
+			{ name: 'Chrome', logo: 'chrome' },
+			{ name: 'Brave', logo: 'brave' },
+			{ name: 'Edge', logo: 'edge' },
+		],
+		title: 'Chrome, Brave and Edge',
+		note: 'In Edge, allow extensions from other stores when it asks.',
+		action: 'Add from Chrome Web Store',
+	},
+	{
+		store: 'Firefox Add-ons',
+		href: 'https://addons.mozilla.org/firefox/addon/rays@a6n.ai/',
+		browsers: [
+			{ name: 'Firefox', logo: 'firefox' },
+			{ name: 'Zen', logo: 'zen' },
+		],
+		title: 'Firefox and Zen',
+		note: 'Firefox 140 or later, on Mac.',
+		action: 'Add from Firefox Add-ons',
+	},
+];
+---
+
+<div class="stores not-content">
+	{
+		stores.map((s) => (
+			<a class="store" href={s.href} rel="noopener">
+				<span class="logos">
+					{s.browsers.map((b) => (
+						<img src={`/browsers/${b.logo}.svg`} alt={b.name} title={b.name} width="40" height="40" loading="lazy" />
+					))}
+				</span>
+				<span class="title">{s.title}</span>
+				<span class="note">{s.note}</span>
+				<span class="action">
+					{s.action}
+					<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+						<path d="M5 11 11 5M6 5h5v5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+					</svg>
+				</span>
+			</a>
+		))
+	}
+</div>
+
+<style>
+	.stores {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+		gap: 1rem;
+		margin-block: 1.5rem 2.5rem;
+	}
+	.store {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.3rem;
+		padding: 1.5rem;
+		border: 1px solid var(--sl-color-hairline);
+		border-radius: 0.75rem;
+		background: var(--rays-card);
+		color: inherit;
+		text-decoration: none;
+		transition: border-color 150ms, background-color 150ms, transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	.store:hover {
+		border-color: var(--sl-color-gray-4);
+		background: var(--rays-card-hover);
+		transform: translateY(-2px);
+	}
+	.store:active {
+		transform: translateY(0) scale(0.99);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.store {
+			transition: none;
+		}
+	}
+	.logos {
+		display: flex;
+		gap: 0.75rem;
+		margin-bottom: 1.1rem;
+	}
+	.logos img {
+		border: 0;
+		border-radius: 0;
+	}
+	.title {
+		color: var(--sl-color-white);
+		font-weight: 500;
+		font-size: 1.05rem;
+	}
+	.note {
+		color: var(--sl-color-gray-3);
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+	.action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-top: auto;
+		padding-top: 1.25rem;
+		color: var(--sl-color-white);
+		font-size: 0.875rem;
+		font-weight: 500;
+	}
+	.store:hover .action {
+		color: var(--sl-color-text-accent);
+	}
+</style>

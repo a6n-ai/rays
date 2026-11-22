@@ -123,7 +123,13 @@ import icon from '../assets/icon.png';
 					Rays comes with the <a href="/docs/dl/"><code>dl</code> command</a>, so you can download and sort from Terminal, or let AI assistants do it over MCP. The
 					Rays extension for <a href="https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail">Chrome</a> and <a href="https://addons.mozilla.org/firefox/addon/rays@a6n.ai/">Firefox</a> sends links to Rays with a right-click.
 				</p>
-				<p>When a new version is out, Rays shows a small note so you can update.</p>
+				<a class="browsers slide" href="/docs/app/browser/">
+					{['chrome', 'brave', 'edge', 'firefox', 'zen'].map((b) => (
+						<img src={`/browsers/${b}.svg`} alt="" width="22" height="22" loading="lazy" />
+					))}
+					<span>Get the extension</span>
+				</a>
+				<p>When a new version is out, click Update and Rays installs it and reopens.</p>
 			</Passage>
 
 			<Passage label="Made by a6n" id="a6n">
@@ -180,6 +186,18 @@ import icon from '../assets/icon.png';
 	}
 	.top a:hover {
 		color: var(--ink);
+	}
+	.browsers {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 0;
+		color: var(--ink);
+		font-size: var(--t-small);
+		text-decoration: none;
+	}
+	.browsers span {
+		margin-left: 6px;
 	}
 	.by {
 		color: var(--muted);
