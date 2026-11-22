@@ -10,12 +10,12 @@ function lastmod(files: string[]): string {
 	}
 }
 
-// Home plus every Starlight page (docs and release notes).
+// Home plus every Starlight page (docs and release notes, which are generated from CHANGELOG.md and untracked).
 export async function GET({ site }: { site: URL }) {
 	const docs = await getCollection('docs');
 	const pages = [
 		{ path: '/', files: ['src/pages/index.astro', 'src/components'] },
-		...docs.map((d) => ({ path: `/${d.id === 'index' ? '' : `${d.id}/`}`, files: [d.filePath!] })),
+		...docs.map((d) => ({ path: `/${d.id === 'index' ? '' : `${d.id}/`}`, files: [d.id === 'releases' ? '../CHANGELOG.md' : d.filePath!] })),
 	];
 	const urls = pages
 		.map(({ path, files }) => {
