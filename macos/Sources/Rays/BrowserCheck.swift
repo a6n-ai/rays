@@ -72,6 +72,16 @@ enum BrowserCheck {
     /// The native host runs the copy inside the app bundle, so the manifest points there.
     static var dlURL: URL { Bundle.main.bundleURL.appending(path: "Contents/MacOS/dl") }
 
+    /// Opens the extension's store page in that browser itself: a Chrome Web Store page in Safari can't install anything.
+    static func openStore(in browser: Browser) {
+        guard let store = storeURL(for: browser.engine) else { return }
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.bundleID) {
+            NSWorkspace.shared.open([store], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            NSWorkspace.shared.open(store)
+        }
+    }
+
     static func storeURL(for engine: Engine) -> URL? {
         switch engine {
         case .chromium: chromeStoreURL

@@ -83,8 +83,8 @@ private struct BrowserStatus: View {
                     Button(state.helper == .missing ? "Install Helper" : "Repair Helper", action: install)
                         .buttonStyle(.glass)
                 }
-                if state.addon != .added, let store = BrowserCheck.storeURL(for: state.browser.engine) {
-                    Button("Get Extension") { NSWorkspace.shared.open(store) }
+                if state.addon != .added, BrowserCheck.storeURL(for: state.browser.engine) != nil {
+                    Button("Get Extension") { BrowserCheck.openStore(in: state.browser) }
                         .buttonStyle(.glassProminent)
                         .help(state.browser.engine == .firefox ? "Opens Rays on Firefox Add-ons." : "Opens Rays in the Chrome Web Store.")
                 }

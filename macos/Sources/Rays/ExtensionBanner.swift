@@ -6,8 +6,6 @@ import SwiftUI
 struct ExtensionBanner: View {
     @State private var check = BrowserCheckModel()
     @AppStorage("extensionBannerDismissed") private var dismissed = ""
-    @AppStorage("settingsTab") private var settingsTab = "general"
-    @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var needing: [BrowserCheck.State] {
@@ -63,11 +61,9 @@ struct ExtensionBanner: View {
             }
             .buttonStyle(.glass)
             if helpersReady {
-                Button("Show Me How") {
-                    settingsTab = "browsers"
-                    openSettings()
-                }
-                .buttonStyle(.glassProminent)
+                Button("Get Extension") { needing.forEach { BrowserCheck.openStore(in: $0.browser) } }
+                    .buttonStyle(.glassProminent)
+                    .help("Opens the Rays extension in each browser's store")
             } else {
                 Button("Install") { check.installAllHelpers(needing) }
                     .buttonStyle(.glassProminent)
