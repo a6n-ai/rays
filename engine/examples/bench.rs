@@ -45,8 +45,9 @@ fn main() {
     let counts: Vec<u32> = args.next().unwrap_or_else(|| "1,8".into()).split(',').map(|c| c.parse().expect("connections")).collect();
     let runs: usize = args.next().map(|r| r.parse().expect("runs")).unwrap_or(5);
 
-    // Warm-up: DNS, TLS session and CDN cache, not counted.
-    for &c in &counts {
+    // Warm-up: DNS, TLS session and CDN cache, not counted. scripts/bench-vs.sh warms up once for every tool itself.
+    let warm = std::env::var_os("RAYS_BENCH_NO_WARMUP").is_none();
+    for &c in counts.iter().filter(|_| warm) {
         if let Err(e) = once(&url, c) {
             eprintln!("warm-up with {c} connections failed: {e}");
             std::process::exit(1);
