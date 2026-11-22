@@ -1,13 +1,13 @@
 ---
 title: "Rays documentation"
-description: "Learn to use Rays, the free download manager for Mac with AI file sorting: install it, speed up downloads, organize folders, use the dl command and MCP."
+description: "Learn to use Rays, the free download manager for Mac with AI file sorting: install it, speed up downloads, organize folders, use the dl command and MCP, and see how its engine works."
 tableOfContents: false
 pagefind: true
 ---
 
 import Cards from '../../../components/docs/Cards.astro';
 
-<p class="lead">Get an overview of what Rays does, how to set it up, and how to use it from Terminal and AI tools.</p>
+<p class="lead">Get an overview of what Rays does, how to set it up, how to use it from Terminal and AI tools, and how its download engine decides how many connections each file gets.</p>
 
 ## Popular
 
@@ -30,5 +30,14 @@ import Cards from '../../../components/docs/Cards.astro';
 		{ title: 'Settings', description: 'Every setting, tab by tab', href: '/docs/app/settings/', icon: 'settings' },
 		{ title: 'Troubleshooting', description: 'Common fixes and where Rays keeps files', href: '/docs/troubleshooting/', icon: 'help' },
 		{ title: 'Release notes', description: 'What changed in each version', href: '/releases/', icon: 'notes' },
+	]}
+/>
+
+## Under the hood
+
+<Cards
+	items={[
+		{ title: 'How the engine works', description: 'One connection first, more only when they make the file faster', href: '/docs/engine/', icon: 'engine' },
+		{ title: 'Benchmarks', description: 'How each engine change was measured, and how to rerun it', href: '/docs/engine/#benchmarks', icon: 'chart' },
 	]}
 />
