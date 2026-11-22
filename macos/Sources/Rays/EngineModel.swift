@@ -229,9 +229,14 @@ final class EngineModel {
 
     /// A finished download may have been moved by the sorter, so a same-named, same-size file under the downloads folder counts.
     func locate(_ job: JobView) -> URL? {
-        if files.hasBookmark(for: job.id) { return files.currentURL(for: job.id) }
+        if files.hasBookmark(for: job.id), let url = files.currentURL(for: job.id) { return url }
         guard let path = job.finishedPath else { return nil }
         if FileManager.default.fileExists(atPath: path) { return URL(filePath: path) }
+        // The sorter's log says where it put the file, even after an AI rename; follow it from then on.
+        if let sorted = SorterJournal.target(for: URL(filePath: path).lastPathComponent) {
+            files.record(id: job.id, url: sorted)
+            return sorted
+        }
         guard let walker = FileManager.default.enumerator(
             at: Self.downloadsURL, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
             options: [.skipsHiddenFiles]) else { return nil }
@@ -245,6 +250,12 @@ final class EngineModel {
             }
         }
         return nil
+    }
+
+    /// A missing file that sits in the Trash, so the row can say so instead of "deleted".
+    func isInTrash(_ job: JobView) -> Bool {
+        let trash = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".Trash")
+        return FileManager.default.fileExists(atPath: trash.appending(path: job.name).path(percentEncoded: false))
     }
 
     func reveal(_ job: JobView) {
@@ -376,4 +387,38 @@ extension JobView {
 
 func byteText(_ bytes: UInt64) -> String {
     Int64(clamping: bytes).formatted(.byteCount(style: .file))
+}
+
+/// Where the sorter moved each file, from its log: `time name -> target (why)`. The last move wins.
+@MainActor
+enum SorterJournal {
+    private static var cache: (stamp: Date, targets: [String: String])?
+
+    static let log = FileManager.default.homeDirectoryForCurrentUser
+        .appending(path: "Library/Application Support/Rays/Sorter/sorter.log")
+
+    /// The file's current place if the sorter moved it there and it is still there.
+    static func target(for name: String) -> URL? {
+        let stamp = (try? log.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+        if cache?.stamp != stamp {
+            cache = (stamp, parse((try? String(contentsOf: log, encoding: .utf8)) ?? ""))
+        }
+        guard let path = cache?.targets[name], FileManager.default.fileExists(atPath: path) else { return nil }
+        return URL(filePath: path)
+    }
+
+    /// Mirrors `parse_move` in sorter/src/status.rs.
+    nonisolated static func parse(_ text: String) -> [String: String] {
+        var out: [String: String] = [:]
+        for line in text.split(separator: "\n") {
+            guard let space = line.firstIndex(of: " "), Double(line[..<space]) != nil else { continue }
+            let rest = line[line.index(after: space)...]
+            guard let arrow = rest.range(of: " -> "), rest.hasSuffix(")") else { continue }
+            let name = String(rest[..<arrow.lowerBound]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let body = rest[arrow.upperBound...].dropLast()
+            guard let cut = body.range(of: " (duplicate of ") ?? body.range(of: " (", options: .backwards) else { continue }
+            out[name] = String(body[..<cut.lowerBound])
+        }
+        return out
+    }
 }

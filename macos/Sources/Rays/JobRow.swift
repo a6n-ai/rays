@@ -205,7 +205,9 @@ struct JobRow: View {
                 // Where the file is now matters more than when it finished, so the time is dropped here.
                 parts = [Part(model.location(of: url), symbol: "folder"), Part(byteText(job.total ?? job.done))]
             } else {
-                parts = [Part("Moved or deleted", symbol: "questionmark.folder")]
+                parts = model.isInTrash(job)
+                    ? [Part("In the Trash", symbol: "trash")]
+                    : [Part("Deleted or moved out of Downloads", symbol: "questionmark.folder")]
             }
         case .failed(let reason):
             parts = [Part(Self.humanFailure(reason))]
