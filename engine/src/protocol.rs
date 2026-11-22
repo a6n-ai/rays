@@ -9,6 +9,36 @@ pub const MAX_LINE: usize = 1 << 20;
 pub enum Request {
     Add { urls: Vec<String> },
     List,
+    Providers,
+    Buckets,
+    /// Adds a bucket. An empty `endpoint` is filled from the `provider` preset with `region` and `field`.
+    /// `path_style` defaults to the preset's. The secret is stored in the Keychain by the app.
+    #[serde(rename = "bucket_add")]
+    BucketAdd {
+        name: String,
+        provider: String,
+        #[serde(default)]
+        endpoint: String,
+        #[serde(default)]
+        region: String,
+        #[serde(default)]
+        field: String,
+        access_key_id: String,
+        secret: String,
+        #[serde(default)]
+        path_style: Option<bool>,
+    },
+    #[serde(rename = "bucket_remove")]
+    BucketRemove { name: String },
+    /// One level of `prefix` in `bucket`.
+    #[serde(rename = "bucket_list")]
+    BucketList {
+        bucket: String,
+        #[serde(default)]
+        prefix: String,
+        #[serde(default)]
+        token: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -20,8 +50,50 @@ pub struct Response {
     pub rejected: Vec<Rejected>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub jobs: Vec<JobLine>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub providers: Vec<ProviderLine>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buckets: Vec<BucketLine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub listing: Option<ListingLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ProviderLine {
+    pub id: String,
+    pub name: String,
+    /// Template with `{region}` and `{field}`; empty when the user supplies the endpoint.
+    pub endpoint: String,
+    pub region: String,
+    pub field: Option<String>,
+    pub path_style: bool,
+}
+
+/// A bucket without its secret.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct BucketLine {
+    pub name: String,
+    pub provider: String,
+    pub endpoint: String,
+    pub region: String,
+    pub access_key_id: String,
+    pub path_style: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
+pub struct ListingLine {
+    pub folders: Vec<String>,
+    pub objects: Vec<ObjectLine>,
+    pub next_token: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ObjectLine {
+    pub key: String,
+    pub size: u64,
+    pub modified: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

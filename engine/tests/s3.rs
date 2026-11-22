@@ -237,3 +237,53 @@ async fn live_bucket_lists_and_downloads() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn socket_requests_add_list_browse_and_remove_buckets() {
+    use dl_engine::ipc;
+    use dl_engine::protocol::Response;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let fake = Fake { data: Arc::new(vec![7; 1 << 20]), signed_gets: Arc::default(), ranges: Arc::default() };
+    let addr = fake_s3(fake).await;
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(Store::open(&dir.path().join("data")).unwrap());
+    let downloads = dir.path().join("downloads");
+    std::fs::create_dir_all(&downloads).unwrap();
+    let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, Arc::new(MemorySecrets::default())).unwrap();
+    let sock = dir.path().join("dl.sock");
+    tokio::spawn(ipc::serve(ipc::bind(&sock).unwrap(), sched));
+
+    let stream = tokio::net::UnixStream::connect(&sock).await.unwrap();
+    let (read, mut write) = stream.into_split();
+    let mut lines = BufReader::new(read).lines();
+    let mut ask = async |line: String| -> Response {
+        write.write_all(format!("{line}\n").as_bytes()).await.unwrap();
+        serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap()
+    };
+
+    let r = ask(r#"{"op":"providers"}"#.into()).await;
+    assert!(r.providers.iter().any(|p| p.id == "r2") && r.providers.last().unwrap().id == "generic");
+
+    let r = ask(r#"{"op":"bucket_add","name":"media","provider":"r2","access_key_id":"AKID","secret":"s"}"#.into()).await;
+    assert!(r.error.unwrap().contains("Account ID"), "a preset field is required");
+
+    let add = format!(r#"{{"op":"bucket_add","name":"media","provider":"minio","endpoint":"http://{addr}","access_key_id":"AKID","secret":"{SECRET}"}}"#);
+    let r = ask(add).await;
+    assert!(r.ok, "{:?}", r.error);
+
+    let r = ask(r#"{"op":"buckets"}"#.into()).await;
+    assert_eq!((r.buckets.len(), r.buckets[0].path_style), (1, true), "minio preset is path style");
+    assert!(!serde_json::to_string(&r).unwrap().contains(SECRET));
+
+    let r = ask(r#"{"op":"bucket_list","bucket":"media"}"#.into()).await;
+    assert_eq!(r.listing.unwrap().folders, vec!["photos/".to_string()]);
+
+    let r = ask(r#"{"op":"add","urls":["s3://media/big.bin"]}"#.into()).await;
+    assert_eq!(r.added.len(), 1, "{r:?}");
+
+    let r = ask(r#"{"op":"bucket_remove","name":"media"}"#.into()).await;
+    assert!(r.ok);
+    let r = ask(r#"{"op":"buckets"}"#.into()).await;
+    assert!(r.buckets.is_empty());
+}

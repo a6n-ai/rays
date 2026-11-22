@@ -38,7 +38,7 @@ fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, Str
             "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL),
             "capabilities": { "tools": {} },
             "serverInfo": { "name": "rays", "version": env!("CARGO_PKG_VERSION") },
-            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links, list_downloads to check progress, sorter_status and sort_folder to file downloads into folders."
+            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders."
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),
@@ -64,7 +64,7 @@ fn tools() -> Value {
     json!([
         {
             "name": "add_downloads",
-            "description": "Download one or more http/https links with Rays. Returns the new download ids and any rejected links.",
+            "description": "Download one or more http/https links, or s3://bucket/key objects from buckets added to Rays. Returns the new download ids and any rejected links.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 } },
@@ -75,6 +75,26 @@ fn tools() -> Value {
             "name": "list_downloads",
             "description": "List Rays downloads with id, state (queued, running, paused, retrying, done, failed), bytes done and total, and file name.",
             "inputSchema": { "type": "object", "properties": {} },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "list_buckets",
+            "description": "S3-compatible buckets the user added to Rays: name, provider, region and endpoint. Secret keys are never returned.",
+            "inputSchema": { "type": "object", "properties": {} },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "browse_bucket",
+            "description": "One level of a bucket: folders (prefixes ending in /) and objects with key, size and modified time. Pass next_token from a previous reply for the next page. Download an object with add_downloads and s3://bucket/key.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "bucket": { "type": "string" },
+                    "prefix": { "type": "string", "description": "Folder to list, ending in /. Default: the bucket's top level." },
+                    "next_token": { "type": "string" }
+                },
+                "required": ["bucket"]
+            },
             "annotations": { "readOnlyHint": true }
         },
         {
@@ -104,6 +124,8 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
     Some(match name {
         "add_downloads" => urls(args).and_then(|urls| reply_text(ask(&Request::Add { urls }))),
         "list_downloads" => reply_text(ask(&Request::List)),
+        "list_buckets" => reply_text(ask(&Request::Buckets)),
+        "browse_bucket" => browse(args).and_then(|req| reply_text(ask(&req))),
         "sorter_status" => sorter::output(&["status".into(), "--json".into()]),
         "sort_folder" => sort_args(args).and_then(|a| sorter::output(&a)),
         _ => return None,
@@ -117,6 +139,12 @@ fn urls(args: &Value) -> Result<Vec<String>, String> {
         return Err("urls must be a non-empty array of strings".into());
     }
     Ok(urls)
+}
+
+fn browse(args: &Value) -> Result<Request, String> {
+    let text = |k: &str| args.get(k).and_then(Value::as_str).map(str::to_owned);
+    let bucket = text("bucket").filter(|b| !b.is_empty()).ok_or("bucket must be a non-empty string")?;
+    Ok(Request::BucketList { bucket, prefix: text("prefix").unwrap_or_default(), token: text("next_token") })
 }
 
 fn sort_args(args: &Value) -> Result<Vec<String>, String> {
@@ -147,7 +175,7 @@ fn reply_text(reply: Result<Response, String>) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dl_engine::protocol::{Added, JobLine};
+    use dl_engine::protocol::{Added, JobLine, ListingLine, ObjectLine};
 
     fn fake(req: &Request) -> Result<Response, String> {
         Ok(match req {
@@ -161,11 +189,30 @@ mod tests {
                 jobs: vec![JobLine { id: 1, name: "a.zip".into(), state: "done".into(), done: 3, total: Some(3) }],
                 ..Default::default()
             },
+            Request::BucketList { bucket, prefix, .. } => Response {
+                ok: true,
+                listing: Some(ListingLine {
+                    folders: vec![format!("{prefix}sub/")],
+                    objects: vec![ObjectLine { key: format!("{bucket}-{prefix}a.bin"), size: 5, modified: String::new() }],
+                    next_token: None,
+                }),
+                ..Default::default()
+            },
+            other => panic!("unexpected request {other:?}"),
         })
     }
 
     fn ask(line: &str) -> Option<Value> {
         handle_line(line, &mut fake)
+    }
+
+    #[test]
+    fn browse_bucket_passes_bucket_and_prefix_and_needs_a_bucket() {
+        let r = ask(r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"browse_bucket","arguments":{"bucket":"media","prefix":"p/"}}}"#).unwrap();
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("media-p/a.bin") && text.contains("p/sub/"), "{text}");
+        let r = ask(r#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"browse_bucket","arguments":{}}}"#).unwrap();
+        assert_eq!(r["result"]["isError"], true);
     }
 
     #[test]
@@ -175,7 +222,7 @@ mod tests {
         assert_eq!(r["result"]["serverInfo"]["name"], "rays");
         let r = ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap();
         let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["add_downloads", "list_downloads", "sorter_status", "sort_folder"]);
+        assert_eq!(names, ["add_downloads", "list_downloads", "list_buckets", "browse_bucket", "sorter_status", "sort_folder"]);
     }
 
     #[test]

@@ -1,3 +1,4 @@
+mod bucket;
 mod framing;
 mod mcp;
 mod sorter;
@@ -21,7 +22,8 @@ const USAGE: &str = "usage:
   dl status [--json]            watched folders, categories and recent moves
   dl config add|remove FOLDER
   dl config set-dest FOLDER CATEGORY PATH | clear-dest FOLDER CATEGORY | set-wait SECONDS | set-rename on|off
-  dl mcp                        run the MCP server on stdio (for AI assistants)";
+  dl mcp                        run the MCP server on stdio (for AI assistants)
+  dl s3://BUCKET/KEY            download an object from a bucket added to Rays";
 
 fn socket_path() -> PathBuf {
     if let Some(p) = std::env::var_os("DL_SOCKET") {
@@ -71,12 +73,14 @@ fn main() -> ExitCode {
     let req = match args.as_slice() {
         [] => return usage(),
         [a] if a == "-h" || a == "--help" || a == "help" => {
-            println!("{USAGE}");
+            println!("{USAGE}\n{}", bucket::USAGE);
             return ExitCode::SUCCESS;
         }
         [a] if a == "mcp" => return mcp::serve(),
         [a] if a == "--list" || a == "list" => Request::List,
         // Sorter commands run the sorter bundled beside dl; `dl sort` is the sorter's default command.
+        [cmd, rest @ ..] if cmd == "bucket" => return bucket::run(rest),
+        [cmd, link] if cmd == "ls" => return bucket::ls(link),
         [cmd, rest @ ..] if cmd == "sort" => return sorter::run(rest),
         [cmd, rest @ ..] if cmd == "status" => return sorter::status(rest),
         [cmd, ..] if ["watch", "unwatch", "config"].contains(&cmd.as_str()) => return sorter::run(&args),
