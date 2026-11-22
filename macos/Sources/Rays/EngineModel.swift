@@ -112,11 +112,32 @@ final class EngineModel {
         buckets = engine.buckets()
     }
 
-    var awsProfiles: [String] { engine?.awsProfiles() ?? [] }
+    // Each lookup runs the aws or cf command, which takes seconds, so results stay for the app's
+    // session and the Cloud page opens instantly; Refresh asks again.
+    private(set) var awsProfiles: [String] = []
+    private(set) var awsFound: [String: [AwsBucket]] = [:]
+    private(set) var cloudflare: Result<CfAccount, Error>?
+    @ObservationIgnored private var cloudLoaded = false
+
+    func loadCloudLogins(force: Bool = false) async {
+        guard let engine, force || !cloudLoaded else { return }
+        cloudLoaded = true
+        if force { awsFound = [:] }
+        async let profiles = Task.detached { engine.awsProfiles() }.value
+        do {
+            cloudflare = .success(try await engine.cloudflareAccount())
+        } catch {
+            cloudflare = .failure(error)
+        }
+        awsProfiles = await profiles
+    }
 
     func awsBuckets(_ profile: String) async throws -> [AwsBucket] {
+        if let cached = awsFound[profile] { return cached }
         guard let engine else { return [] }
-        return try await engine.awsBuckets(profile: profile)
+        let found = try await engine.awsBuckets(profile: profile)
+        awsFound[profile] = found
+        return found
     }
 
     /// Linked to an AWS CLI profile: the CLI supplies fresh keys each time and Rays stores none.
@@ -124,11 +145,6 @@ final class EngineModel {
         let config = BucketConfig(name: bucket.name, provider: "aws", endpoint: "https://s3.\(bucket.region).amazonaws.com",
                                   region: bucket.region, accessKeyId: "", pathStyle: false, profile: profile)
         try await addBucket(config, secret: "")
-    }
-
-    func cloudflareAccount() async throws -> CfAccount? {
-        guard let engine else { return nil }
-        return try await engine.cloudflareAccount()
     }
 
     func addCloudflareBucket(_ name: String, account: String) async throws {

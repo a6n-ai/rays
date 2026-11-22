@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum CloudTab: String { case browse, buckets, downloads }
 
@@ -61,10 +62,12 @@ struct CloudView: View {
                         .menuIndicator(.hidden)
                         .help("Choose bucket")
                     }
-                    Button { reload += 1 } label: { ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh") }
+                    Button {
+                        if shown == .buckets { Task { await model.loadCloudLogins(force: true) } } else { reload += 1 }
+                    } label: { ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh") }
                         .buttonStyle(.plain)
-                        .disabled(shown != .browse)
-                        .help("List this folder again")
+                        .disabled(shown == .downloads)
+                        .help(shown == .buckets ? "Ask the aws and cf commands again" : "List this folder again")
                 }
             }
             .sharedBackgroundVisibility(.hidden)
@@ -81,7 +84,33 @@ struct CloudView: View {
     }
 }
 
-/// One level of a bucket: folders open in place, objects download with the normal engine.
+/// One row in a bucket listing: a folder (a common prefix) or an object.
+private struct BucketEntry: Identifiable {
+    let id: String
+    let name: String
+    let isFolder: Bool
+    let size: UInt64?
+    let modified: Date?
+
+    var type: UTType { isFolder ? .folder : UTType(filenameExtension: (name as NSString).pathExtension) ?? .data }
+    var kind: String { type.localizedDescription ?? (isFolder ? "Folder" : "Document") }
+
+    nonisolated(unsafe) private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    static func rows(folders: [String], objects: [BucketObject]) -> [BucketEntry] {
+        folders.map { BucketEntry(id: $0, name: BucketBrowser.leaf($0), isFolder: true, size: nil, modified: nil) }
+            + objects.map { o in
+                BucketEntry(id: o.key, name: BucketBrowser.leaf(o.key), isFolder: false, size: o.size,
+                            modified: iso.date(from: o.modified) ?? ISO8601DateFormatter().date(from: o.modified))
+            }
+    }
+}
+
+/// One level of a bucket in the same table as the folder views: folders open in place, files download.
 private struct BucketBrowser: View {
     @Environment(EngineModel.self) private var model
     let bucket: String
@@ -93,9 +122,12 @@ private struct BucketBrowser: View {
     @State private var loading = false
     @State private var error: String?
     @State private var added = Set<String>()
+    @State private var selection = Set<String>()
+
+    private var entries: [BucketEntry] { BucketEntry.rows(folders: folders, objects: objects) }
 
     var body: some View {
-        List {
+        VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Button { prefix = Self.parent(prefix) } label: { Image(systemName: "chevron.left") }
                     .buttonStyle(.borderless)
@@ -106,49 +138,79 @@ private struct BucketBrowser: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
+                Spacer()
+                if loading { ProgressView().controlSize(.small) }
             }
+            .padding(.horizontal, LayoutMetrics.margin)
+            .padding(.vertical, 8)
             if let error {
-                ErrorLine(text: error)
-            } else if !loading && folders.isEmpty && objects.isEmpty {
-                Text(prefix.isEmpty ? "This bucket is empty." : "This folder is empty.")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(folders, id: \.self) { folder in
-                Button { prefix = folder } label: {
-                    Label(Self.leaf(folder), systemImage: "folder")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            ForEach(objects, id: \.key) { object in
-                HStack {
-                    Label(Self.leaf(object.key), systemImage: "doc")
-                    Spacer()
-                    Text(byteText(object.size)).foregroundStyle(.secondary).monospacedDigit()
-                    Button { download(object.key) } label: {
-                        Image(systemName: added.contains(object.key) ? "checkmark.circle.fill" : "arrow.down.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(added.contains(object.key) ? "Added to Downloads" : "Download")
-                    .accessibilityLabel("Download \(Self.leaf(object.key))")
-                }
-                .contextMenu {
-                    Button { download(object.key) } label: { Label("Download", systemImage: "arrow.down.circle") }
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString("s3://\(bucket)/\(object.key)", forType: .string)
-                    } label: { Label("Copy Link", systemImage: "link") }
-                }
+                ContentUnavailableView("Couldn't list this bucket", systemImage: "exclamationmark.triangle", description: Text(error))
+            } else if !loading && entries.isEmpty {
+                ContentUnavailableView(prefix.isEmpty ? "This bucket is empty" : "This folder is empty", systemImage: "folder")
+            } else {
+                table
             }
             if let nextToken, !loading {
                 Button("Load More") { Task { await load(token: nextToken) } }
+                    .padding(8)
             }
-            if loading { ProgressView().frame(maxWidth: .infinity) }
         }
-        .listStyle(.inset)
-        .scrollContentBackground(.hidden)
         .task(id: "\(prefix)|\(reload)") { await load(token: nil) }
+    }
+
+    private var table: some View {
+        Table(entries, selection: $selection) {
+            TableColumn("Name") { entry in
+                HStack(spacing: 6) {
+                    Image(nsImage: NSWorkspace.shared.icon(for: entry.type))
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                        .accessibilityHidden(true)
+                    Text(entry.name).lineLimit(1).truncationMode(.middle)
+                    if added.contains(entry.id) {
+                        Image(systemName: "arrow.down.circle")
+                            .foregroundStyle(.tint)
+                            .help("Added to Downloads")
+                            .accessibilityLabel("Added to Downloads")
+                    }
+                }
+            }
+            .width(min: 160, ideal: 260)
+            TableColumn("Size") { entry in
+                Text(entry.size.map(byteText) ?? "—").foregroundStyle(.secondary).monospacedDigit()
+            }
+            .width(min: 60, ideal: 70)
+            TableColumn("Date Modified") { entry in
+                Text(entry.modified?.formatted(.dateTime.day().month(.abbreviated).hour().minute()) ?? "")
+                    .foregroundStyle(.secondary)
+            }
+            .width(min: 120, ideal: 150)
+            TableColumn("Kind") { entry in
+                Text(entry.kind).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .width(min: 80, ideal: 110)
+        }
+        .scrollContentBackground(.hidden)
+        .alternatingRowBackgrounds(.disabled)
+        .contextMenu(forSelectionType: String.self) { ids in
+            let files = ids.filter { !$0.hasSuffix("/") }
+            if ids.count == 1, let folder = ids.first, folder.hasSuffix("/") {
+                Button("Open") { prefix = folder }
+            }
+            Button(files.count > 1 ? "Download \(files.count) Files" : "Download") { files.forEach(download) }
+                .disabled(files.isEmpty)
+            Button("Copy Link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(ids.sorted().map { "s3://\(bucket)/\($0)" }.joined(separator: "\n"), forType: .string)
+            }
+            .disabled(ids.isEmpty)
+        } primaryAction: { ids in
+            if ids.count == 1, let folder = ids.first, folder.hasSuffix("/") {
+                prefix = folder
+            } else {
+                ids.filter { !$0.hasSuffix("/") }.forEach(download)
+            }
+        }
     }
 
     private func download(_ key: String) {
@@ -165,6 +227,7 @@ private struct BucketBrowser: View {
             if token == nil {
                 folders = page.folders
                 objects = page.objects
+                selection = []
             } else {
                 folders += page.folders
                 objects += page.objects

@@ -81,6 +81,7 @@ struct BucketsForm: View {
         }
         .scrollContentBackground(.hidden)
         .formStyle(.grouped)
+        .task { await model.loadCloudLogins() }
         .onAppear { applyPreset() }
         .onChange(of: providerID) { applyPreset() }
         .onChange(of: region) { fillEndpoint() }
@@ -175,10 +176,14 @@ private struct AWSSection: View {
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
         }
-        .task(id: profile) { await load() }
+        .task(id: "\(profile)|\(model.awsFound[profile] == nil)") { await load() }
     }
 
     private func load() async {
+        if let cached = model.awsFound[profile] {
+            found = cached
+            return
+        }
         loading = true
         defer { loading = false }
         do {
@@ -206,18 +211,20 @@ private struct AWSSection: View {
 /// R2 buckets from the `cf` login. Shown only when `cf` is installed and logged in.
 private struct CloudflareSection: View {
     @Environment(EngineModel.self) private var model
-    @State private var account: CfAccount?
-    @State private var loadError: String?
-    @State private var checked = false
     @State private var adding: String?
     @State private var error: String?
 
     private var linked: Set<String> { Set(model.buckets.map(\.name)) }
 
+    private var checked: Bool { model.cloudflare != nil }
+    private var account: CfAccount? { try? model.cloudflare?.get() }
+    private var loadError: String? {
+        if case .failure(let error)? = model.cloudflare { EngineModel.message(for: error) } else { nil }
+    }
+
     var body: some View {
         Group {
             if !checked {
-                // A view must exist for .task to run; an empty Group never loads.
                 Section("Cloudflare R2") { ProgressView().frame(maxWidth: .infinity) }
             } else if let loadError, !loadError.contains("not found") {
                 Section("Cloudflare R2") {
@@ -247,14 +254,6 @@ private struct CloudflareSection: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-        }
-        .task {
-            do {
-                account = try await model.cloudflareAccount()
-            } catch {
-                loadError = EngineModel.message(for: error)
-            }
-            checked = true
         }
     }
 

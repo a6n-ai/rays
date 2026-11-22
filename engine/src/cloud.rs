@@ -22,6 +22,8 @@ pub struct AwsBucket {
 }
 
 static CACHE: Mutex<Option<HashMap<String, (Keys, Instant)>>> = Mutex::new(None);
+/// A bucket's region never changes, and asking costs one `aws` run per bucket.
+static REGIONS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 /// Keys for an AWS CLI profile, from the CLI itself (saved keys, `aws login`, SSO or credential_process).
 pub fn aws_keys(profile: &str) -> Result<Keys, String> {
@@ -50,10 +52,17 @@ pub fn aws_buckets(profile: &str) -> Result<Vec<AwsBucket>, String> {
     Ok(names
         .into_iter()
         .map(|name| {
-            let region = aws(&["s3api", "get-bucket-location", "--bucket", &name, "--profile", profile,
-                               "--query", "LocationConstraint", "--output", "text"])
-                .map(|r| region_from_location(r.trim()))
-                .unwrap_or_else(|_| "us-east-1".into());
+            let known = REGIONS.lock().unwrap_or_else(PoisonError::into_inner).as_ref().and_then(|m| m.get(&name).cloned());
+            let region = known.unwrap_or_else(|| {
+                let found = aws(&["s3api", "get-bucket-location", "--bucket", &name, "--profile", profile,
+                                  "--query", "LocationConstraint", "--output", "text"])
+                    .map(|r| region_from_location(r.trim()));
+                let region = found.clone().unwrap_or_else(|_| "us-east-1".into());
+                if found.is_ok() {
+                    REGIONS.lock().unwrap_or_else(PoisonError::into_inner).get_or_insert_with(HashMap::new).insert(name.clone(), region.clone());
+                }
+                region
+            });
             AwsBucket { name, region }
         })
         .collect())
