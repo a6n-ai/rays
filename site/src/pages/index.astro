@@ -24,6 +24,7 @@ import icon from '../assets/icon.png';
 				<span class="by">by <a class="slide" href="https://a6n.ai">a6n</a></span>
 				<nav class="top" aria-label="Site">
 					<a class="slide" href="/docs/">Docs</a>
+					<a class="slide wide" href="/docs/app/browser/">Extension</a>
 					<a class="slide" href="/releases/">Release notes</a>
 					<ThemeToggle />
 				</nav>
@@ -140,6 +141,7 @@ import icon from '../assets/icon.png';
 				<a class="slide" href="https://github.com/a6n-ai/rays">GitHub</a>
 				<span class="rule" aria-hidden="true"></span>
 				<a class="slide" href="/docs/">Docs</a>
+				<a class="slide" href="/docs/app/browser/">Browser extension</a>
 				<a class="slide" href="/releases/">Release notes</a>
 				<a class="slide" href="/support/">Support</a>
 				<a class="slide" href="/privacy/">Privacy</a>
@@ -167,6 +169,10 @@ import icon from '../assets/icon.png';
 		gap: 18px;
 		margin-left: auto;
 		font: 400 var(--t-small) var(--font-text);
+	}
+	.top a,
+	.by {
+		white-space: nowrap;
 	}
 	.top a {
 		color: var(--muted);
@@ -244,6 +250,12 @@ import icon from '../assets/icon.png';
 		line-height: 1.5;
 	}
 	@media (max-width: 600px) {
+		.top .wide {
+			display: none;
+		}
+		.top {
+			gap: 12px;
+		}
 		.features div {
 			grid-template-columns: minmax(0, 1fr);
 		}
