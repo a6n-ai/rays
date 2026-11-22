@@ -71,6 +71,8 @@ struct ContentView: View {
                     FolderView(root: EngineModel.downloadsURL, folder: folder) { destination = .downloads }
                 case .sorter?:
                     SorterView()
+                case .bucket(let name)?:
+                    BucketView(bucket: name)
                 default:
                     DownloadsView(isDropTargeted: isDropTargeted)
                 }

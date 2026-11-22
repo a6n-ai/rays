@@ -11,6 +11,7 @@ final class EngineModel {
     /// Bumped when the folders on disk may have changed, so the sidebar re-lists them.
     private(set) var folderRevision = 0
     private(set) var generation = 0
+    private(set) var buckets: [BucketConfig] = []
     @ObservationIgnored private var engine: Engine?
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let files = FileTracker(storeURL: FileManager.default.homeDirectoryForCurrentUser
@@ -55,6 +56,7 @@ final class EngineModel {
             self.engine = engine
             jobs = engine.snapshot()
             jobs.forEach(track)
+            buckets = engine.buckets()
         } catch {
             startError = error.localizedDescription
         }
@@ -85,7 +87,7 @@ final class EngineModel {
         let urls = Links.inText(text)
         guard let engine else { return }
         guard !urls.isEmpty else {
-            notice = "No link found. Links start with http:// or https://."
+            notice = "No link found. Links start with http://, https:// or s3://."
             return
         }
         let rejected = engine.add(urls: urls).filter { $0.id == nil }
@@ -95,6 +97,35 @@ final class EngineModel {
     }
 
     func clearNotice() { notice = nil }
+
+    var providers: [ProviderPreset] { engine?.providers() ?? [] }
+
+    /// The preset's endpoint for this region and extra field, or nil while something it needs is missing.
+    func providerEndpoint(_ provider: String, region: String, field: String) -> String? {
+        try? engine?.providerEndpoint(provider: provider, region: region, field: field)
+    }
+
+    /// The engine lists the bucket once to check the keys before saving anything.
+    func addBucket(_ config: BucketConfig, secret: String) async throws {
+        guard let engine else { return }
+        try await engine.addBucket(config: config, secret: secret)
+        buckets = engine.buckets()
+    }
+
+    func removeBucket(_ name: String) throws {
+        try engine?.removeBucket(name: name)
+        buckets = engine?.buckets() ?? []
+    }
+
+    func listBucket(_ name: String, prefix: String, token: String?) async throws -> Listing {
+        guard let engine else { return Listing(folders: [], objects: [], nextToken: nil) }
+        return try await engine.listBucket(bucket: name, prefix: prefix, token: token)
+    }
+
+    /// Keys can hold spaces or `%`; the engine percent-decodes the link back to the exact key.
+    func download(bucket: String, key: String) {
+        add("s3://\(bucket)/\(key.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? key)")
+    }
 
     func setSpeedLimit(_ bytesPerSec: Int) {
         defaults.set(bytesPerSec, forKey: SettingsKey.speedLimit)
@@ -250,12 +281,12 @@ enum Links {
         return NSDictionary(contentsOf: url)?["URL"] as? String
     }
 
-    /// Every http(s) link in pasted text, in order, without repeats. Handles the usual ways links get
+    /// Every http(s) or s3 link in pasted text, in order, without repeats. Handles the usual ways links get
     /// copied: one per line, separated by spaces, commas, semicolons or tabs (CSV and spreadsheet cells),
     /// quoted, inside Markdown `[name](url)` or HTML `href="url"`, and links pasted back to back.
     static func inText(_ text: String) -> [String] {
         // A link runs until whitespace, a quote, or a bracket; a new "http" also starts a new link.
-        let pattern = #"https?://[^\s"'<>\[\]{}|\\^`]+?(?=https?://|[\s"'<>\[\]{}|\\^`]|$)"#
+        let pattern = #"(?:https?|s3)://[^\s"'<>\[\]{}|\\^`]+?(?=(?:https?|s3)://|[\s"'<>\[\]{}|\\^`]|$)"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         var seen = Set<String>()
         return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
