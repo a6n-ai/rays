@@ -955,8 +955,9 @@ async fn shared_bandwidth_limit_removes_a_failed_probe() {
     let total = data.len() as u64;
     assert!(peak(&hist) >= 3, "never probed above two connections");
     assert!(stepped_down(&hist, total), "the failed probe was not removed");
+    // Two, plus at most the one connection of a periodic probe that may be running when the file ends.
     let late = hist.iter().filter(|p| p.1 >= total * 17 / 20).map(|p| p.0).max().unwrap_or(0);
-    assert!(late <= 2, "{late} connections near the end");
+    assert!(late <= 3, "{late} connections near the end");
 }
 
 #[tokio::test]

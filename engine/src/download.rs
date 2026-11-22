@@ -9,7 +9,7 @@ use crate::types::{Job, JobId, JobState, Live, Outcome, Segment};
 use reqwest::header::{
     ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_RANGE, ETAG, HeaderName, IF_RANGE, LAST_MODIFIED, RANGE,
 };
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
@@ -273,7 +273,8 @@ async fn run_attempt(
     if let Some(total) = split {
         // The plan must be on disk before preallocating: a full-size .part without a saved plan would be
         // mistaken for a finished single-stream download after a crash.
-        let segments = plan(total, u64::from(env.start.min(cap)));
+        let start = if total >= BIG_FILE { env.start.max(BIG_START) } else { env.start };
+        let segments = plan(total, u64::from(start.min(cap)));
         let job = with_job(&env.live, |j| {
             j.segments = segments;
             j.clone()
@@ -336,8 +337,9 @@ fn plan(total: u64, parts: u64) -> Vec<Segment> {
         .collect()
 }
 
-/// Sets the connection count of a split run. It probes one connection up and keeps it only if the next 2 s window
-/// beats the best by 10%. When a probe fails it removes it and then tries one fewer, keeping the lower count while
+/// Sets the connection count of a split run. It probes up and keeps the added connections only if the next 2 s window
+/// beats the best by 10%. While each step brings at least `DOUBLE_GAIN`, a probe doubles the count (1, 2, 4, 8),
+/// so a server that caps each connection is filled in a few steps; after that, probes add one. When a probe fails it removes it and then tries one fewer, keeping the lower count while
 /// it is within `PENALTY` of the best (each count scored as speed / 1.02^n, after Falcon and FastBioDL), so a link
 /// where extra connections don't help settles low. While holding, it steps down when throughput falls 25%.
 struct Grow {
@@ -346,7 +348,31 @@ struct Grow {
     /// `(time, bytes done)` at the last three ticks; the first and last bound the current window.
     samples: VecDeque<(Instant, u64)>,
     stage: Stage,
+    /// Still doubling: no probe has yet gained less than `DOUBLE_GAIN`.
+    doubling: bool,
+    /// Connections the pending probe added, removed together if it fails.
+    added: usize,
+    /// Ticks in the window being measured.
+    span: u8,
 }
+
+/// A probe that gains at least this much keeps the count doubling.
+const DOUBLE_GAIN: f64 = 1.25;
+/// A doubling probe is judged on one tick: a jump of 25% or more shows in one second.
+const DOUBLE_WINDOW_TICKS: u8 = 1;
+/// Fresh files at least this big start on `BIG_START` parts, as other download managers start on 8 to 16; the
+/// trim after doubling, and the step down, still settle on one where more don't help.
+const BIG_FILE: u64 = 32 << 20;
+const BIG_START: u32 = 4;
+/// While throttled, the cap is raised by one after this long without a 429/503, in case the first refusal came
+/// before every accepted connection was counted.
+const THROTTLE_RETRY: Duration = Duration::from_secs(3);
+/// A connection is reconnected when it runs below 1/`SHED_RATIO` of its fair share (after MDM's shed rule): the
+/// lower of the best single connection seen and the best total divided by the connections running, so
+/// connections that share one link are never shed for sharing it.
+const SHED_RATIO: f64 = 4.0;
+/// A new connection gets this long before it can be judged slow, and must have this much work left.
+const SHED_GRACE: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Copy)]
 enum Stage {
@@ -372,8 +398,8 @@ enum Change {
 #[derive(Debug, PartialEq, Eq)]
 enum Act {
     None,
-    Add,
-    Remove,
+    Add(usize),
+    Remove(usize),
 }
 
 impl Grow {
@@ -383,12 +409,23 @@ impl Grow {
             best: 0.0,
             samples: VecDeque::from([(now, done)]),
             stage: Stage::Warm(WARM_TICKS, Change::Rebase { probe: true, shrink: false }),
+            doubling: true,
+            added: 0,
+            span: WINDOW_TICKS,
         }
     }
 
-    /// Bytes per second over the last two ticks.
+    /// Starts a probe: as many again as `target` while doubling, else one, never past `cap`.
+    fn probe(&mut self, target: usize, cap: usize) -> Act {
+        self.added = if self.doubling { target.max(1) } else { 1 }.min(cap - target);
+        self.stage = Stage::Warm(WARM_TICKS, Change::Probe);
+        Act::Add(self.added)
+    }
+
+    /// Bytes per second over the last `span` ticks.
     fn window(&self) -> f64 {
-        match (self.samples.front(), self.samples.back()) {
+        let first = self.samples.len().saturating_sub(usize::from(self.span) + 1);
+        match (self.samples.get(first), self.samples.back()) {
             (Some(&(t0, d0)), Some(&(t1, d1))) if t1 > t0 => d1.saturating_sub(d0) as f64 / (t1 - t0).as_secs_f64(),
             _ => 0.0,
         }
@@ -407,18 +444,24 @@ impl Grow {
             }
             Stage::Hold(_) => {
                 self.stage = Stage::Hold(0);
+                self.span = WINDOW_TICKS;
                 if target > 1 && self.window() < self.best * 0.75 {
                     self.stage = Stage::Warm(WARM_TICKS, Change::Rebase { probe: false, shrink: false });
-                    Act::Remove
+                    Act::Remove(1)
                 } else if growable && target < cap {
-                    self.stage = Stage::Warm(WARM_TICKS, Change::Probe);
-                    Act::Add
+                    self.probe(target, cap)
                 } else {
                     Act::None
                 }
             }
-            Stage::Warm(n, change) => {
-                self.stage = if n > 1 { Stage::Warm(n - 1, change) } else { Stage::Measure(WINDOW_TICKS, change) };
+            Stage::Warm(n, change) if n > 1 => {
+                self.stage = Stage::Warm(n - 1, change);
+                Act::None
+            }
+            Stage::Warm(_, change) => {
+                let doubling_probe = matches!(change, Change::Probe) && self.doubling;
+                self.span = if doubling_probe { DOUBLE_WINDOW_TICKS } else { WINDOW_TICKS };
+                self.stage = Stage::Measure(self.span, change);
                 Act::None
             }
             Stage::Measure(n, change) if n > 1 => {
@@ -432,18 +475,25 @@ impl Grow {
     fn judge(&mut self, change: Change, growable: bool, target: usize, cap: usize) -> Act {
         let window = self.window();
         match change {
-            // The probe didn't pay: remove it, re-measure, then see whether even fewer is as good.
+            // The probe didn't pay: remove what it added, re-measure, then see whether even fewer is as good.
             Change::Probe if window < self.best * 1.1 => {
+                self.doubling = false;
                 self.stage = Stage::Warm(WARM_TICKS, Change::Rebase { probe: false, shrink: true });
-                Act::Remove
+                Act::Remove(self.added)
             }
-            Change::Probe => self.advance(window, true, false, growable, target, cap),
+            Change::Probe => {
+                let doubled = self.added > 1;
+                self.doubling &= window >= self.best * DOUBLE_GAIN && target < cap;
+                // A doubling step that ends the doubling may have overshot: trim down while speed holds.
+                let trim = doubled && !self.doubling;
+                self.advance(window, !trim, trim, growable, target, cap)
+            }
             // Fewer is as good: keep it, and try one fewer again.
             Change::Shrink if window * PENALTY >= self.best => self.advance(window, false, true, growable, target, cap),
             // Fewer is worse: put the connection back and hold (a periodic probe re-checks later).
             Change::Shrink => {
                 self.stage = Stage::Warm(WARM_TICKS, Change::Rebase { probe: false, shrink: false });
-                Act::Add
+                Act::Add(1)
             }
             Change::Rebase { probe, shrink } => self.advance(window, probe, shrink, growable, target, cap),
         }
@@ -453,14 +503,68 @@ impl Grow {
         self.best = window;
         if shrink && target > 1 {
             self.stage = Stage::Warm(WARM_TICKS, Change::Shrink);
-            Act::Remove
+            Act::Remove(1)
         } else if probe && growable && target < cap {
-            self.stage = Stage::Warm(WARM_TICKS, Change::Probe);
-            Act::Add
+            self.probe(target, cap)
         } else {
             self.stage = Stage::Hold(0);
             Act::None
         }
+    }
+}
+
+/// Finds a connection to reconnect because it is far slower than the others (one bad path or a slow mirror). Each
+/// running segment's speed is measured over its last two ticks.
+#[derive(Default)]
+struct Slow {
+    /// Per running segment: when it was first seen, and `(time, bytes done)` at its last three ticks.
+    seen: HashMap<usize, (Instant, VecDeque<(Instant, u64)>)>,
+    best_single: f64,
+    best_total: f64,
+    total: VecDeque<(Instant, u64)>,
+}
+
+impl Slow {
+    /// Returns at most one segment to reconnect.
+    fn tick(&mut self, shared: &Shared, now: Instant) -> Option<usize> {
+        let running: Vec<usize> = shared.running_list().iter().map(|(i, _)| *i).collect();
+        self.seen.retain(|i, _| running.contains(i));
+        let segs = with_job(&shared.env.live, |j| j.segments.clone());
+        let rate = |q: &VecDeque<(Instant, u64)>| match (q.front(), q.back()) {
+            (Some(&(t0, d0)), Some(&(t1, d1))) if t1 > t0 && q.len() == 3 => {
+                Some(d1.saturating_sub(d0) as f64 / (t1 - t0).as_secs_f64())
+            }
+            _ => None,
+        };
+        let total: u64 = segs.iter().map(|s| s.done).sum();
+        self.total.push_back((now, total));
+        if self.total.len() > 3 {
+            self.total.pop_front();
+        }
+        if let Some(r) = rate(&self.total) {
+            self.best_total = self.best_total.max(r);
+        }
+        let mut speeds = Vec::new();
+        for &idx in &running {
+            let Some(seg) = segs.get(idx) else { continue };
+            let (born, q) = self.seen.entry(idx).or_insert_with(|| (now, VecDeque::new()));
+            q.push_back((now, seg.done));
+            if q.len() > 3 {
+                q.pop_front();
+            }
+            if let Some(r) = rate(q) {
+                self.best_single = self.best_single.max(r);
+                let left = seg.end.saturating_sub(seg.start + seg.done) as f64;
+                speeds.push((idx, *born, r, left));
+            }
+        }
+        let bar = self.best_single.min(self.best_total / running.len().max(1) as f64);
+        let (idx, ..) = speeds.into_iter().filter(|&(_, born, r, left)| {
+            now.duration_since(born) >= SHED_GRACE && r * SHED_RATIO < bar && left > r * SHED_GRACE.as_secs_f64()
+        }).min_by(|a, b| a.2.total_cmp(&b.2))?;
+        // Measured afresh once it reconnects.
+        self.seen.remove(&idx);
+        Some(idx)
     }
 }
 
@@ -478,7 +582,7 @@ struct Shared {
     validator: Option<String>,
     /// Per segment, indexed like the job's segments: the attempt it is waiting to retry, 0 when it is not waiting.
     waits: Mutex<Vec<u8>>,
-    /// Set after an HTTP 429 or 503; no further splits for the rest of this run.
+    /// Set after an HTTP 429 or 503: no more probing up for the rest of this run, and splits only within `cap`.
     throttled: AtomicBool,
     /// Segments that got 429/503 while others were transferring, oldest first. Resumed as connections free up.
     parked: Mutex<VecDeque<usize>>,
@@ -496,6 +600,8 @@ struct Shared {
     /// When each recent connection failure happened, and on which segment.
     conn_fails: Mutex<Vec<(Instant, usize)>>,
     blocked_noted: AtomicBool,
+    /// The last 429/503, which restarts the wait before the cap is raised again.
+    last_reject: Mutex<Option<Instant>>,
 }
 
 /// How a segment task ended without error.
@@ -525,10 +631,12 @@ impl Shared {
     /// lowers the cap to those. False for the last connection, which then retries like any other failure.
     fn park(&self) -> bool {
         let others = self.env.live.connections.load(Ordering::Relaxed);
-        if others == 0 {
+        // Parts started together can be refused before the accepted ones begin transferring: other tasks still
+        // count, and `retry_cap` raises the cap to the transfers once they start.
+        if others == 0 && self.running_list().len() <= 1 {
             return false;
         }
-        self.cap.fetch_min(others as usize, Ordering::Relaxed);
+        self.cap.fetch_min((others as usize).max(1), Ordering::Relaxed);
         true
     }
 
@@ -536,11 +644,42 @@ impl Shared {
         self.running_list().retain(|(i, _)| *i != idx);
     }
 
+    /// Stops segment `idx` at its write position; the coordinator restarts it on a new connection.
+    fn stop_segment(&self, idx: usize) {
+        let mut running = self.running_list();
+        if let Some(pos) = running.iter().position(|(i, _)| *i == idx) {
+            let (_, stop) = running.remove(pos);
+            let _ = stop.send(true);
+        }
+    }
+
     /// Stops the newest running segment. It stops at its write position, and its segment resumes later.
     fn stop_newest(&self) {
         let newest = self.running_list().pop();
         if let Some((_, stop)) = newest {
             let _ = stop.send(true);
+        }
+    }
+
+    /// While throttled with segments waiting, raises the cap by one after `THROTTLE_RETRY` without a refusal and
+    /// starts a waiting segment. A refusal lowers it again (`park`). The first refusal can come before every
+    /// accepted connection was counted, which would otherwise hold the run below what the server allows.
+    fn retry_cap(self: &Arc<Self>, set: &mut SegSet) {
+        if !self.throttled.load(Ordering::Relaxed) {
+            return;
+        }
+        // Connections working now were accepted: the cap is at least that many, at no extra request.
+        self.cap.fetch_max(self.env.live.connections.load(Ordering::Relaxed) as usize, Ordering::Relaxed);
+        if self.parked_queue().is_empty() {
+            return;
+        }
+        let quiet = self.last_reject.lock().unwrap_or_else(PoisonError::into_inner).is_none_or(|t| t.elapsed() >= THROTTLE_RETRY);
+        let cap = self.cap.load(Ordering::Relaxed);
+        if quiet && cap < self.target.load(Ordering::Relaxed) && set.len() >= cap {
+            self.cap.store(cap + 1, Ordering::Relaxed);
+            // Counts as a refusal for the wait, so the next raise waits another THROTTLE_RETRY.
+            *self.last_reject.lock().unwrap_or_else(PoisonError::into_inner) = Some(Instant::now());
+            hand_off(set, self);
         }
     }
 
@@ -643,6 +782,7 @@ async fn run_split(
         first: Mutex::new(first),
         conn_fails: Mutex::new(Vec::new()),
         blocked_noted: AtomicBool::new(false),
+        last_reject: Mutex::new(None),
     });
 
     let mut set: SegSet = JoinSet::new();
@@ -653,6 +793,7 @@ async fn run_split(
     }
     steal(&mut set, &shared);
     let mut grow = Grow::new(Instant::now(), done);
+    let mut slow = Slow::default();
     let mut tick = tokio::time::interval_at(tokio::time::Instant::now() + TICK, TICK);
     loop {
         tokio::select! {
@@ -662,27 +803,38 @@ async fn run_split(
                 return Ok(Outcome::Paused);
             }
             _ = tick.tick() => {
+                shared.retry_cap(&mut set);
+                // Under a speed limit every connection is slow on purpose; after a 429 a reconnect is refused.
+                if !env.limiter.is_limited()
+                    && !shared.throttled.load(Ordering::Relaxed)
+                    && let Some(idx) = slow.tick(&shared, Instant::now())
+                {
+                    shared.stop_segment(idx);
+                }
                 let growable = !env.limiter.is_limited() && !shared.throttled.load(Ordering::Relaxed);
                 let target = shared.target.load(Ordering::Relaxed);
                 let written = env.live.done.load(Ordering::Relaxed);
                 match grow.tick(Instant::now(), written, growable, target, env.connections as usize) {
                     Act::None => {}
-                    Act::Add => {
-                        shared.target.fetch_add(1, Ordering::Relaxed);
+                    Act::Add(n) => {
+                        shared.target.fetch_add(n, Ordering::Relaxed);
                         let before = set.len();
-                        // A segment parked by an earlier step down resumes before a new one is split off.
-                        if !hand_off(&mut set, &shared) {
-                            steal(&mut set, &shared);
-                        }
-                        // No segment left to split: undo the probe and hold.
-                        if set.len() == before {
-                            shared.target.fetch_sub(1, Ordering::Relaxed);
+                        // Segments parked by an earlier step down resume before new ones are split off.
+                        while set.len() < before + n && hand_off(&mut set, &shared) {}
+                        steal(&mut set, &shared);
+                        // Fewer segments left to split than asked: keep what started, or undo the probe and hold.
+                        let started = set.len() - before;
+                        shared.target.fetch_sub(n - started, Ordering::Relaxed);
+                        grow.added = started;
+                        if started == 0 {
                             grow.stage = Stage::Hold(0);
                         }
                     }
-                    Act::Remove => {
-                        shared.target.fetch_sub(1, Ordering::Relaxed);
-                        shared.stop_newest();
+                    Act::Remove(n) => {
+                        shared.target.fetch_sub(n, Ordering::Relaxed);
+                        for _ in 0..n {
+                            shared.stop_newest();
+                        }
                     }
                 }
             }
@@ -753,11 +905,16 @@ fn hand_off(set: &mut SegSet, shared: &Arc<Shared>) -> bool {
 
 /// Starts a task on each free connection, each taking part of the unfinished segment with the most bytes left.
 fn steal(set: &mut SegSet, shared: &Arc<Shared>) {
-    // Under a user speed cap more connections add requests, not bandwidth; after a 429 they get us blocked.
-    if shared.env.limiter.is_limited() || shared.throttled.load(Ordering::Relaxed) {
+    // Under a user speed cap more connections add requests, not bandwidth. After a 429/503 a split still may run
+    // up to the cap of connections the server accepted, so the last part does not finish on one connection.
+    if shared.env.limiter.is_limited() {
         return;
     }
-    while set.len() < shared.target.load(Ordering::Relaxed) {
+    let throttled = shared.throttled.load(Ordering::Relaxed);
+    while set.len() < shared.target.load(Ordering::Relaxed)
+        && (!throttled || set.len() < shared.cap.load(Ordering::Relaxed))
+        && shared.parked_queue().is_empty()
+    {
         let Some(idx) = split_one(shared) else { break };
         shared.wait_slots().push(0);
         shared.env.hub.state_changed(shared.id);
@@ -880,13 +1037,14 @@ async fn segment_attempt(
                 200 | 416 => return Err(Stop::Fallback),
                 status if retryable(status) => {
                     if matches!(status, 429 | 503) {
-                        // The server is counting our connections: stop opening new ones for this run, and
-                        // remember the lower count (our other transfers are still open, so `active` counts them).
+                        // The server is counting our connections: stop splitting for this run, and remember how many
+                        // worked. This request never started transferring, so `active` counts only the others.
                         shared.throttled.store(true, Ordering::Relaxed);
                         shared.env.dirty.store(true, Ordering::Relaxed);
+                        *shared.last_reject.lock().unwrap_or_else(PoisonError::into_inner) = Some(Instant::now());
                         let active = shared.env.live.connections.load(Ordering::Relaxed);
-                        if active >= 2 {
-                            shared.note_host(active - 1, "rate limited");
+                        if active >= 1 {
+                            shared.note_host(active, "rate limited");
                         }
                         if shared.park() {
                             return Ok(SegEnd::Parked);
@@ -1054,20 +1212,24 @@ fn retry_wait(attempt: u8) -> Duration {
 
 #[cfg(test)]
 mod tests {
-    /// Drives `Grow` on a synthetic link: `speed(n)` bytes/s with `n` connections. Returns the count after `ticks`.
+    /// Drives `Grow` on a synthetic link: `speed(n)` bytes/s with `n` connections. Returns the count held most
+    /// over the last 20 ticks (a periodic probe or step-down changes it briefly).
     fn settle(start: usize, cap: usize, ticks: u32, speed: impl Fn(usize) -> f64) -> usize {
         let t0 = Instant::now();
         let mut grow = Grow::new(t0, 0);
-        let (mut n, mut done) = (start, 0.0);
+        let (mut n, mut done, mut held) = (start, 0.0, [0u32; MAX_PARTS as usize + 1]);
         for k in 1..=ticks {
             done += speed(n);
             match grow.tick(t0 + Duration::from_secs(u64::from(k)), done as u64, true, n, cap) {
-                Act::Add => n += 1,
-                Act::Remove => n -= 1,
+                Act::Add(k) => n += k,
+                Act::Remove(k) => n -= k,
                 Act::None => {}
             }
+            if k + 20 > ticks {
+                held[n] += 1;
+            }
         }
-        n
+        (0..held.len()).max_by_key(|&c| held[c]).unwrap_or(n)
     }
 
     #[test]
@@ -1084,6 +1246,28 @@ mod tests {
         assert_eq!(settle(4, 8, 60, |n| 5e6 * n.min(8) as f64), 8);
         // Gains stop at 6: it settles there, not at the cap.
         assert_eq!(settle(4, 8, 60, |n| 5e6 * n.min(6) as f64), 6);
+    }
+
+    #[test]
+    fn grow_doubles_to_fill_a_server_that_caps_each_connection() {
+        // 2 MB/s per connection, up to 16: from one connection it reaches 16 by the 9th second (1, 2, 4, 8, 16,
+        // each doubling judged on one second), and settles there.
+        let t0 = Instant::now();
+        let mut grow = Grow::new(t0, 0);
+        let (mut n, mut done, mut reached) = (1usize, 0.0, None);
+        for k in 1..=12u64 {
+            done += 2e6 * n as f64;
+            match grow.tick(t0 + Duration::from_secs(k), done as u64, true, n, 16) {
+                Act::Add(a) => n += a,
+                Act::Remove(r) => n -= r,
+                Act::None => {}
+            }
+            if n == 16 && reached.is_none() {
+                reached = Some(k);
+            }
+        }
+        assert!(reached.is_some_and(|k| k <= 9), "reached 16 at {reached:?}");
+        assert_eq!(settle(1, 16, 60, |n| 2e6 * n as f64), 16);
     }
 
     #[test]
