@@ -3,6 +3,7 @@ use crate::download::{self, SignUrl};
 use crate::events::EventHub;
 use crate::limit::RateLimiter;
 use crate::names;
+use crate::cloud;
 use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
 use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, now_secs};
@@ -321,6 +322,11 @@ impl Scheduler {
         if !(cfg.endpoint.starts_with("https://") || cfg.endpoint.starts_with("http://")) {
             return Err(invalid("endpoint must start with https://"));
         }
+        if let Some(profile) = &cfg.profile {
+            let keys = cloud::aws_keys(profile).map_err(|msg| EngineError::InvalidUrl { msg })?;
+            Signer::with_keys(&cfg, &keys)?.list(&self.client, "", None).await?;
+            return self.store.save_bucket(&cfg);
+        }
         if cfg.access_key_id.is_empty() || secret.is_empty() {
             return Err(invalid("access key ID and secret are required"));
         }
@@ -350,6 +356,10 @@ impl Scheduler {
 
     fn signer(&self, name: &str) -> Result<Signer, String> {
         let cfg = self.bucket(name)?;
+        if let Some(profile) = &cfg.profile {
+            let keys = cloud::aws_keys(profile)?;
+            return Signer::with_keys(&cfg, &keys).map_err(|e| e.to_string());
+        }
         let secret = self.secrets.get(name).ok_or_else(|| format!("no secret key saved for bucket {name}"))?;
         Signer::new(&cfg, &secret).map_err(|e| e.to_string())
     }
@@ -360,7 +370,16 @@ impl Scheduler {
             return Ok(None);
         };
         let signer = self.signer(&bucket)?;
-        Ok(Some(Arc::new(move || signer.get(&key))))
+        let Some(profile) = self.bucket(&bucket)?.profile else {
+            return Ok(Some(Arc::new(move || signer.get(&key))));
+        };
+        // Login keys expire (often after an hour), so a long download asks the CLI again; the
+        // keys are cached, so this costs a process run only every few minutes.
+        let cfg = self.bucket(&bucket)?;
+        Ok(Some(Arc::new(move || match cloud::aws_keys(&profile).and_then(|k| Signer::with_keys(&cfg, &k).map_err(|e| e.to_string())) {
+            Ok(fresh) => fresh.get(&key),
+            Err(_) => signer.get(&key),
+        })))
     }
 
     fn find(&self, id: JobId) -> Option<Arc<Live>> {

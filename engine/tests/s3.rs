@@ -87,6 +87,7 @@ fn bucket(addr: SocketAddr) -> BucketConfig {
         region: "us-east-1".into(),
         access_key_id: "AKID".into(),
         path_style: true,
+        profile: None,
     }
 }
 
@@ -201,8 +202,9 @@ async fn every_part_request_is_signed_fresh() {
     assert_eq!(signs.load(Ordering::SeqCst), fake.signed_gets.load(Ordering::SeqCst));
 }
 
-/// Real SigV4 check against a live server, run by hand: RAYS_S3_ENDPOINT, RAYS_S3_BUCKET, RAYS_S3_KEY_ID,
-/// RAYS_S3_SECRET, RAYS_S3_OBJECT (an object in the bucket) and optional RAYS_S3_REGION, RAYS_S3_PATH_STYLE=1.
+/// Real SigV4 check against a live server, run by hand: RAYS_S3_ENDPOINT, RAYS_S3_BUCKET, RAYS_S3_OBJECT
+/// (an object in the bucket), optional RAYS_S3_REGION and RAYS_S3_PATH_STYLE=1, and either RAYS_S3_KEY_ID
+/// with RAYS_S3_SECRET or RAYS_AWS_PROFILE (keys from the AWS CLI, session tokens included).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "needs a live S3 server; see doc comment"]
 async fn live_bucket_lists_and_downloads() {
@@ -212,8 +214,9 @@ async fn live_bucket_lists_and_downloads() {
         provider: "generic".into(),
         endpoint: var("RAYS_S3_ENDPOINT"),
         region: std::env::var("RAYS_S3_REGION").unwrap_or_else(|_| "us-east-1".into()),
-        access_key_id: var("RAYS_S3_KEY_ID"),
+        access_key_id: std::env::var("RAYS_S3_KEY_ID").unwrap_or_default(),
         path_style: std::env::var("RAYS_S3_PATH_STYLE").is_ok_and(|v| v == "1"),
+        profile: std::env::var("RAYS_AWS_PROFILE").ok(),
     };
     let object = var("RAYS_S3_OBJECT");
     let dir = tempfile::tempdir().unwrap();
@@ -221,8 +224,9 @@ async fn live_bucket_lists_and_downloads() {
     let downloads = dir.path().join("downloads");
     std::fs::create_dir_all(&downloads).unwrap();
     let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, Arc::new(MemorySecrets::default())).unwrap();
-    sched.add_bucket(cfg.clone(), var("RAYS_S3_SECRET")).await.unwrap();
-    let listing = sched.list_bucket(&cfg.name, "", None).await.unwrap();
+    sched.add_bucket(cfg.clone(), std::env::var("RAYS_S3_SECRET").unwrap_or_default()).await.unwrap();
+    let folder = object.rfind('/').map_or("", |i| &object[..=i]);
+    let listing = sched.list_bucket(&cfg.name, folder, None).await.unwrap();
     assert!(listing.objects.iter().any(|o| o.key == object), "{listing:?}");
     let link = format!("s3://{}/{object}", cfg.name);
     assert!(sched.add(vec![link.clone()])[0].error.is_none());

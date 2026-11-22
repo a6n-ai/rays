@@ -6,8 +6,9 @@ use std::process::{Command, ExitCode};
 
 pub const USAGE: &str = "  dl bucket providers           cloud providers and their ids
   dl bucket add NAME --provider ID --key-id KEY [--region R] [--account-id A | --namespace N |
-                --project-ref P] [--endpoint URL] [--path-style | --virtual-host]
-                                add a bucket; the secret key is read from stdin
+                --project-ref P] [--endpoint URL] [--path-style | --virtual-host] [--aws-profile NAME]
+                                add a bucket; the secret key is read from stdin, or with
+                                --aws-profile the AWS CLI login supplies the keys
   dl bucket list | dl bucket remove NAME
   dl ls s3://BUCKET/[PREFIX/]   list one level of a bucket";
 
@@ -54,6 +55,7 @@ pub fn ls(link: &str) -> ExitCode {
 fn add_request(name: &str, flags: &[String]) -> Result<Request, String> {
     let (mut provider, mut endpoint, mut region, mut field, mut key_id, mut path_style) =
         (String::new(), String::new(), String::new(), String::new(), String::new(), None);
+    let mut profile = None;
     let mut it = flags.iter();
     while let Some(flag) = it.next() {
         let mut value = || it.next().cloned().ok_or_else(|| format!("{flag} needs a value"));
@@ -63,6 +65,7 @@ fn add_request(name: &str, flags: &[String]) -> Result<Request, String> {
             "--region" => region = value()?,
             "--account-id" | "--namespace" | "--project-ref" | "--field" => field = value()?,
             "--key-id" => key_id = value()?,
+            "--aws-profile" => profile = Some(value()?),
             "--path-style" => path_style = Some(true),
             "--virtual-host" => path_style = Some(false),
             other => return Err(format!("unknown option {other}")),
@@ -71,11 +74,15 @@ fn add_request(name: &str, flags: &[String]) -> Result<Request, String> {
     if provider.is_empty() {
         provider = if endpoint.is_empty() { return Err("--provider is required (see dl bucket providers)".into()) } else { "generic".into() };
     }
+    if profile.is_some() {
+        // Keys come from the AWS CLI each time; nothing secret is read or stored.
+        return Ok(Request::BucketAdd { name: name.into(), provider, endpoint, region, field, access_key_id: key_id, secret: String::new(), path_style, profile });
+    }
     if key_id.is_empty() {
-        return Err("--key-id is required".into());
+        return Err("--key-id is required (or --aws-profile NAME)".into());
     }
     let secret = read_secret()?;
-    Ok(Request::BucketAdd { name: name.into(), provider, endpoint, region, field, access_key_id: key_id, secret, path_style })
+    Ok(Request::BucketAdd { name: name.into(), provider, endpoint, region, field, access_key_id: key_id, secret, path_style, profile })
 }
 
 /// From a pipe as is; from a terminal with echo off, so the key never shows on screen or in history.

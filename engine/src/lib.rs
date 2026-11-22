@@ -18,6 +18,8 @@ pub mod limit;
 #[cfg(feature = "full")]
 pub mod names;
 #[cfg(feature = "full")]
+pub mod cloud;
+#[cfg(feature = "full")]
 pub mod s3;
 #[cfg(feature = "full")]
 pub mod scheduler;

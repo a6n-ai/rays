@@ -102,14 +102,14 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             ..Default::default()
         },
         Ok(Request::Buckets) => Response { ok: true, buckets: sched.buckets().into_iter().map(bucket_line).collect(), ..Default::default() },
-        Ok(Request::BucketAdd { name, provider, endpoint, region, field, access_key_id, secret, path_style }) => {
+        Ok(Request::BucketAdd { name, provider, endpoint, region, field, access_key_id, secret, path_style, profile }) => {
             let added = async {
                 let preset = s3::providers().into_iter().find(|p| p.id == provider);
                 let preset = preset.ok_or_else(|| EngineError::InvalidUrl { msg: format!("unknown provider {provider}") })?;
                 let region = if region.is_empty() { preset.region.clone() } else { region };
                 let endpoint = if endpoint.is_empty() { s3::endpoint_for(&provider, &region, &field)? } else { endpoint };
                 let path_style = path_style.unwrap_or(preset.path_style);
-                let cfg = BucketConfig { name, provider, endpoint, region, access_key_id, path_style };
+                let cfg = BucketConfig { name, provider, endpoint, region, access_key_id, path_style, profile };
                 sched.add_bucket(cfg, secret).await
             };
             done(added.await)

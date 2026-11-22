@@ -50,6 +50,8 @@ struct BucketsForm: View {
                 }
             }
 
+            if !model.awsProfiles.isEmpty { AWSSection() }
+
             Section {
                 Picker("Provider", selection: $providerID) {
                     ForEach(model.providers, id: \.id) { Text($0.name).tag($0.id) }
@@ -109,7 +111,7 @@ struct BucketsForm: View {
     private func add() {
         let (n, e, k) = trimmed
         let config = BucketConfig(name: n, provider: providerID, endpoint: e,
-                                  region: region.trimmingCharacters(in: .whitespaces), accessKeyId: k, pathStyle: pathStyle)
+                                  region: region.trimmingCharacters(in: .whitespaces), accessKeyId: k, pathStyle: pathStyle, profile: nil)
         adding = true
         error = nil
         Task {
@@ -130,6 +132,77 @@ struct BucketsForm: View {
             try model.removeBucket(bucket)
         } catch {
             self.error = EngineModel.message(for: error)
+        }
+    }
+}
+
+/// Buckets from the AWS CLI logins on this Mac. Linking one stores no keys: the CLI hands Rays fresh ones.
+private struct AWSSection: View {
+    @Environment(EngineModel.self) private var model
+    @AppStorage("cloudAWSProfile") private var profile = "default"
+    @State private var found: [AwsBucket] = []
+    @State private var loading = false
+    @State private var adding: String?
+    @State private var error: String?
+
+    private var linked: Set<String> { Set(model.buckets.map(\.name)) }
+
+    var body: some View {
+        Section {
+            Picker("Profile", selection: $profile) {
+                ForEach(model.awsProfiles, id: \.self) { Text($0).tag($0) }
+            }
+            if loading {
+                ProgressView().frame(maxWidth: .infinity)
+            } else if let error {
+                ErrorLine(text: error)
+            } else if found.isEmpty {
+                Text("No buckets in this profile.").foregroundStyle(.secondary)
+            }
+            ForEach(found, id: \.name) { bucket in
+                LabeledContent {
+                    if linked.contains(bucket.name) {
+                        Label("Added", systemImage: "checkmark").foregroundStyle(.secondary)
+                    } else if adding == bucket.name {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("Add") { add(bucket) }.disabled(adding != nil)
+                    }
+                } label: {
+                    Label { Text(bucket.name); Text(bucket.region) } icon: { Image(systemName: "cloud") }
+                }
+            }
+        } header: {
+            Text("Your AWS CLI")
+        } footer: {
+            Text("Rays asks the aws command for keys each time and keeps none. Only list and read access is used.")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+        }
+        .task(id: profile) { await load() }
+    }
+
+    private func load() async {
+        loading = true
+        defer { loading = false }
+        do {
+            found = try await model.awsBuckets(profile)
+            error = nil
+        } catch {
+            found = []
+            self.error = EngineModel.message(for: error)
+        }
+    }
+
+    private func add(_ bucket: AwsBucket) {
+        adding = bucket.name
+        Task {
+            defer { adding = nil }
+            do {
+                try await model.addAWSBucket(bucket, profile: profile)
+            } catch {
+                self.error = "\(bucket.name): " + EngineModel.message(for: error)
+            }
         }
     }
 }

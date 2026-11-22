@@ -112,6 +112,20 @@ final class EngineModel {
         buckets = engine.buckets()
     }
 
+    var awsProfiles: [String] { engine?.awsProfiles() ?? [] }
+
+    func awsBuckets(_ profile: String) async throws -> [AwsBucket] {
+        guard let engine else { return [] }
+        return try await engine.awsBuckets(profile: profile)
+    }
+
+    /// Linked to an AWS CLI profile: the CLI supplies fresh keys each time and Rays stores none.
+    func addAWSBucket(_ bucket: AwsBucket, profile: String) async throws {
+        let config = BucketConfig(name: bucket.name, provider: "aws", endpoint: "https://s3.\(bucket.region).amazonaws.com",
+                                  region: bucket.region, accessKeyId: "", pathStyle: false, profile: profile)
+        try await addBucket(config, secret: "")
+    }
+
     func removeBucket(_ name: String) throws {
         try engine?.removeBucket(name: name)
         buckets = engine?.buckets() ?? []

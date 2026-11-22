@@ -25,6 +25,7 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     // The secret key is in the Keychain, never here.
     "CREATE TABLE buckets(name TEXT PRIMARY KEY, provider TEXT NOT NULL, endpoint TEXT NOT NULL,
      region TEXT NOT NULL, access_key_id TEXT NOT NULL, path_style INTEGER NOT NULL, created_at INTEGER NOT NULL)",
+    "ALTER TABLE buckets ADD COLUMN profile TEXT",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
@@ -216,11 +217,11 @@ impl Store {
     /// Adds a bucket, or replaces the one with the same name.
     pub fn save_bucket(&self, b: &BucketConfig) -> Result<(), EngineError> {
         self.lock()?.execute(
-            "INSERT INTO buckets (name, provider, endpoint, region, access_key_id, path_style, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(name) DO UPDATE SET provider = excluded.provider, \
+            "INSERT INTO buckets (name, provider, endpoint, region, access_key_id, path_style, created_at, profile) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(name) DO UPDATE SET provider = excluded.provider, \
              endpoint = excluded.endpoint, region = excluded.region, access_key_id = excluded.access_key_id, \
-             path_style = excluded.path_style",
-            params![b.name, b.provider, b.endpoint, b.region, b.access_key_id, b.path_style, now_secs()],
+             path_style = excluded.path_style, profile = excluded.profile",
+            params![b.name, b.provider, b.endpoint, b.region, b.access_key_id, b.path_style, now_secs(), b.profile],
         )?;
         Ok(())
     }
@@ -234,7 +235,7 @@ impl Store {
     pub fn buckets(&self) -> Result<Vec<BucketConfig>, EngineError> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
-            "SELECT name, provider, endpoint, region, access_key_id, path_style FROM buckets ORDER BY created_at, name",
+            "SELECT name, provider, endpoint, region, access_key_id, path_style, profile FROM buckets ORDER BY created_at, name",
         )?;
         let rows = stmt
             .query_map([], |r| {
@@ -245,6 +246,7 @@ impl Store {
                     region: r.get(3)?,
                     access_key_id: r.get(4)?,
                     path_style: r.get(5)?,
+                    profile: r.get(6)?,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -335,8 +337,10 @@ mod tests {
             region: "auto".into(),
             access_key_id: "AKID".into(),
             path_style: true,
+            profile: None,
         };
         store.save_bucket(&b).unwrap();
+        b.profile = Some("work".into());
         b.region = "weur".into();
         store.save_bucket(&b).unwrap();
         assert_eq!(store.buckets().unwrap(), vec![b]);

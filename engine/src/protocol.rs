@@ -23,10 +23,15 @@ pub enum Request {
         region: String,
         #[serde(default)]
         field: String,
+        #[serde(default)]
         access_key_id: String,
+        #[serde(default)]
         secret: String,
         #[serde(default)]
         path_style: Option<bool>,
+        /// An AWS CLI profile to take keys from instead of `access_key_id` and `secret`.
+        #[serde(default)]
+        profile: Option<String>,
     },
     #[serde(rename = "bucket_remove")]
     BucketRemove { name: String },

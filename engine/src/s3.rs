@@ -21,6 +21,8 @@ pub struct BucketConfig {
     pub region: String,
     pub access_key_id: String,
     pub path_style: bool,
+    /// An AWS CLI profile that supplies the keys each time; Rays then stores no secret for this bucket.
+    pub profile: Option<String>,
 }
 
 /// A cloud provider preset. `endpoint` may contain `{region}` and `{field}`, where `field` names the one extra
@@ -173,11 +175,20 @@ pub struct Signer {
 
 impl Signer {
     pub fn new(cfg: &BucketConfig, secret: &str) -> Result<Signer, EngineError> {
+        Signer::with_keys(cfg, &crate::cloud::Keys { key: cfg.access_key_id.clone(), secret: secret.to_owned(), token: None })
+    }
+
+    /// Keys from elsewhere, such as an AWS CLI login, which also carry a session token.
+    pub fn with_keys(cfg: &BucketConfig, keys: &crate::cloud::Keys) -> Result<Signer, EngineError> {
         let endpoint = reqwest::Url::parse(&cfg.endpoint).map_err(|e| invalid(format!("endpoint: {e}")))?;
         let style = if cfg.path_style { UrlStyle::Path } else { UrlStyle::VirtualHost };
         let region = if cfg.region.is_empty() { "us-east-1".to_owned() } else { cfg.region.clone() };
         let bucket = Bucket::new(endpoint, style, cfg.name.clone(), region).map_err(|e| invalid(format!("bucket: {e}")))?;
-        Ok(Signer { bucket, creds: Credentials::new(cfg.access_key_id.clone(), secret.to_owned()) })
+        let creds = match &keys.token {
+            Some(token) => Credentials::new_with_token(keys.key.clone(), keys.secret.clone(), token.clone()),
+            None => Credentials::new(keys.key.clone(), keys.secret.clone()),
+        };
+        Ok(Signer { bucket, creds })
     }
 
     /// A fresh pre-signed GET URL for `key`.
@@ -248,6 +259,7 @@ mod tests {
             region: "eu-1".into(),
             access_key_id: "AKID".into(),
             path_style,
+            profile: None,
         }
     }
 

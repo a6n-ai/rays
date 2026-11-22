@@ -133,6 +133,20 @@ impl Engine {
         self.rt.spawn(async move { sched.add_bucket(config, secret).await }).await.map_err(join_error)?
     }
 
+    /// Profiles the AWS CLI knows on this Mac, for linking buckets without typing keys.
+    pub fn aws_profiles(&self) -> Vec<String> {
+        crate::cloud::aws_profiles()
+    }
+
+    /// The profile's buckets with their regions; runs the AWS CLI, so it is off the caller's thread.
+    pub async fn aws_buckets(&self, profile: String) -> Result<Vec<crate::cloud::AwsBucket>, EngineError> {
+        self.rt
+            .spawn_blocking(move || crate::cloud::aws_buckets(&profile))
+            .await
+            .map_err(join_error)?
+            .map_err(|msg| EngineError::InvalidUrl { msg })
+    }
+
     pub fn remove_bucket(&self, name: String) -> Result<(), EngineError> {
         self.sched.remove_bucket(&name)
     }
