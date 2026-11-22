@@ -22,7 +22,11 @@ run() { # tool index; downloads into $tmp, then deletes the file
     3) curl -sfSL -o "$tmp/f" "$url" ;;
     4) wget -q -O "$tmp/f" "$url" ;;
   esac
-  rm -f "$tmp/f"
+  # A tool that exits early without the whole file must not count as a fast run (Rays' bench checks its own).
+  local got=0
+  [ "$1" -eq 0 ] || got=$(stat -f%z "$tmp/f" 2>/dev/null || echo 0)
+  rm -f "$tmp/f" "$tmp/f.aria2"
+  [ "$1" -eq 0 ] || [ "$got" = "$size" ]
 }
 # A 1-byte range GET, since some speed-test servers drop HEAD requests.
 size=$(curl -sfSL -r 0-0 -o /dev/null -w '%header{content-range}' "$url" | sed 's#.*/##')

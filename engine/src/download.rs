@@ -30,6 +30,9 @@ const MIN_SPLIT: u64 = 4 << 20;
 const MIN_SEGMENT: u64 = 1 << 20;
 /// Split points are rounded down to this, so ranges start on round offsets.
 const SPLIT_ALIGN: u64 = 64 << 10;
+/// Bytes a segment task gathers before one write and flush (each is a blocking-pool round trip). It must stay
+/// below `MIN_SEGMENT`: a split cuts at least that far past the recorded bytes, so it never lands in the buffer.
+const WRITE_BATCH: usize = 256 << 10;
 /// The connection count is judged on 2 s windows of total throughput, sampled every `TICK`.
 const TICK: Duration = Duration::from_secs(1);
 /// Ticks ignored after a change, then the ticks whose throughput judges it. One warm tick lets a new connection
@@ -902,8 +905,10 @@ async fn segment_attempt(
     file.seek(SeekFrom::Start(from)).await?;
     let _transfer = Transfer::start(&shared.env.live);
     let mut pos = from;
+    // Written and recorded together, so a recorded byte is always on disk; a cancel drops the unrecorded rest.
+    let mut buf: Vec<u8> = Vec::with_capacity(WRITE_BATCH);
     loop {
-        if pos >= seg_pos(shared, idx)?.1 {
+        if pos + buf.len() as u64 >= seg_pos(shared, idx)?.1 {
             break;
         }
         let chunk = or_cancel(cancel, tokio::time::timeout(STALL, resp.chunk()))
@@ -913,22 +918,44 @@ async fn segment_attempt(
         let Some(bytes) = chunk else { break };
         // Read `end` after the wait: a split may have lowered it while the chunk was in transit.
         let end = seg_pos(shared, idx)?.1;
-        if pos >= end {
+        let at = pos + buf.len() as u64;
+        if at >= end {
             break;
         }
         // The server may send past the segment end; those bytes belong to the next segment.
-        let take = bytes.len().min((end - pos) as usize);
+        let take = bytes.len().min((end - at) as usize);
         or_cancel(cancel, shared.env.limiter.acquire(take)).await?;
-        file.write_all(&bytes[..take]).await?;
-        file.flush().await?;
-        let counted = shared.record(idx, take as u64);
-        pos += counted;
-        *received += counted;
+        buf.extend_from_slice(&bytes[..take]);
+        if buf.len() >= WRITE_BATCH {
+            write_batch(shared, idx, &mut file, &mut buf, &mut pos, received).await?;
+        }
     }
+    write_batch(shared, idx, &mut file, &mut buf, &mut pos, received).await?;
     if pos < seg_pos(shared, idx)?.1 {
         return Err(Stop::Retry(format!("segment {idx} ended early")));
     }
     Ok(SegEnd::Complete)
+}
+
+/// Writes the gathered bytes of segment `idx` at `pos`, then records them.
+async fn write_batch(
+    shared: &Shared,
+    idx: usize,
+    file: &mut tokio::fs::File,
+    buf: &mut Vec<u8>,
+    pos: &mut u64,
+    received: &mut u64,
+) -> Result<(), Stop> {
+    if buf.is_empty() {
+        return Ok(());
+    }
+    file.write_all(buf).await?;
+    file.flush().await?;
+    let counted = shared.record(idx, buf.len() as u64);
+    *pos += counted;
+    *received += counted;
+    buf.clear();
+    Ok(())
 }
 
 /// Checks the length, fsyncs and renames `.part` to its final name.

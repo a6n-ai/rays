@@ -56,8 +56,10 @@ impl EventHub {
     }
     /// Bytes arrived: delivered no sooner than PROGRESS_INTERVAL after the previous delivery.
     pub fn progress(&self, id: JobId) {
-        self.lock().changed.insert(id);
-        self.notify.notify_one();
+        // Already pending means the consumer is already woken; another notify only spins it.
+        if self.lock().changed.insert(id) {
+            self.notify.notify_one();
+        }
     }
     /// Job deleted: delivered immediately; also drops any pending change for `id`.
     pub fn removed(&self, id: JobId) {
