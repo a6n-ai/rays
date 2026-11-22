@@ -1,0 +1,120 @@
+name: Browser extension
+
+# Every change to extension/ on main is packaged once and submitted to both stores for review.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extension/**"
+      - "scripts/package-extension.sh"
+      - ".github/workflows/extension.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extension
+  cancel-in-progress: false
+
+env:
+  # Each store needs a higher version on every upload; 0.1.0 was the first, uploaded by hand.
+  EXT_VERSION: 0.1.${{ github.run_number }}
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: scripts/package-extension.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: |
+            build/extension/chrome.zip
+            build/extension/firefox.zip
+
+  chrome:
+    needs: package
+    runs-on: ubuntu-latest
+    env:
+      ITEM: publishers/${{ secrets.CWS_PUBLISHER_ID }}/items/mgepiogdappnhmohefhalmeppkfciail
+    steps:
+      - name: Check Chrome Web Store secrets
+        id: keys
+        env:
+          SA: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+          PUB: ${{ secrets.CWS_PUBLISHER_ID }}
+        run: |
+          if [ -z "$SA" ] || [ -z "$PUB" ]; then
+            echo "::notice::Set repo secrets CWS_PUBLISHER_ID and CWS_SERVICE_ACCOUNT_JSON to publish to the Chrome Web Store."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v4
+        if: steps.keys.outputs.ready == 'true'
+        with:
+          name: extension
+      - name: Get access token
+        if: steps.keys.outputs.ready == 'true'
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          credentials_json: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+      - name: Upload and submit for review
+        if: steps.keys.outputs.ready == 'true'
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          api=https://chromewebstore.googleapis.com
+          auth="Authorization: Bearer $TOKEN"
+          state=$(curl -sfS -X POST -H "$auth" -T chrome.zip "$api/upload/v2/$ITEM:upload" | jq -r .uploadState)
+          for _ in $(seq 30); do
+            case "$state" in *IN_PROGRESS) ;; *) break ;; esac
+            sleep 10
+            state=$(curl -sfS -H "$auth" "$api/v2/$ITEM:fetchStatus" | jq -r .lastAsyncUploadState)
+          done
+          echo "upload: $state"
+          [ "$state" = "SUCCEEDED" ] || { echo "::error::Upload ended in $state"; exit 1; }
+          curl -sfS -X POST -H "$auth" -H "Content-Type: application/json" -d '{}' "$api/v2/$ITEM:publish" | jq .
+          echo "::notice::Chrome: Rays extension $EXT_VERSION submitted for review."
+
+  firefox:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check AMO secrets
+        id: keys
+        env:
+          ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+        run: |
+          if [ -z "$ISSUER" ]; then
+            echo "::notice::Set repo secrets AMO_JWT_ISSUER and AMO_JWT_SECRET to publish to addons.mozilla.org."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.keys.outputs.ready == 'true'
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        if: steps.keys.outputs.ready == 'true'
+        with:
+          name: extension
+      - name: Submit to addons.mozilla.org for review
+        if: steps.keys.outputs.ready == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          mkdir firefox && unzip -q firefox.zip -d firefox
+          # Listed: AMO hosts and updates it after review, so don't wait for approval.
+          npx --yes web-ext@8 sign --channel listed --approval-timeout 0 --source-dir firefox --artifacts-dir out
+          echo "::notice::Firefox: Rays extension $EXT_VERSION submitted for review."
