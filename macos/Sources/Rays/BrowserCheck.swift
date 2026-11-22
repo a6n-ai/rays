@@ -5,7 +5,7 @@ import Observation
 /// Reads browser files to report helper and extension status. Only `installHelper` writes, and only on a click.
 enum BrowserCheck {
     static let hostName = "ai.a6n.rays"
-    static let chromeID = "ibcagaikmkbigbllllcihhafjkbobhci"
+    static let chromeID = "mgepiogdappnhmohefhalmeppkfciail"
     static let firefoxID = "rays@a6n.ai"
     static let manifestName = "\(hostName).json"
     static let temporaryAddonNote =

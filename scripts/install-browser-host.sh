@@ -1,34 +1,21 @@
 #!/usr/bin/env bash
 # Registers bin/dl as the Rays native messaging host for Chrome-family browsers and Firefox.
 # Usage: scripts/install-browser-host.sh [chrome-extension-id]
-# The extension key lives in build/ (gitignored); its public half is pinned in extension/manifest.json
-# so the unpacked Chrome ID is stable. Do not commit the .pem.
+# The Chrome Web Store's public key is pinned in extension/manifest.json, so the unpacked ID
+# matches the store ID. Google holds the private key.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 DL="$ROOT/bin/dl"
 HOST=ai.a6n.rays
 FIREFOX_ID=rays@a6n.ai
-KEY="$ROOT/build/rays-extension-key.pem"
-PUB_DER="$ROOT/build/rays-extension-pub.der"
 MANIFEST="$ROOT/extension/manifest.json"
 
 [[ -x "$DL" ]] || { echo "missing $DL: build the CLI first" >&2; exit 1; }
 
-if [[ ! -f "$KEY" ]]; then
-  openssl genrsa -out "$KEY" 2048 2>/dev/null
-  chmod 600 "$KEY"
-  echo "generated $KEY"
-fi
-openssl rsa -in "$KEY" -pubout -outform DER -out "$PUB_DER" 2>/dev/null
-PUB_B64="$(openssl base64 -A -in "$PUB_DER")"
-DEFAULT_ID="$(shasum -a 256 "$PUB_DER" | cut -c1-32 | tr '0123456789abcdef' 'abcdefghijklmnop')"
+PUB_B64="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["key"])' "$MANIFEST")"
+DEFAULT_ID="$(printf %s "$PUB_B64" | openssl base64 -d -A | shasum -a 256 | cut -c1-32 | tr '0123456789abcdef' 'abcdefghijklmnop')"
 ID="${1:-$DEFAULT_ID}"
-
-if ! grep -qF "$PUB_B64" "$MANIFEST"; then
-  echo "warning: extension/manifest.json \"key\" does not match $KEY; set it to:" >&2
-  echo "  \"key\": \"$PUB_B64\"" >&2
-fi
 
 write_manifest() { # dir, browser-specific allow-list line
   mkdir -p "$1"

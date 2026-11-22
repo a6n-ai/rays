@@ -5,7 +5,7 @@
   "description": "Send links to the Rays download manager. Made by a6n.",
   "author": "a6n",
   "homepage_url": "https://rays.a6n.ai",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApXD54D/ynOgHoydt9TkcF2GREBsWzUb8ku42af3dHZNNSCF2TkbW9lbLb7p6QEHKVeHO7SzaHxGhdGs3iGblUP0XtTjEVGGdsO1L2A9MtYHmIBFzaGYCf03S32uSPdM9/4H3R7JugL5qPHNHLtYLI7yctALmcpux5/LDcdBHrXx9JNDtRskrQiREXnz9E6JtEzaIVPSFqKZP6d1OJdJ8kXBlV5Z6sWTP1ifa+aDwgnzGQnvB6YZHgskTIoEV7LybBB5OrsKX1MC17io7UJnud1wsmNUlEdezgZkms9UC1dhboXGox1O6PuhpCS+1HUv976txxtatjxO4aBosc0h2PwIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiuwatEZ8XpAA5DIrKpSt04rm/2Cmk75liVkow8ZezzvP39lh4ZfvPy5cGg9LGws/WrRgqudGwxAB6Wtv7HYkW9HOEbLq5hxVsmVfAO3H2Cw+1Pyh1634MhMRp9GQc+edLPUDzuil/7g9CHPDb3XNsWidvXpttdsiEhTUebO6X5Avs/uLZxV1nU8ioQo67kI1Yz3iEaWI7oJSzdf0aBBYKB3pY3c1AaBHJClBkYebLWiHVF0IxA+MTheCAj+7P3eXpuvGzFNNizKOSE/EYejwVuR2fpQYZYFEvFR08xNdHu8tk7Pi4TIDYpC5k6jAdd3hbU4WmrHcvqiyPtxxCyUSTwIDAQAB",
   "permissions": ["contextMenus", "nativeMessaging", "downloads", "storage"],
   "background": {
     "service_worker": "background.js",
