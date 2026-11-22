@@ -69,9 +69,14 @@ It downloads a 100 MB file from a Hetzner speed-test server with a cap of 1, 4 a
 
 *100% = the speed of one connection on the same run. One wired line in Asia to Hetzner Singapore. The last run was on a congested line, where extra connections helped; on a line one connection fills, Rays now stays near one connection instead of slowing down.*
 
+What we measured and kept:
+
+- **Batched disk writes.** Each connection gathers 256 KB before writing, instead of writing and flushing every 16 KB chunk, and the app is woken once per update instead of once per chunk. On a local 1 GB test server both versions run at about 3.4 GB/s, far above any home line, and the batched one uses about 20% less CPU (0.35 against 0.44 CPU seconds per GB).
+
 What we measured and dropped:
 
-- **Batched disk writes.** On a local 1 GB test server, writing each chunk as it arrives already sustains 1.2 to 1.5 GB/s, about 100 times faster than a fast home line. Batching writes into 1 MB blocks added CPU work and no speed, so Rays writes each chunk directly.
+- **Starting big files on 4 connections, and re-probing sooner after a failed probe.** In an A/B test on a real line it was slower with up to 16 connections (5.6 against 8.5 MB/s, median of 7) and no faster with 4: the extra probing and removing cost more than it found.
+- **A faster build (`opt-level = 3`) and more engine threads (4 instead of 2).** No change in speed or CPU on the local test server, so Rays keeps the smaller app.
 - **HTTP/3 (QUIC).** On one connection, HTTP/3 averaged 8.5 MB/s against 8.9 MB/s over TCP. Rays ships with HTTP/3 off. It can be built in with the `http3` feature to test.
 
 Your results depend on your line and the server. Run the benchmark against a server near you to see your own numbers.
