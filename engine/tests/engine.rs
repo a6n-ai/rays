@@ -480,7 +480,11 @@ fn speed_limit_lifted_mid_download_speeds_it_up() {
     engine.set_speed_limit(0);
     let started = Instant::now();
     let path = wait_done(&engine, id);
-    assert!(started.elapsed() < Duration::from_secs(8), "still slow after lifting limit: {:?}", started.elapsed());
+    // Relative, not a fixed time: the paced origin is slower on a busy CI runner. Still at the 1 MiB/s
+    // limit, the rest would take `remaining` seconds; lifted, it must beat that clearly.
+    let remaining = (BIG as u64 - throttled) as f64 / f64::from(1u32 << 20);
+    let took = started.elapsed().as_secs_f64();
+    assert!(took < remaining * 0.6, "still slow after lifting limit: {took:.1}s, limit would take {remaining:.1}s");
     assert_eq!(sha_of(&path), sha(&big_payload()));
     engine.shutdown();
 }
