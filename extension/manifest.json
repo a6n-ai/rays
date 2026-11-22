@@ -2,7 +2,9 @@
   "manifest_version": 3,
   "name": "Rays",
   "version": "0.1.0",
-  "description": "Send links to the Rays download manager.",
+  "description": "Send links to the Rays download manager. Made by a6n.",
+  "author": "a6n",
+  "homepage_url": "https://rays.a6n.ai",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApXD54D/ynOgHoydt9TkcF2GREBsWzUb8ku42af3dHZNNSCF2TkbW9lbLb7p6QEHKVeHO7SzaHxGhdGs3iGblUP0XtTjEVGGdsO1L2A9MtYHmIBFzaGYCf03S32uSPdM9/4H3R7JugL5qPHNHLtYLI7yctALmcpux5/LDcdBHrXx9JNDtRskrQiREXnz9E6JtEzaIVPSFqKZP6d1OJdJ8kXBlV5Z6sWTP1ifa+aDwgnzGQnvB6YZHgskTIoEV7LybBB5OrsKX1MC17io7UJnud1wsmNUlEdezgZkms9UC1dhboXGox1O6PuhpCS+1HUv976txxtatjxO4aBosc0h2PwIDAQAB",
   "permissions": ["contextMenus", "nativeMessaging", "downloads", "storage"],
   "background": {
