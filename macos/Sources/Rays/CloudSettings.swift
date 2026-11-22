@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Settings > Cloud: S3-compatible buckets. A provider preset fills the endpoint; every field stays editable.
-struct CloudTab: View {
+/// Cloud > Buckets: S3-compatible buckets. A provider preset fills the endpoint; every field stays editable.
+struct BucketsForm: View {
     @Environment(EngineModel.self) private var model
     @State private var providerID = "aws"
     @State private var name = ""
@@ -28,7 +28,7 @@ struct CloudTab: View {
         Form {
             Section("Buckets") {
                 if model.buckets.isEmpty {
-                    Text("No buckets yet. Add one below, then browse it from the sidebar.")
+                    Text("No buckets yet. Add one below, then browse it.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.buckets, id: \.name) { bucket in

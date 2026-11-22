@@ -19,9 +19,6 @@ struct SettingsView: View {
             Tab("Browsers", systemImage: "globe", value: "browsers") {
                 BrowsersTab()
             }
-            Tab("Cloud", systemImage: "cloud", value: "cloud") {
-                CloudTab()
-            }
         }
         .containerBackground(.thinMaterial, for: .window)
         .frame(width: 520)

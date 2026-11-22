@@ -1,6 +1,6 @@
 ---
 title: "Rays settings"
-description: "Every Rays setting explained: appearance, download folder, parallel downloads, speed limit, sorting, browser helpers, the dl command S3 buckets and uninstalling."
+description: "Every Rays setting explained: appearance, download folder, parallel downloads, speed limit, sorting, browser helpers, the dl command and uninstalling."
 ---
 
 Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make them.
@@ -22,10 +22,6 @@ Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make
 ## Sorting
 
 The main [sorter](/docs/app/sorter/) settings: whether on-device AI is ready, how long to wait before sorting, renaming from content, and the folders being watched, with a button to open the Sorter.
-
-## Cloud
-
-Add and remove [S3 buckets](/docs/s3/). Pick a provider (or **Generic S3**), enter the bucket name and keys, and click **Add Bucket**. Rays checks the keys first and saves the secret key to your Keychain.
 
 ## Browsers
 

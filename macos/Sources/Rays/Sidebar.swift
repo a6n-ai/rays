@@ -4,7 +4,7 @@ enum Destination: Hashable {
     case downloads
     case sorter
     case folder(URL)
-    case bucket(String)
+    case cloud
 }
 
 struct SidebarFolder: Identifiable {
@@ -53,16 +53,10 @@ struct SidebarView: View {
                     .tag(Destination.downloads)
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
+                Label("Cloud", systemImage: "cloud")
+                    .tag(Destination.cloud)
             } header: {
                 Text("Rays")
-            }
-            if !model.buckets.isEmpty {
-                Section("Buckets") {
-                    ForEach(model.buckets, id: \.name) { bucket in
-                        Label(bucket.name, systemImage: "cloud")
-                            .tag(Destination.bucket(bucket.name))
-                    }
-                }
             }
             Section("Folders", isExpanded: $foldersExpanded) {
                 if denied {

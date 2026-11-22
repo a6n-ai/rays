@@ -16,7 +16,7 @@ Rays is made by a6n. This policy covers the Rays app for Mac, the `dl` command, 
 - Settings, download history and sorter rules are stored only on your Mac.
 - Rays has no analytics, tracking, advertising or crash reporting.
 - To check for updates, Rays asks GitHub for the latest release (`api.github.com`). GitHub sees your IP address, as with any web request. See [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
-- If you add a bucket in Settings > Cloud, Rays connects to the S3-compatible service you chose to list and download your files. That service's own privacy policy applies. Your secret key is stored in the macOS Keychain on your Mac.
+- If you add a bucket in Cloud, Rays connects to the S3-compatible service you chose to list and download your files. That service's own privacy policy applies. Your secret key is stored in the macOS Keychain on your Mac.
 
 ## The browser extension
 

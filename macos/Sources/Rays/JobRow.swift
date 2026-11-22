@@ -70,6 +70,19 @@ struct JobRow: View {
                 status
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if job.isDone, let url = model.locate(job) {
+                ShareLink(item: url) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .opacity(isHovered ? 1 : 0)
+                .help("Share or AirDrop \(job.name)")
+                .accessibilityLabel("Share \(job.name)")
+            }
             moreButton
             primaryButton
         }
@@ -302,8 +315,14 @@ struct JobRow: View {
     @ViewBuilder private var menu: some View {
         if !job.isDone {
             Button { perform(primary) } label: { Label(primary.title, systemImage: primary.symbol) }
-        } else if !isMissing {
+        } else if let url = model.locate(job) {
             Button { model.reveal(job) } label: { Label("Show in Finder", systemImage: "folder") }
+            Button {
+                NSSharingService(named: .sendViaAirDrop)?.perform(withItems: [url])
+            } label: {
+                Label("AirDrop", systemImage: "dot.radiowaves.up.forward")
+            }
+            ShareLink(item: url) { Label("Share…", systemImage: "square.and.arrow.up") }
         }
         Button {
             NSPasteboard.general.clearContents()
