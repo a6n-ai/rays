@@ -103,6 +103,8 @@ private struct DownloadsView: View {
     @State private var filter = Filter.all
     @State private var selection = Set<UInt64>()
     @State private var removal: [JobView] = []
+    /// The sorter moves finished files out of the downloads folder; rows then show where each one went.
+    @State private var watcher = DirectoryWatcher()
 
     private enum Filter: String, CaseIterable, Identifiable {
         case all = "All", active = "Active", finished = "Finished"
@@ -136,6 +138,8 @@ private struct DownloadsView: View {
             .navigationTitle("Rays")
             .navigationSubtitle(subtitle)
             .toolbar { toolbar }
+            .onAppear { watcher.watch(EngineModel.downloadsURL) { model.foldersChanged() } }
+            .onDisappear { watcher.stop() }
             .confirmationDialog(
                 removalTitle, isPresented: Binding(get: { !removal.isEmpty }, set: { if !$0 { removal = [] } }),
                 titleVisibility: .visible

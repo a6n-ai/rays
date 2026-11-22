@@ -12,6 +12,9 @@ final class FileTracker {
         bookmarks = (try? PropertyListDecoder().decode([String: Data].self, from: Data(contentsOf: storeURL))) ?? [:]
     }
 
+    /// Drops cached locations after a folder change, so a file the sorter just moved is looked up again.
+    func refresh() { cache.removeAll() }
+
     func hasBookmark(for id: UInt64) -> Bool { bookmarks[String(id)] != nil }
 
     func record(id: UInt64, url: URL) {

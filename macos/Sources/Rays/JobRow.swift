@@ -185,6 +185,8 @@ struct JobRow: View {
         case .retrying(let attempt):
             parts = [Part("Reconnecting, try \(attempt) of 5")]
         case .done:
+            // Read so the row redraws when the sorter moves its file.
+            _ = model.folderRevision
             if let url = model.locate(job) {
                 // Where the file is now matters more than when it finished, so the time is dropped here.
                 parts = [Part(model.location(of: url), symbol: "folder"), Part(byteText(job.total ?? job.done))]

@@ -149,7 +149,10 @@ final class EngineModel {
         foldersChanged()
     }
 
-    func foldersChanged() { folderRevision += 1 }
+    func foldersChanged() {
+        files.refresh()
+        folderRevision += 1
+    }
 
     /// Standardized paths of finished downloads, so folder views can mark the files Rays fetched.
     func trackedPaths() -> Set<String> {
