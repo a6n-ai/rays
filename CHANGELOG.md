@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.6 (22 Nov 2026)
+
+- Download from S3 buckets: Amazon S3, Cloudflare R2, Backblaze B2, Wasabi, MinIO and any S3-compatible service. Add a bucket in Settings > Cloud, then browse it in the sidebar. `dl` and MCP can download from buckets too. Secret keys stay in your Keychain.
+- Faster downloads: big files start on 4 connections, and Rays adds connections only while they make the download faster.
+- Works with the Rays extension from the Chrome Web Store. If you loaded the extension by hand before, remove it and load it again, then click Install All Helpers in Settings > Browsers.
+
 ## 0.1.5 (18 Nov 2026)
 
 - One command, `dl`, now covers sorting too: `dl list`, `dl sort`, `dl watch`, `dl unwatch`, `dl status` and `dl config`.
