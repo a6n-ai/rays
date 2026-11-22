@@ -320,6 +320,7 @@ enum SettingsKey {
     static let maxRunning = "maxRunning"
     static let downloadsDir = "downloadsDir"
     static let sorterPath = "sorterPath"
+    static let menuBar = "showsMenuBar"
 }
 
 struct SpeedPreset: Identifiable {

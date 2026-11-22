@@ -5,6 +5,7 @@ import SwiftUI
 struct RaysApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage(AppearanceChoice.key) private var appearance = AppearanceChoice.system
+    @AppStorage(SettingsKey.menuBar) private var showsMenuBar = true
 
     var body: some Scene {
         Window("Rays", id: "main") {
@@ -30,6 +31,13 @@ struct RaysApp: App {
             SettingsView()
                 .environment(appDelegate.model)
         }
+
+        MenuBarExtra(isInserted: $showsMenuBar) {
+            MenuBarPanel().environment(appDelegate.model)
+        } label: {
+            MenuBarLabel().environment(appDelegate.model)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 
@@ -54,7 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         sizeWindowOnce()
         Updater.shared.checkIfDue()
+        dock = DockProgress(model: model)
     }
+    private var dock: DockProgress?
 
     /// Earlier builds opened at 640x480 and macOS keeps that size, so `defaultSize` never applies.
     /// Set the new default size once; afterwards the size the user picks is kept.
@@ -91,8 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.add(links.joined(separator: "\n"))
     }
 
-    // Closing the only window quits, so the quit path (warning and shutdown) always runs.
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    // With the menu bar item on, Rays keeps downloading after the window closes, like other download managers.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !(UserDefaults.standard.object(forKey: SettingsKey.menuBar) as? Bool ?? true)
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let lost = model.unresumableActive

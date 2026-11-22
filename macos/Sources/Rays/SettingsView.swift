@@ -76,6 +76,7 @@ private struct GeneralTab: View {
     @AppStorage(AppearanceChoice.key) private var appearance = AppearanceChoice.system
     @AppStorage(SettingsKey.downloadsDir) private var customFolder = ""
     @AppStorage(SettingsKey.sorterPath) private var sorterPath = Sorter.defaultPath
+    @AppStorage(SettingsKey.menuBar) private var showsMenuBar = true
     let sorter: SorterModel
     @State private var folderError: String?
 
@@ -112,6 +113,13 @@ private struct GeneralTab: View {
                 }
                 if let folderError {
                     ErrorLine(text: folderError)
+                }
+
+                SettingRow(symbol: "menubar.arrow.down.rectangle", color: .indigo,
+                           title: "Show in menu bar", hint: "See and pause downloads from the menu bar. Closing the window keeps Rays running.") {
+                    Toggle("Show in menu bar", isOn: $showsMenuBar)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                 }
             }
 
