@@ -45,8 +45,33 @@ jobs:
       - name: uv (for dmgbuild)
         run: brew install uv
 
+      - name: Import signing certificate
+        env:
+          P12: ${{ secrets.RAYS_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.RAYS_SIGNING_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then
+            echo "::warning::RAYS_SIGNING_P12 is not set; signing ad hoc, so updates ask for permissions again."
+            exit 0
+          fi
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          kp="$(uuidgen)"
+          security create-keychain -p "$kp" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kp" "$kc"
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/rays.p12"
+          security import "$RUNNER_TEMP/rays.p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/rays.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kp" "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          echo "RAYS_SIGN_IDENTITY=Rays Release" >> "$GITHUB_ENV"
+
       - name: Build Rays.app
         run: scripts/bundle-app.sh
+
+      - name: Check signature
+        if: env.RAYS_SIGN_IDENTITY != ''
+        run: codesign -d -r- bin/Rays.app 2>&1 | grep 'certificate root'
 
       - name: Package
         run: |

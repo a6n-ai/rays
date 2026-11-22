@@ -6,6 +6,14 @@ cd "$(dirname "$0")/.."
 
 scripts/build-engine.sh
 
+# One certificate for every release keeps the code identity the same across updates, so macOS
+# keeps folder access and Keychain items. CI imports it from secrets; locally it's in the login keychain.
+identity="${RAYS_SIGN_IDENTITY:-}"
+if [ -z "$identity" ]; then
+  if security find-identity -p codesigning 2>/dev/null | grep -q '"Rays Release"'; then identity="Rays Release"; else identity=-; fi
+fi
+[ "$identity" = - ] && echo "warning: signing ad hoc; updates will ask for folder and Keychain access again" >&2
+
 swift_flags=(-c release --package-path macos --arch arm64 --arch x86_64)
 swift build "${swift_flags[@]}"
 bin_dir="$(swift build "${swift_flags[@]}" --show-bin-path)"
@@ -36,11 +44,11 @@ cargo build --release -p sorter -p extract --target x86_64-apple-darwin
 for bin in sorter extract; do
   lipo -create "target/aarch64-apple-darwin/release/$bin" "target/x86_64-apple-darwin/release/$bin" -output "target/release/$bin-universal"
   cp "target/release/$bin-universal" "$app/Contents/MacOS/$bin"
-  codesign --force -s - "$app/Contents/MacOS/$bin"
+  codesign --force -s "$identity" "$app/Contents/MacOS/$bin"
 done
 
-codesign --force -s - "$app/Contents/MacOS/dl"
-codesign --force -s - "$app"
+codesign --force -s "$identity" "$app/Contents/MacOS/dl"
+codesign --force -s "$identity" "$app"
 
 du -sh "$app"
 ls -l bin/dl
