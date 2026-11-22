@@ -69,34 +69,6 @@ It downloads a 100 MB file from a Hetzner speed-test server with a cap of 1, 4 a
 
 *100% = the speed of one connection on the same run. One wired line in Asia to Hetzner Singapore. The last run was on a congested line, where extra connections helped; on a line one connection fills, Rays now stays near one connection instead of slowing down.*
 
-### Rays against other tools
-
-No download manager we looked at publishes how it measures its speed claims, so here is ours, with the script:
-
-```sh
-scripts/bench-vs.sh https://sin-speed.hetzner.com/100MB.bin 3
-```
-
-Each round downloads the same 100 MB file once with every tool, in the same order, after one warm-up round that isn't counted.
-
-| Tool | Median | Slowest to fastest run |
-|---|---|---|
-| Rays (adaptive, up to 16 connections) | 8.7 MB/s | 4.5 to 9.1 MB/s |
-| aria2 1.37, 16 connections (`-x16 -s16`) | 9.4 MB/s | 8.6 to 9.9 MB/s |
-| aria2 1.37, default settings | 5.8 MB/s | 2.0 to 10.6 MB/s |
-| curl 8.7 | 9.6 MB/s | 1.9 to 11.0 MB/s |
-| wget 1.25 | 1.2 MB/s | 1.2 to 4.5 MB/s |
-
-*3 rounds on 22 Nov 2026. Apple M3 Pro, one home line in Asia to Hetzner Singapore.*
-
-What it shows, honestly:
-
-- **This line tops out near 10 MB/s.** Rays, aria2 with 16 connections and curl all reached it. When one connection can fill a line, more connections can't make it faster. That's why Rays starts on one and adds more only when they pay.
-- **The line itself swung a lot.** curl's runs ranged from 1.9 to 11 MB/s, and the medians sit inside each other's ranges. Three rounds can't separate the top three. Rays had one slow run (4.5 MB/s) and was otherwise within 10% of aria2's best.
-- **aria2's defaults and wget fell behind.** aria2 uses one connection per server unless you raise `-x`, and wget always uses one.
-
-Free Download Manager has no command line, so it isn't in the scripted test. Your line and server will give different numbers. Run the script to see yours.
-
 What we measured and dropped:
 
 - **Batched disk writes.** On a local 1 GB test server, writing each chunk as it arrives already sustains 1.2 to 1.5 GB/s, about 100 times faster than a fast home line. Batching writes into 1 MB blocks added CPU work and no speed, so Rays writes each chunk directly.

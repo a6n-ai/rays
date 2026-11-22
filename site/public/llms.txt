@@ -12,7 +12,7 @@
 
 - [Getting started](https://rays.a6n.ai/docs/getting-started/): install, first download, turn on sorting.
 - [Features](https://rays.a6n.ai/docs/features/): everything Rays does, its limits in numbers, and what it does not do (torrents, video grabbing, scheduling).
-- [How the engine works](https://rays.a6n.ai/docs/engine/): adaptive connections, crash-safe resume, and benchmarks against aria2, curl and wget with the script to rerun them.
+- [How the engine works](https://rays.a6n.ai/docs/engine/): adaptive connections, crash-safe resume, and the A/B benchmarks behind each choice, with the script to rerun them.
 - [Install](https://rays.a6n.ai/docs/install/), [Downloads](https://rays.a6n.ai/docs/app/downloads/), [Sorter](https://rays.a6n.ai/docs/app/sorter/), [Browser extension](https://rays.a6n.ai/docs/app/browser/) ([Chrome Web Store](https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail), [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/rays@a6n.ai/)), [Settings](https://rays.a6n.ai/docs/app/settings/), [S3 buckets](https://rays.a6n.ai/docs/s3/), [MCP](https://rays.a6n.ai/docs/mcp/), [Troubleshooting](https://rays.a6n.ai/docs/troubleshooting/).
 - [The dl command](https://rays.a6n.ai/docs/dl/): `dl URL...`, `dl s3://BUCKET/KEY`, `dl bucket`, `dl ls`, `dl list`, `dl sort`, `dl watch`, `dl status`, `dl config`, `dl mcp`, exit codes and environment variables.
 - [Release notes](https://rays.a6n.ai/releases/): what changed in each version.

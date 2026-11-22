@@ -17,7 +17,7 @@ Rays is free, open source (AGPL-3.0) and made for macOS 26. There is no account,
 | Data sent to a6n | None. No analytics, tracking or crash reporting |
 | Price | Free |
 
-Speed against aria2, curl and wget, with the script to rerun it: [Benchmarks](/docs/engine/#rays-against-other-tools).
+How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engine/#benchmarks).
 
 ## Downloads
 
