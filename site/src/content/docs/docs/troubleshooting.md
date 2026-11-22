@@ -27,7 +27,7 @@ Open Rays, go to **Settings > General**, and click **Install** next to **Command
 
 ## Download with Rays does nothing in the browser
 
-Open **Settings > Browsers**. The browser should show **Connected to Rays**. If it says the helper is missing or needs repair, click **Install All Helpers** and reload the extension. Firefox temporary add-ons are removed when Firefox restarts.
+Open **Settings > Browsers**. The browser should show **Connected to Rays**. If it says the helper is missing or needs repair, click **Install All Helpers** and reload the extension.
 
 ## Where Rays keeps files
 
