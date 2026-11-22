@@ -122,3 +122,13 @@ Slower at cap 16 in 6 of 7 rounds, so both were reverted. The ramp hypothesis di
 reaches the line's ceiling. Batched segment writes (256 KiB) and one event wake-up per pending job were kept:
 same speed, about 20% less CPU on a local 1 GB server (`engine/examples/serve.rs`). `opt-level = 3` and 4 worker
 threads showed no gain and were not kept.
+
+## Result: graceful removal (A/B, 23 Nov 2026)
+
+Removing a connection the aria2 way (the newest segment ends 1 MiB past its written bytes and the rest is parked,
+instead of stopping its request) measured no better: cap 4 9.3 vs 8.6 MB/s, cap 16 9.0 vs 9.4 MB/s (old vs new,
+median of 7), with the per-round winner flipping. Reverted.
+
+The A/B script first ran the old engine first in every round. With the order alternated, whichever engine ran
+second was faster in 6 of 7 cap-4 rounds, so on this line a gap of about 1.5 MB/s is noise. The "start on 4
+parts" result above was measured with the fixed order and should be read with that in mind.

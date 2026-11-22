@@ -115,7 +115,10 @@ impl Scheduler {
             loop {
                 tick.tick().await;
                 match weak.upgrade() {
-                    Some(s) => s.flush_progress(),
+                    // It fsyncs, so it runs on the blocking pool, not on one of the two runtime threads.
+                    Some(s) => {
+                        let _ = tokio::task::spawn_blocking(move || s.flush_progress()).await;
+                    }
                     None => break,
                 }
             }
@@ -506,13 +509,28 @@ impl Scheduler {
     }
 
     /// Copies the live byte counters into the jobs that are transferring and saves them.
+    /// Saves each active job's progress. The progress is read before the `.part` is synced, so every byte the
+    /// saved plan counts is on disk even after a power cut, not just in the page cache. The save itself runs under
+    /// the job lock, as before, so it can never overwrite a newer Done or Paused.
     fn flush_progress(&self) {
         let lives = lock(&self.jobs).to_vec();
         for live in &lives {
-            let mut job = lock(&live.job);
+            let snapshot = {
+                let job = lock(&live.job);
+                if !is_active(&job.state) {
+                    continue;
+                }
+                let mut snap = job.clone();
+                snap.done = live.done.load(Ordering::Relaxed);
+                snap
+            };
+            if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&snapshot.part_path) {
+                let _ = file.sync_data();
+            }
+            let job = lock(&live.job);
             if is_active(&job.state) {
-                job.done = live.done.load(Ordering::Relaxed);
-                let _ = self.store.save(&job);
+                // A split since the snapshot only lowered ends; the older plan still covers every byte.
+                let _ = self.store.save(&Job { state: job.state.clone(), ..snapshot });
             }
         }
     }
