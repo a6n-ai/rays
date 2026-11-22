@@ -78,9 +78,10 @@ sorter (`sorter/`, `extract/`) and the website (`site/`). Design: [docs/designs/
 through native messaging, with the bundled `dl` as the host.
 
 1. In Rays, open **Settings > Browsers** and click **Install All Helpers**.
-2. Click **Show Extension Folder**, then load it: Chrome-family browsers via `chrome://extensions`,
-   **Developer mode**, **Load unpacked**; Firefox and Zen via `about:debugging`, **This Firefox**,
-   **Load Temporary Add-on**, `manifest.json`.
+2. Chrome, Brave and Edge: install [Rays from the Chrome Web Store](https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail).
+   Firefox and Zen: click **Show Extension Folder**, then `about:debugging`, **This Firefox**,
+   **Load Temporary Add-on**, `manifest.json`. Developers can load `extension/` unpacked in any Chrome-family
+   browser; the pinned store key gives it the same ID.
 
 Right-click a link and choose **Download with Rays**. The toolbar badge shows `+N` on success and `!`
 on error. The extension's options page has **Send all browser downloads to Rays**; the browser's copy is
