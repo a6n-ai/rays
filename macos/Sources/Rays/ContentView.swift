@@ -144,8 +144,19 @@ private struct DownloadsView: View {
                 removalTitle, isPresented: Binding(get: { !removal.isEmpty }, set: { if !$0 { removal = [] } }),
                 titleVisibility: .visible
             ) {
-                Button("Remove and Delete Partial Files", role: .destructive) { confirmRemoval(deletePartial: true) }
-                Button("Remove and Keep Partial Files") { confirmRemoval(deletePartial: false) }
+                if removal.contains(where: \.isDone) {
+                    Button("Remove and Move Files to Trash", role: .destructive) {
+                        model.removeAndTrash(removal)
+                        removal = []
+                        selection = []
+                    }
+                }
+                if removal.contains(where: \.hasPartial) {
+                    Button("Remove and Delete Partial Files", role: .destructive) { confirmRemoval(deletePartial: true) }
+                }
+                Button(removal.contains(where: \.hasPartial) ? "Remove and Keep Partial Files" : "Remove from List") {
+                    confirmRemoval(deletePartial: false)
+                }
                 Button("Cancel", role: .cancel) {}
             }
     }
@@ -249,7 +260,8 @@ private struct DownloadsView: View {
     private func removeSelected() {
         let targets = selectedJobs
         guard !targets.isEmpty else { return }
-        if targets.contains(where: \.hasPartial) {
+        // Finished files and partials both have something on disk, so ask what to do with it.
+        if targets.contains(where: { $0.hasPartial || $0.isDone }) {
             removal = targets
         } else {
             remove(targets, deletePartial: false)

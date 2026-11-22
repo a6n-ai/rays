@@ -190,6 +190,18 @@ final class EngineModel {
 
     func remove(_ id: UInt64, deletePartial: Bool) { engine?.remove(id: id, deletePartial: deletePartial) }
 
+    /// Finished files go to the Trash (so the user can put them back); unfinished ones lose their partial file.
+    func removeAndTrash(_ jobs: [JobView]) {
+        let urls = jobs.filter(\.isDone).compactMap(locate)
+        if !urls.isEmpty {
+            NSWorkspace.shared.recycle(urls) { _, error in
+                guard error != nil else { return }
+                Task { @MainActor in self.notice = "Couldn't move some files to the Trash." }
+            }
+        }
+        for job in jobs { remove(job.id, deletePartial: job.hasPartial) }
+    }
+
     /// A finished download may have been moved by the sorter, so a same-named, same-size file under the downloads folder counts.
     func locate(_ job: JobView) -> URL? {
         if files.hasBookmark(for: job.id) { return files.currentURL(for: job.id) }

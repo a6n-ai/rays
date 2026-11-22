@@ -70,6 +70,7 @@ struct JobRow: View {
                 status
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            moreButton
             primaryButton
         }
         .frame(height: LayoutMetrics.rowHeight)
@@ -270,6 +271,24 @@ struct JobRow: View {
         .accessibilityLabel("\(primary.title) \(job.name)")
     }
 
+    /// The context menu, shown on hover so Remove and Move to Trash are found without right-clicking.
+    private var moreButton: some View {
+        Menu { menu } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                .contentShape(Circle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .opacity(isHovered ? 1 : 0)
+        .help("More actions")
+        .accessibilityLabel("More actions for \(job.name)")
+    }
+
     private func perform(_ action: Primary) {
         switch action {
         case .pause: model.pause(job.id)
@@ -296,14 +315,11 @@ struct JobRow: View {
         Button(role: .destructive) {
             if job.hasPartial { confirmRemove = true } else { model.remove(job.id, deletePartial: false) }
         } label: {
-            Label("Remove…", systemImage: "trash")
+            Label(job.hasPartial ? "Remove…" : "Remove from List", systemImage: "minus.circle")
         }
-        if let url = model.locate(job) {
-            Button(role: .destructive) {
-                NSWorkspace.shared.recycle([url]) { _, _ in }
-                model.remove(job.id, deletePartial: false)
-            } label: {
-                Label("Remove and Delete File", systemImage: "trash.fill")
+        if model.locate(job) != nil {
+            Button(role: .destructive) { model.removeAndTrash([job]) } label: {
+                Label("Remove and Move to Trash", systemImage: "trash")
             }
         }
     }
