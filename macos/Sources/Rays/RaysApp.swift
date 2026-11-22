@@ -52,8 +52,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Backs the "Download with Rays" item in every app's Services menu (declared in Info.plist).
         NSApp.servicesProvider = self
         NSUpdateDynamicServices()
-        // Keeps the stable extension copy in step with this build, so a loaded extension stays current.
-        BrowserCheck.prepareExtensionFolder()
         sizeWindowOnce()
         Updater.shared.checkIfDue()
     }

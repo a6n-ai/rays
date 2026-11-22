@@ -66,7 +66,6 @@ private struct BrowserStatus: View {
     let failure: String?
     let install: () -> Void
     let remove: () -> Void
-    @State private var showSteps = false
     @State private var confirmRemove = false
 
     var body: some View {
@@ -84,8 +83,11 @@ private struct BrowserStatus: View {
                     Button(state.helper == .missing ? "Install Helper" : "Repair Helper", action: install)
                         .buttonStyle(.glass)
                 }
-                Button("Show Extension Folder") { NSWorkspace.shared.open(BrowserCheck.prepareExtensionFolder()) }
-                    .buttonStyle(.glass)
+                if state.addon != .added, let store = BrowserCheck.storeURL(for: state.browser.engine) {
+                    Button("Get Extension") { NSWorkspace.shared.open(store) }
+                        .buttonStyle(.glassProminent)
+                        .help(state.browser.engine == .firefox ? "Opens Rays on Firefox Add-ons." : "Opens Rays in the Chrome Web Store.")
+                }
                 if state.helper != .missing {
                     Button("Remove Helper", role: .destructive) { confirmRemove = true }
                         .buttonStyle(.glass)
@@ -102,17 +104,6 @@ private struct BrowserStatus: View {
             }
             if let failure {
                 ErrorLine(text: failure)
-            }
-            if state.addon != .added {
-                DisclosureGroup("How to add it", isExpanded: $showSteps) {
-                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                        Text("\(index + 1). \(step)")
-                    }
-                    if state.browser.engine == .chromium {
-                        Button("Copy address", action: copyAddress)
-                            .buttonStyle(.glass)
-                    }
-                }
             }
         }
     }
@@ -139,19 +130,6 @@ private struct BrowserStatus: View {
         case .unknown(let reason):
             StatusLine(symbol: "questionmark.circle", color: .secondary, text: "Extension status unknown", detail: reason)
         }
-    }
-
-    private var steps: [String] {
-        if state.browser.engine == .firefox {
-            ["Open about:debugging", "Click This Firefox → Load Temporary Add-on", "Choose manifest.json in the extension folder"]
-        } else {
-            ["Open chrome://extensions", "Turn on Developer mode", "Click Load unpacked and choose the extension folder"]
-        }
-    }
-
-    private func copyAddress() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("chrome://extensions", forType: .string)
     }
 }
 

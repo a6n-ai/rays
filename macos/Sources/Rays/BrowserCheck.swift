@@ -8,8 +8,9 @@ enum BrowserCheck {
     static let chromeID = "mgepiogdappnhmohefhalmeppkfciail"
     static let firefoxID = "rays@a6n.ai"
     static let manifestName = "\(hostName).json"
-    static let temporaryAddonNote =
-        "Temporary add-ons aren't saved; if you loaded it from about:debugging it works until Firefox restarts."
+    static let chromeStoreURL = URL(string: "https://chromewebstore.google.com/detail/\(chromeID)")!
+    static let firefoxStoreURL = URL(string: "https://addons.mozilla.org/firefox/addon/\(firefoxID)/")!
+    static let addonNotFoundNote = "Rays couldn't find it in any Firefox profile. Add it from Firefox Add-ons."
 
     enum Engine: Sendable { case chromium, firefox, safari }
 
@@ -70,29 +71,13 @@ enum BrowserCheck {
 
     /// The native host runs the copy inside the app bundle, so the manifest points there.
     static var dlURL: URL { Bundle.main.bundleURL.appending(path: "Contents/MacOS/dl") }
-    static var bundledExtensionURL: URL { Bundle.main.bundleURL.appending(path: "Contents/Resources/extension") }
 
-    /// A stable copy outside the app bundle: browsers can't pick folders inside an .app, and an
-    /// unpacked extension breaks if its folder moves or is replaced when the app updates.
-    static var extensionURL: URL {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        return home.appending(path: "Library/Application Support/Rays/Extension", directoryHint: .isDirectory)
-    }
-
-    /// Refreshes the stable copy from the bundle, replacing files in place so the path never changes.
-    @discardableResult
-    static func prepareExtensionFolder() -> URL {
-        let fm = FileManager.default
-        let dest = extensionURL
-        try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
-        if let items = try? fm.contentsOfDirectory(at: bundledExtensionURL, includingPropertiesForKeys: nil) {
-            for item in items {
-                let target = dest.appending(path: item.lastPathComponent)
-                try? fm.removeItem(at: target)
-                try? fm.copyItem(at: item, to: target)
-            }
+    static func storeURL(for engine: Engine) -> URL? {
+        switch engine {
+        case .chromium: chromeStoreURL
+        case .firefox: firefoxStoreURL
+        case .safari: nil
         }
-        return dest
     }
 
     static func appURL(for browser: Browser) -> URL? {
@@ -159,7 +144,7 @@ enum BrowserCheck {
             else { continue }
             return .added
         }
-        return .unknown(temporaryAddonNote)
+        return .unknown(addonNotFoundNote)
     }
 
     static func installHelper(_ browser: Browser) throws {

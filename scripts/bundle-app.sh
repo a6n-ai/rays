@@ -38,14 +38,6 @@ for bin in sorter extract; do
   cp "target/release/$bin-universal" "$app/Contents/MacOS/$bin"
   codesign --force -s - "$app/Contents/MacOS/$bin"
 done
-cp -R extension "$app/Contents/Resources/extension"
-# A signed Firefox/Zen package (from scripts/sign-firefox.sh) enables one-click "Add" in those browsers.
-# Without a local one, fetch the newest package CI signed (skipped quietly when offline or no gh).
-if [ ! -f build/firefox/rays.xpi ]; then
-  tag="$(gh release list --json tagName -q '[.[] | select(.tagName | startswith("extension-v"))][0].tagName' 2>/dev/null || true)"
-  if [ -n "$tag" ]; then gh release download "$tag" --pattern rays.xpi --dir build/firefox --clobber 2>/dev/null || true; fi
-fi
-if [ -f build/firefox/rays.xpi ]; then cp build/firefox/rays.xpi "$app/Contents/Resources/rays.xpi"; fi
 
 codesign --force -s - "$app/Contents/MacOS/dl"
 codesign --force -s - "$app"

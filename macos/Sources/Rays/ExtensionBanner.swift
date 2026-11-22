@@ -52,7 +52,7 @@ struct ExtensionBanner: View {
                 Text(helpersReady ? "Almost done: add the extension in \(names)" : "Add Rays to \(names)")
                     .font(.callout.weight(.semibold))
                 Text(helpersReady
-                     ? "Browsers only let you add extensions yourself. It takes three clicks."
+                     ? "Get it from your browser's extension store in one click."
                      : "Right-click any link to download it with Rays.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
