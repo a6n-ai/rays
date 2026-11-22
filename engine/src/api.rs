@@ -1,6 +1,7 @@
 //! UniFFI-exported `Engine` object: owns the tokio runtime and wires the modules together.
 use crate::events::EventHub;
 use crate::ipc;
+use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
 use crate::store::Store;
 use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView};
@@ -35,6 +36,7 @@ impl Engine {
             config.max_running,
             config.connections.max(1),
             config.speed_limit,
+            Arc::new(Keychain),
         )?;
         let socket_path = PathBuf::from(&config.socket_path);
         {
@@ -115,9 +117,43 @@ impl Engine {
         events
     }
 
+    /// Cloud provider presets for the bucket form, ending with Generic S3.
+    pub fn providers(&self) -> Vec<ProviderPreset> {
+        s3::providers()
+    }
+
+    /// Fills a preset's endpoint from its region and extra field (for example an R2 account ID).
+    pub fn provider_endpoint(&self, provider: String, region: String, field: String) -> Result<String, EngineError> {
+        s3::endpoint_for(&provider, &region, &field)
+    }
+
+    /// Checks the endpoint and keys with one listing, then saves the bucket; the secret goes to the Keychain.
+    pub async fn add_bucket(&self, config: BucketConfig, secret: String) -> Result<(), EngineError> {
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { sched.add_bucket(config, secret).await }).await.map_err(join_error)?
+    }
+
+    pub fn remove_bucket(&self, name: String) -> Result<(), EngineError> {
+        self.sched.remove_bucket(&name)
+    }
+
+    pub fn buckets(&self) -> Vec<BucketConfig> {
+        self.sched.buckets()
+    }
+
+    /// One level of `prefix` in `bucket`; pass `next_token` back for the next page.
+    pub async fn list_bucket(&self, bucket: String, prefix: String, token: Option<String>) -> Result<Listing, EngineError> {
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { sched.list_bucket(&bucket, &prefix, token).await }).await.map_err(join_error)?
+    }
+
     /// Pauses running jobs, saves state, removes the socket file.
     pub fn shutdown(&self) {
         self.sched.shutdown();
         let _ = std::fs::remove_file(&self.socket_path);
     }
+}
+
+fn join_error(e: tokio::task::JoinError) -> EngineError {
+    EngineError::Io { msg: format!("engine task: {e}") }
 }

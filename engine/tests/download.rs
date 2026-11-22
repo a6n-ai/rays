@@ -203,7 +203,7 @@ async fn run_conn(
     connections: u32,
     limiter: Arc<RateLimiter>,
 ) -> Outcome {
-    download::run(live, reqwest::Client::new(), &dir, Arc::new(EventHub::new()), rx, connections, 2, limiter, None).await
+    download::run(live, reqwest::Client::new(), &dir, Arc::new(EventHub::new()), rx, connections, 2, limiter, None, None).await
 }
 
 fn unlimited() -> Arc<RateLimiter> {
@@ -450,8 +450,8 @@ async fn large_file_splits_into_ranged_connections() {
     let check = live.clone();
     let path = expect_done(run_conn(live, dir.path().to_path_buf(), rx, 4, unlimited()).await);
     assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&big_data()));
-    // The plan starts with two segments; growth may add more.
-    assert!(srv.ranged_hits.load(Ordering::SeqCst) >= 2);
+    // Two segments: the first streams on the probe (no Range), the second is a ranged request; growth may add more.
+    assert!(srv.ranged_hits.load(Ordering::SeqCst) >= 1);
     assert!(check.job.lock().unwrap().segments.len() >= 2);
 }
 
@@ -462,7 +462,7 @@ async fn split_starting_on_one_part_streams_on_the_probe_connection() {
     let dir = tempfile::tempdir().unwrap();
     let (live, rx) = job(format!("{}/big", srv.base), dir.path(), "big.bin");
     let check = live.clone();
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 4, 1, unlimited(), None).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 4, 1, unlimited(), None, None).await;
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&big_data()));
     // A fast local link finishes before growth's first probe: the probe's response carried the whole file.
     assert_eq!(srv.ranged_hits.load(Ordering::SeqCst), 0, "the probe's stream was not reused");
@@ -932,7 +932,7 @@ async fn per_connection_limit_grows_past_three() {
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "big.bin");
     let sampler = Sampler::start(live.clone());
     // Starts on one part, as the app does, and must still climb on a link that limits each connection.
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 6, 1, unlimited(), None).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 6, 1, unlimited(), None, None).await;
     let path = expect_done(out);
     let hist = sampler.finish();
     assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data));
@@ -986,7 +986,7 @@ async fn rate_limit_429_is_remembered_and_caps_the_next_download() {
     let host = "127.0.0.1";
 
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "first.bin");
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone())).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None).await;
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&data));
     assert!(link.rejected.load(Ordering::SeqCst) > 0, "server never answered 429");
     let (max, _) = store.host_limit(host).unwrap().expect("limit remembered");
@@ -994,7 +994,7 @@ async fn rate_limit_429_is_remembered_and_caps_the_next_download() {
 
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "second.bin");
     let sampler = Sampler::start(live.clone());
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone())).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None).await;
     let hist = sampler.finish();
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&data));
     let peak = peak(&hist);
@@ -1017,7 +1017,7 @@ async fn clean_split_under_a_remembered_limit_relaxes_it_by_one() {
 
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "big.bin");
     let sampler = Sampler::start(live.clone());
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone())).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None).await;
     let hist = sampler.finish();
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&data));
     let peak = peak(&hist);

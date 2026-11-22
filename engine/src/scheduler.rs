@@ -1,8 +1,9 @@
 //! Queue order, concurrency limit, and job lifecycle. See design doc "Engine API".
-use crate::download;
+use crate::download::{self, SignUrl};
 use crate::events::EventHub;
 use crate::limit::RateLimiter;
 use crate::names;
+use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
 use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, now_secs};
 use std::collections::{HashMap, HashSet};
@@ -29,6 +30,8 @@ pub struct Scheduler {
     /// One bucket shared by every transfer, so the cap is global.
     limiter: Arc<RateLimiter>,
     client: reqwest::Client,
+    /// Secret keys of S3 buckets, by bucket name.
+    secrets: Arc<dyn Secrets>,
     jobs: Mutex<Vec<Arc<Live>>>,
     speed: Mutex<HashMap<JobId, (Instant, u64, u64)>>,
     /// Ids whose download task has not returned yet. A paused job keeps its slot until its task stops,
@@ -51,6 +54,7 @@ fn is_active(state: &JobState) -> bool {
 
 impl Scheduler {
     /// Loads jobs from `store` (already reconciled, all unfinished are Paused).
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rt: tokio::runtime::Handle,
         store: Arc<Store>,
@@ -59,6 +63,7 @@ impl Scheduler {
         max_running: u32,
         connections: u32,
         speed_limit: u64,
+        secrets: Arc<dyn Secrets>,
     ) -> Result<Arc<Scheduler>, EngineError> {
         let loaded = store.load_all()?;
         let next_position = loaded.iter().map(|j| j.position).max().map_or(0, |p| p + 1);
@@ -95,6 +100,7 @@ impl Scheduler {
             connections: AtomicU32::new(connections.clamp(1, MAX_CONNECTIONS)),
             limiter: Arc::new(RateLimiter::new(speed_limit)),
             client,
+            secrets,
             jobs: Mutex::new(lives),
             speed: Mutex::new(HashMap::new()),
             inflight: Mutex::new(HashSet::new()),
@@ -239,7 +245,7 @@ impl Scheduler {
     }
 
     fn add_one(&self, url: String) -> AddResult {
-        if let Err(error) = Self::check_url(&url) {
+        if let Err(error) = self.check_url(&url) {
             return AddResult { url, id: None, error: Some(error) };
         }
         match self.insert_job(&url) {
@@ -248,7 +254,11 @@ impl Scheduler {
         }
     }
 
-    fn check_url(url: &str) -> Result<(), String> {
+    fn check_url(&self, url: &str) -> Result<(), String> {
+        if url.starts_with("s3://") {
+            let (bucket, _) = s3::parse_link(url).ok_or("an s3 link is s3://bucket/key")?;
+            return self.bucket(&bucket).map(|_| ());
+        }
         let parsed = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
         let web = matches!(parsed.scheme(), "http" | "https");
         if web && parsed.host_str().is_some_and(|h| !h.is_empty()) {
@@ -302,6 +312,57 @@ impl Scheduler {
         Ok(id)
     }
 
+    /// Saves a bucket after one listing proves the endpoint and keys work. The secret goes to `secrets` only.
+    pub async fn add_bucket(&self, cfg: BucketConfig, secret: String) -> Result<(), EngineError> {
+        let invalid = |msg: &str| EngineError::InvalidUrl { msg: msg.to_owned() };
+        if cfg.name.is_empty() || cfg.name.contains('/') {
+            return Err(invalid("bucket name is empty or has a slash"));
+        }
+        if !(cfg.endpoint.starts_with("https://") || cfg.endpoint.starts_with("http://")) {
+            return Err(invalid("endpoint must start with https://"));
+        }
+        if cfg.access_key_id.is_empty() || secret.is_empty() {
+            return Err(invalid("access key ID and secret are required"));
+        }
+        Signer::new(&cfg, &secret)?.list(&self.client, "", None).await?;
+        self.secrets.set(&cfg.name, &secret)?;
+        self.store.save_bucket(&cfg)
+    }
+
+    pub fn remove_bucket(&self, name: &str) -> Result<(), EngineError> {
+        self.store.remove_bucket(name)?;
+        self.secrets.delete(name);
+        Ok(())
+    }
+
+    pub fn buckets(&self) -> Vec<BucketConfig> {
+        self.store.buckets().unwrap_or_default()
+    }
+
+    pub async fn list_bucket(&self, name: &str, prefix: &str, token: Option<String>) -> Result<Listing, EngineError> {
+        let signer = self.signer(name).map_err(|msg| EngineError::InvalidUrl { msg })?;
+        signer.list(&self.client, prefix, token.as_deref()).await
+    }
+
+    fn bucket(&self, name: &str) -> Result<BucketConfig, String> {
+        self.buckets().into_iter().find(|b| b.name == name).ok_or_else(|| format!("no bucket named {name} in Rays"))
+    }
+
+    fn signer(&self, name: &str) -> Result<Signer, String> {
+        let cfg = self.bucket(name)?;
+        let secret = self.secrets.get(name).ok_or_else(|| format!("no secret key saved for bucket {name}"))?;
+        Signer::new(&cfg, &secret).map_err(|e| e.to_string())
+    }
+
+    /// `None` for web links; for an `s3://` link, a function that signs a fresh GET each time it is called.
+    fn sign_for(&self, url: &str) -> Result<Option<SignUrl>, String> {
+        let Some((bucket, key)) = s3::parse_link(url) else {
+            return Ok(None);
+        };
+        let signer = self.signer(&bucket)?;
+        Ok(Some(Arc::new(move || signer.get(&key))))
+    }
+
     fn find(&self, id: JobId) -> Option<Arc<Live>> {
         lock(&self.jobs).iter().find(|l| lock(&l.job).id == id).cloned()
     }
@@ -324,8 +385,13 @@ impl Scheduler {
             let connections = self.connections.load(Ordering::Relaxed);
             let limiter = Arc::clone(&self.limiter);
             let store = Arc::clone(&self.store);
+            let url = lock(&live.job).url.clone();
+            let sign = self.sign_for(&url);
             self.rt.spawn(async move {
-                let outcome = download::run(live, client, &dir, hub, rx, connections, 1, limiter, Some(store)).await;
+                let outcome = match sign {
+                    Ok(sign) => download::run(live, client, &dir, hub, rx, connections, 1, limiter, Some(store), sign).await,
+                    Err(reason) => Outcome::Failed(reason),
+                };
                 sched.finish(id, outcome);
             });
         }

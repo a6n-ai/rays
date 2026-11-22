@@ -1,4 +1,5 @@
 //! SQLite persistence (`<data_dir>/queue.db`, WAL). Uses the system libsqlite3.
+use crate::s3::BucketConfig;
 use crate::types::{EngineError, HostView, Job, JobId, JobState, Segment, now_secs};
 use rusqlite::{Connection, OptionalExtension, Row, named_params, params};
 use std::path::{Path, PathBuf};
@@ -21,6 +22,9 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "ALTER TABLE jobs ADD COLUMN segments TEXT NOT NULL DEFAULT '[]'",
     "CREATE TABLE hosts(host TEXT PRIMARY KEY, max_parts INTEGER NOT NULL, reason TEXT NOT NULL,
      updated_at INTEGER NOT NULL)",
+    // The secret key is in the Keychain, never here.
+    "CREATE TABLE buckets(name TEXT PRIMARY KEY, provider TEXT NOT NULL, endpoint TEXT NOT NULL,
+     region TEXT NOT NULL, access_key_id TEXT NOT NULL, path_style INTEGER NOT NULL, created_at INTEGER NOT NULL)",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
@@ -209,6 +213,44 @@ impl Store {
         Ok(rows)
     }
 
+    /// Adds a bucket, or replaces the one with the same name.
+    pub fn save_bucket(&self, b: &BucketConfig) -> Result<(), EngineError> {
+        self.lock()?.execute(
+            "INSERT INTO buckets (name, provider, endpoint, region, access_key_id, path_style, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(name) DO UPDATE SET provider = excluded.provider, \
+             endpoint = excluded.endpoint, region = excluded.region, access_key_id = excluded.access_key_id, \
+             path_style = excluded.path_style",
+            params![b.name, b.provider, b.endpoint, b.region, b.access_key_id, b.path_style, now_secs()],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_bucket(&self, name: &str) -> Result<(), EngineError> {
+        self.lock()?.execute("DELETE FROM buckets WHERE name = ?1", [name])?;
+        Ok(())
+    }
+
+    /// Buckets in the order they were added.
+    pub fn buckets(&self) -> Result<Vec<BucketConfig>, EngineError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT name, provider, endpoint, region, access_key_id, path_style FROM buckets ORDER BY created_at, name",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(BucketConfig {
+                    name: r.get(0)?,
+                    provider: r.get(1)?,
+                    endpoint: r.get(2)?,
+                    region: r.get(3)?,
+                    access_key_id: r.get(4)?,
+                    path_style: r.get(5)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     fn lock(&self) -> Result<MutexGuard<'_, Connection>, EngineError> {
         self.conn.lock().map_err(|_| EngineError::Db { msg: "connection mutex poisoned".into() })
     }
@@ -282,6 +324,26 @@ fn job_from_row(row: &Row) -> rusqlite::Result<Job> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn buckets_save_replace_list_and_remove() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut b = BucketConfig {
+            name: "media".into(),
+            provider: "r2".into(),
+            endpoint: "https://x.r2.cloudflarestorage.com".into(),
+            region: "auto".into(),
+            access_key_id: "AKID".into(),
+            path_style: true,
+        };
+        store.save_bucket(&b).unwrap();
+        b.region = "weur".into();
+        store.save_bucket(&b).unwrap();
+        assert_eq!(store.buckets().unwrap(), vec![b]);
+        store.remove_bucket("media").unwrap();
+        assert!(store.buckets().unwrap().is_empty());
+    }
+
     use super::*;
 
     fn sample(part: &Path, state: JobState) -> Job {

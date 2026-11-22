@@ -56,6 +56,7 @@ pub async fn run(
     start: u32,
     limiter: Arc<RateLimiter>,
     store: Option<Arc<crate::store::Store>>,
+    sign: Option<SignUrl>,
 ) -> Outcome {
     let env = Env {
         live,
@@ -66,6 +67,7 @@ pub async fn run(
         start,
         limiter,
         store,
+        sign,
         retry_hint: Arc::new(AtomicU64::new(0)),
         dirty: Arc::new(AtomicBool::new(false)),
     };
@@ -134,6 +136,9 @@ impl From<std::io::Error> for Stop {
     }
 }
 
+/// Returns a freshly signed URL for the job's object; see `crate::s3`.
+pub type SignUrl = Arc<dyn Fn() -> String + Send + Sync>;
+
 /// What one run needs, cheap to clone into the segment tasks.
 #[derive(Clone)]
 struct Env {
@@ -146,6 +151,8 @@ struct Env {
     start: u32,
     limiter: Arc<RateLimiter>,
     store: Option<Arc<crate::store::Store>>,
+    /// Makes a fresh signed URL for each request (S3 links); `None` uses the job URL as is.
+    sign: Option<SignUrl>,
     /// Server-requested wait (Retry-After), in ms, consumed by the next retry sleep.
     retry_hint: Arc<AtomicU64>,
     /// Set by a retry, a 429/503 or a connection failure; a run that set it keeps the remembered limit.
@@ -198,7 +205,7 @@ async fn run_attempt(
     }
     let have = tokio::fs::metadata(&part).await.map(|m| m.len()).unwrap_or(0);
 
-    let mut req = env.client.get(&url);
+    let mut req = env.client.get(env.request_url(&url));
     if have > 0 {
         req = req.header(RANGE, format!("bytes={have}-"));
         if let Some(v) = &validator {
@@ -849,7 +856,7 @@ async fn segment_attempt(
     let mut resp = match first {
         Some(resp) => resp,
         None => {
-            let mut req = shared.env.client.get(&shared.url).header(RANGE, format!("bytes={from}-{}", end - 1));
+            let mut req = shared.env.client.get(shared.env.request_url(&shared.url)).header(RANGE, format!("bytes={from}-{}", end - 1));
             if let Some(v) = &shared.validator {
                 req = req.header(IF_RANGE, v.as_str());
             }
@@ -985,6 +992,10 @@ fn retryable(status: u16) -> bool {
 }
 
 impl Env {
+    fn request_url(&self, url: &str) -> String {
+        self.sign.as_ref().map_or_else(|| url.to_owned(), |sign| sign())
+    }
+
     /// Lifts a remembered limit by one after a clean finish; a no-op for hosts without a row.
     fn relax_host(&self) {
         if let (Some(store), Some(host)) = (&self.store, with_job(&self.live, |j| host_of(&j.url))) {
