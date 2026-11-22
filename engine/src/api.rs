@@ -147,6 +147,21 @@ impl Engine {
             .map_err(|msg| EngineError::InvalidUrl { msg })
     }
 
+    /// The account the `cf` command is logged in to, with its R2 buckets.
+    pub async fn cloudflare_account(&self) -> Result<crate::cloud::CfAccount, EngineError> {
+        self.rt
+            .spawn_blocking(crate::cloud::cf_account)
+            .await
+            .map_err(join_error)?
+            .map_err(|msg| EngineError::InvalidUrl { msg })
+    }
+
+    /// Adds an R2 bucket from the `cf` login; the first one creates a read-only R2 token.
+    pub async fn add_cloudflare_bucket(&self, account_id: String, name: String) -> Result<(), EngineError> {
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { sched.add_cloudflare_bucket(account_id, name).await }).await.map_err(join_error)?
+    }
+
     pub fn remove_bucket(&self, name: String) -> Result<(), EngineError> {
         self.sched.remove_bucket(&name)
     }

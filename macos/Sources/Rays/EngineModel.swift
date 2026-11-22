@@ -126,6 +126,17 @@ final class EngineModel {
         try await addBucket(config, secret: "")
     }
 
+    func cloudflareAccount() async throws -> CfAccount? {
+        guard let engine else { return nil }
+        return try await engine.cloudflareAccount()
+    }
+
+    func addCloudflareBucket(_ name: String, account: String) async throws {
+        guard let engine else { return }
+        try await engine.addCloudflareBucket(accountId: account, name: name)
+        buckets = engine.buckets()
+    }
+
     func removeBucket(_ name: String) throws {
         try engine?.removeBucket(name: name)
         buckets = engine?.buckets() ?? []

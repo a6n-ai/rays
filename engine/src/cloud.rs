@@ -80,13 +80,68 @@ fn parse_keys(json: &str) -> Result<Keys, String> {
     Ok(Keys { key: o.access_key_id, secret: o.secret_access_key, token: o.session_token.filter(|t| !t.is_empty()) })
 }
 
-/// An app opened from Finder has a bare PATH, so the usual install places are tried first.
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct CfAccount {
+    pub id: String,
+    pub name: String,
+    pub buckets: Vec<String>,
+}
+
+/// The account `cf` is logged in to and its R2 buckets.
+/// shortcut: takes the first account; add a picker when someone has several.
+pub fn cf_account() -> Result<CfAccount, String> {
+    let accounts: serde_json::Value = serde_json::from_str(&run("cf", &["accounts", "list"])?).map_err(|e| format!("cf accounts: {e}"))?;
+    let first = accounts.as_array().and_then(|a| a.first()).ok_or("cf is logged in to no account")?;
+    let id = first["id"].as_str().unwrap_or_default().to_owned();
+    let name = first["name"].as_str().unwrap_or_default().to_owned();
+    let listed: serde_json::Value = serde_json::from_str(&run("cf", &["r2", "buckets", "list"])?).map_err(|e| format!("cf r2: {e}"))?;
+    let buckets = listed["buckets"].as_array().into_iter().flatten().filter_map(|b| b["name"].as_str().map(str::to_owned)).collect();
+    Ok(CfAccount { id, name, buckets })
+}
+
+/// Creates a read-only R2 API token through `cf`. R2's S3 key ID is the token ID and its secret is
+/// the SHA-256 of the token value, which is hashed here and never kept.
+pub fn cf_create_keys(account_id: &str) -> Result<Keys, String> {
+    let policies = format!(
+        r#"[{{"effect":"allow","permission_groups":[{{"id":"{R2_STORAGE_READ}"}}],"resources":{{"com.cloudflare.api.account.{account_id}":"*"}}}}]"#
+    );
+    let out = run("cf", &["user", "tokens", "create", "--name", "Rays (read-only R2)", "--policies", &policies])?;
+    let v: serde_json::Value = serde_json::from_str(&out).map_err(|e| format!("cf tokens: {e}"))?;
+    let v = v.get("result").unwrap_or(&v);
+    let (Some(id), Some(value)) = (v["id"].as_str(), v["value"].as_str()) else {
+        return Err("cf didn't return a token".into());
+    };
+    Ok(Keys { key: id.to_owned(), secret: r2_secret(value), token: None })
+}
+
+/// Cloudflare's "Workers R2 Storage Read" permission group: list buckets and read objects, account-wide.
+const R2_STORAGE_READ: &str = "b4992e1108244f5d8bfbd5744320c2e1";
+
+fn r2_secret(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(token.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+}
+
 fn aws(args: &[&str]) -> Result<String, String> {
-    let bin = ["/opt/homebrew/bin/aws", "/usr/local/bin/aws", "/usr/bin/aws"]
-        .into_iter()
-        .find(|p| std::path::Path::new(p).exists())
-        .unwrap_or("aws");
-    let out = Command::new(bin).args(args).output().map_err(|e| format!("AWS CLI not found: {e}"))?;
+    run("aws", args)
+}
+
+/// An app opened from Finder has a bare PATH, so the usual install places (and node, for `cf`) are added.
+fn run(tool: &str, args: &[&str]) -> Result<String, String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path = format!("/opt/homebrew/bin:/usr/local/bin:{home}/.npm-global/bin:{home}/.local/bin:{}",
+                       std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".into()));
+    let out = Command::new(tool).args(args).env("PATH", &path).output();
+    // Command::new looks up the parent's PATH, not the one passed to the child, so try each place.
+    let out = match out {
+        Ok(o) => o,
+        Err(_) => path
+            .split(':')
+            .map(|dir| std::path::Path::new(dir).join(tool))
+            .find(|p| p.exists())
+            .ok_or_else(|| format!("{tool} command not found"))
+            .and_then(|bin| Command::new(bin).args(args).env("PATH", &path).output().map_err(|e| e.to_string()))?,
+    };
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
         return Err(err.trim().lines().last().unwrap_or("aws failed").to_owned());
@@ -107,9 +162,24 @@ mod tests {
     }
 
     #[test]
+    fn r2_secret_is_sha256_hex_of_the_token() {
+        assert_eq!(r2_secret("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    }
+
+    #[test]
     fn maps_bucket_locations_to_regions() {
         assert_eq!(region_from_location("None"), "us-east-1");
         assert_eq!(region_from_location("EU"), "eu-west-1");
         assert_eq!(region_from_location("ap-south-1"), "ap-south-1");
     }
+}
+
+/// Reads the `cf` login, run by hand: `cargo test -p dl-engine --lib live_cf -- --ignored`.
+#[cfg(test)]
+#[test]
+#[ignore = "needs a cf login"]
+fn live_cf_account_lists_r2_buckets() {
+    let acct = cf_account().unwrap();
+    assert_eq!(acct.id.len(), 32, "{acct:?}");
+    println!("{} buckets", acct.buckets.len());
 }

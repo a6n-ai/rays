@@ -51,6 +51,7 @@ struct BucketsForm: View {
             }
 
             if !model.awsProfiles.isEmpty { AWSSection() }
+            CloudflareSection()
 
             Section {
                 Picker("Provider", selection: $providerID) {
@@ -202,6 +203,62 @@ private struct AWSSection: View {
                 try await model.addAWSBucket(bucket, profile: profile)
             } catch {
                 self.error = "\(bucket.name): " + EngineModel.message(for: error)
+            }
+        }
+    }
+}
+
+/// R2 buckets from the `cf` login. Shown only when `cf` is installed and logged in.
+private struct CloudflareSection: View {
+    @Environment(EngineModel.self) private var model
+    @State private var account: CfAccount?
+    @State private var adding: String?
+    @State private var error: String?
+
+    private var linked: Set<String> { Set(model.buckets.map(\.name)) }
+
+    var body: some View {
+        Group {
+            if let account {
+                Section {
+                    if let error { ErrorLine(text: error) }
+                    if account.buckets.isEmpty {
+                        Text("No R2 buckets in this account.").foregroundStyle(.secondary)
+                    }
+                    ForEach(account.buckets, id: \.self) { bucket in
+                        LabeledContent {
+                            if linked.contains(bucket) {
+                                Label("Added", systemImage: "checkmark").foregroundStyle(.secondary)
+                            } else if adding == bucket {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Button("Add") { add(bucket, account: account.id) }.disabled(adding != nil)
+                            }
+                        } label: {
+                            Label(bucket, systemImage: "cloud")
+                        }
+                    }
+                } header: {
+                    Text("Cloudflare R2 · \(account.name)")
+                } footer: {
+                    Text("The first Add creates a read-only R2 token named \u{201C}Rays (read-only R2)\u{201D} in your Cloudflare account. Its key is kept in your Keychain.")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .task { account = try? await model.cloudflareAccount() }
+    }
+
+    private func add(_ bucket: String, account: String) {
+        adding = bucket
+        Task {
+            defer { adding = nil }
+            do {
+                try await model.addCloudflareBucket(bucket, account: account)
+                error = nil
+            } catch {
+                self.error = "\(bucket): " + EngineModel.message(for: error)
             }
         }
     }

@@ -335,6 +335,45 @@ impl Scheduler {
         self.store.save_bucket(&cfg)
     }
 
+    /// Adds an R2 bucket from the `cf` login. The first one creates a read-only R2 token, kept in
+    /// `secrets` under a name no bucket can have, so later buckets reuse it.
+    pub async fn add_cloudflare_bucket(&self, account_id: String, name: String) -> Result<(), EngineError> {
+        let slot = format!("cloudflare/{account_id}");
+        let saved = self.secrets.get(&slot).and_then(|s| s.split_once('\n').map(|(k, v)| (k.to_owned(), v.to_owned())));
+        let (key, secret) = match saved {
+            Some(pair) => pair,
+            None => {
+                let acct = account_id.clone();
+                let keys = tokio::task::spawn_blocking(move || cloud::cf_create_keys(&acct))
+                    .await
+                    .map_err(|e| EngineError::Io { msg: e.to_string() })?
+                    .map_err(|msg| EngineError::InvalidUrl { msg })?;
+                self.secrets.set(&slot, &format!("{}\n{}", keys.key, keys.secret))?;
+                (keys.key, keys.secret)
+            }
+        };
+        let cfg = BucketConfig {
+            name,
+            provider: "r2".into(),
+            endpoint: format!("https://{account_id}.r2.cloudflarestorage.com"),
+            region: "auto".into(),
+            access_key_id: key,
+            path_style: true,
+            profile: None,
+        };
+        // A new token can take a few seconds to work everywhere.
+        let mut tries = 0;
+        loop {
+            match self.add_bucket(cfg.clone(), secret.clone()).await {
+                Err(e) if tries < 5 && token_not_ready(&e) => {
+                    tries += 1;
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+                other => return other,
+            }
+        }
+    }
+
     pub fn remove_bucket(&self, name: &str) -> Result<(), EngineError> {
         self.store.remove_bucket(name)?;
         self.secrets.delete(name);
@@ -524,4 +563,9 @@ impl Scheduler {
             }
         }
     }
+}
+
+/// R2 rejects a token for a moment after it is created.
+fn token_not_ready(e: &EngineError) -> bool {
+    e.to_string().contains("InvalidAccessKeyId") || e.to_string().contains("Unauthorized")
 }
