@@ -25,6 +25,13 @@ Downloads go to `~/Downloads` unless you choose another folder in **Settings > G
 - The toolbar's **Speed Limit** menu caps bandwidth for all downloads.
 - **Settings > Downloads** sets how many files download at once (1 to 10) and how many parts each file uses (1 to 16).
 
+## In the Dock and menu bar
+
+- While files download, the Rays icon in the Dock shows a progress bar and a badge with how many are downloading.
+- The Rays icon in the menu bar shows the overall percent. Click it to see your downloads, pause or resume them, download a link you copied, or open Rays.
+- Closing the window keeps Rays running in the menu bar, so downloads carry on. To quit, choose **Quit Rays** in the menu bar panel, or right-click Rays in the Dock and choose **Quit**. **Settings > General > Show in menu bar** turns the menu bar icon off; then closing the window quits Rays.
+- While anything downloads, Rays keeps macOS from slowing it in the background (App Nap) and keeps the Mac from going to sleep on its own. The display can still turn off.
+
 ## Finished files
 
 Drag a finished download out of the window to copy it somewhere else. If the [sorter](/docs/app/sorter/) watches your download folder, finished files are moved into category folders a few seconds after they complete.
