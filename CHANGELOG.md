@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.1.8 (22 Nov 2026)
+
+- Cloud: one page in the sidebar to browse buckets, add them and see cloud downloads. A bucket can use an AWS CLI profile (saved keys, `aws login` or SSO), so Rays keeps no secret for it. Cloudflare R2 buckets come straight from your `cf` login.
+- Remove a download from the list, or move its file to the Trash, from each row's menu or with Delete.
+- Share finished downloads with AirDrop or the Share menu.
+- If the sorter moved or renamed a file, its row still finds it. Missing files show whether they are in the Trash or were deleted.
+- Get Extension opens the store page in the browser that needs it.
+- Releases are now signed with one stable certificate, so from this version on updates keep folder access and Keychain items (this update may ask once more). Rays opened from the DMG asks to be moved to Applications instead of breaking sorter folders.
+
 ## 0.1.7 (22 Nov 2026)
 
 - Updates install themselves: click Update and Rays downloads the new version, checks it, replaces itself and reopens. From this version on, no more dragging to Applications.
