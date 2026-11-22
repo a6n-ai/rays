@@ -13,6 +13,8 @@ struct BucketsForm: View {
     @State private var pathStyle = false
     @State private var adding = false
     @State private var error: String?
+    @AppStorage("cloudTab") private var cloudTab: CloudTab = .browse
+    @AppStorage("cloudBucket") private var browseBucket = ""
 
     private var preset: ProviderPreset? { model.providers.first { $0.id == providerID } }
     private var trimmed: (String, String, String) {
@@ -32,20 +34,12 @@ struct BucketsForm: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.buckets, id: \.name) { bucket in
-                    LabeledContent {
-                        Button("Remove", role: .destructive) { remove(bucket.name) }
-                    } label: {
-                        HStack(spacing: 10) {
-                            SettingIcon(symbol: "cloud.fill", color: .blue)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(bucket.name)
-                                Text(providerName(bucket.provider) + " · " + bucket.endpoint)
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
+                    CloudRow(provider: bucket.provider, title: bucket.name, detail: detail(bucket)) {
+                        RowIcon("folder", "Browse \(bucket.name)", tint: .blue) {
+                            browseBucket = bucket.name
+                            cloudTab = .browse
                         }
+                        RowIcon("trash", "Remove \(bucket.name)", tint: .red) { remove(bucket.name) }
                     }
                 }
             }
@@ -55,7 +49,10 @@ struct BucketsForm: View {
 
             Section {
                 Picker("Provider", selection: $providerID) {
-                    ForEach(model.providers, id: \.id) { Text($0.name).tag($0.id) }
+                    ForEach(model.providers, id: \.id) { preset in
+                        Label { Text(preset.name) } icon: { Image(systemName: ProviderIcon.style(preset.id).0) }
+                            .tag(preset.id)
+                    }
                 }
                 TextField("Bucket name", text: $name)
                 if let label = preset?.fieldLabel {
@@ -88,6 +85,11 @@ struct BucketsForm: View {
         .onChange(of: providerID) { applyPreset() }
         .onChange(of: region) { fillEndpoint() }
         .onChange(of: field) { fillEndpoint() }
+    }
+
+    private func detail(_ bucket: BucketConfig) -> String {
+        let source = bucket.profile.map { "AWS CLI: \($0)" } ?? "Key in Keychain"
+        return [providerName(bucket.provider), bucket.region, source].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private func providerName(_ id: String) -> String {
@@ -161,16 +163,9 @@ private struct AWSSection: View {
                 Text("No buckets in this profile.").foregroundStyle(.secondary)
             }
             ForEach(found, id: \.name) { bucket in
-                LabeledContent {
-                    if linked.contains(bucket.name) {
-                        Label("Added", systemImage: "checkmark").foregroundStyle(.secondary)
-                    } else if adding == bucket.name {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Button("Add") { add(bucket) }.disabled(adding != nil)
-                    }
-                } label: {
-                    Label { Text(bucket.name); Text(bucket.region) } icon: { Image(systemName: "cloud") }
+                CloudRow(provider: "aws", title: bucket.name, detail: bucket.region) {
+                    AddState(added: linked.contains(bucket.name), busy: adding == bucket.name, name: bucket.name) { add(bucket) }
+                        .disabled(adding != nil)
                 }
             }
         } header: {
@@ -212,6 +207,8 @@ private struct AWSSection: View {
 private struct CloudflareSection: View {
     @Environment(EngineModel.self) private var model
     @State private var account: CfAccount?
+    @State private var loadError: String?
+    @State private var checked = false
     @State private var adding: String?
     @State private var error: String?
 
@@ -219,23 +216,27 @@ private struct CloudflareSection: View {
 
     var body: some View {
         Group {
-            if let account {
+            if !checked {
+                // A view must exist for .task to run; an empty Group never loads.
+                Section("Cloudflare R2") { ProgressView().frame(maxWidth: .infinity) }
+            } else if let loadError, !loadError.contains("not found") {
+                Section("Cloudflare R2") {
+                    Text("Log in with cf auth login in Terminal to see your R2 buckets here.")
+                        .foregroundStyle(.secondary)
+                    Text(loadError).font(.footnote).foregroundStyle(.tertiary).lineLimit(2)
+                }
+            } else if let account {
                 Section {
                     if let error { ErrorLine(text: error) }
                     if account.buckets.isEmpty {
                         Text("No R2 buckets in this account.").foregroundStyle(.secondary)
                     }
                     ForEach(account.buckets, id: \.self) { bucket in
-                        LabeledContent {
-                            if linked.contains(bucket) {
-                                Label("Added", systemImage: "checkmark").foregroundStyle(.secondary)
-                            } else if adding == bucket {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Button("Add") { add(bucket, account: account.id) }.disabled(adding != nil)
+                        CloudRow(provider: "r2", title: bucket, detail: "Cloudflare R2") {
+                            AddState(added: linked.contains(bucket), busy: adding == bucket, name: bucket) {
+                                add(bucket, account: account.id)
                             }
-                        } label: {
-                            Label(bucket, systemImage: "cloud")
+                            .disabled(adding != nil)
                         }
                     }
                 } header: {
@@ -247,7 +248,14 @@ private struct CloudflareSection: View {
                 }
             }
         }
-        .task { account = try? await model.cloudflareAccount() }
+        .task {
+            do {
+                account = try await model.cloudflareAccount()
+            } catch {
+                loadError = EngineModel.message(for: error)
+            }
+            checked = true
+        }
     }
 
     private func add(_ bucket: String, account: String) {
@@ -260,6 +268,28 @@ private struct CloudflareSection: View {
             } catch {
                 self.error = "\(bucket): " + EngineModel.message(for: error)
             }
+        }
+    }
+}
+
+/// Trailing state of a found bucket: added, adding, or an Add button.
+private struct AddState: View {
+    let added: Bool
+    let busy: Bool
+    let name: String
+    let add: () -> Void
+
+    var body: some View {
+        if added {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .frame(width: 26, height: 24)
+                .help("\(name) is added")
+                .accessibilityLabel("\(name) is added")
+        } else if busy {
+            ProgressView().controlSize(.small).frame(width: 26, height: 24)
+        } else {
+            RowIcon("plus.circle.fill", "Add \(name)", tint: .accentColor, action: add)
         }
     }
 }
