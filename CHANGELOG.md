@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.1.9 (22 Nov 2026)
+
+- Cloud Browse works like Finder: your connected providers appear as folders, then their buckets, then each bucket's folders and files, as icons or a list with size, date and kind.
+- Buckets show brand icons, and the AWS CLI and Cloudflare R2 lists load once and then open instantly. Refresh looks them up again.
+
 ## 0.1.8 (22 Nov 2026)
 
 - Cloud: one page in the sidebar to browse buckets, add them and see cloud downloads. A bucket can use an AWS CLI profile (saved keys, `aws login` or SSO), so Rays keeps no secret for it. Cloudflare R2 buckets come straight from your `cf` login.
