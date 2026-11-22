@@ -75,7 +75,7 @@ What we measured and kept:
 
 What we measured and dropped:
 
-- **Starting big files on 4 connections, and re-probing sooner after a failed probe.** In an A/B test on a real line it was slower with up to 16 connections (5.6 against 8.5 MB/s, median of 7) and no faster with 4: the extra probing and removing cost more than it found.
+- **Starting big files on 4 connections, re-probing sooner after a failed probe, and letting a removed connection finish its piece (as aria2 does).** None was faster in A/B tests on a real line, so Rays keeps the simpler engine.
 - **A faster build (`opt-level = 3`) and more engine threads (4 instead of 2).** No change in speed or CPU on the local test server, so Rays keeps the smaller app.
 - **HTTP/3 (QUIC).** On one connection, HTTP/3 averaged 8.5 MB/s against 8.9 MB/s over TCP. Rays ships with HTTP/3 off. It can be built in with the `http3` feature to test.
 
