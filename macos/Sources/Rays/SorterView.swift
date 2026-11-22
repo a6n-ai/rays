@@ -3,10 +3,18 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension SorterFolder {
-    /// An agent copy other than the bundled sorter, left behind by an older install.
+    /// The agent runs a sorter that isn't inside an installed Rays: an older standalone copy, a deleted
+    /// app, or a DMG or temporary copy. Another installed Rays (the same app at a different path) is fine.
     var needsUpdate: Bool {
         guard let agent = agentBinary else { return false }
-        return URL(filePath: agent).resolvingSymlinksInPath() != URL(filePath: Sorter.defaultPath).resolvingSymlinksInPath()
+        let url = URL(filePath: agent).resolvingSymlinksInPath()
+        if url == URL(filePath: Sorter.defaultPath).resolvingSymlinksInPath() { return false }
+        if Sorter.isTemporary(url.path(percentEncoded: false)) { return true }
+        let app = url.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let installed = app.pathExtension == "app"
+            && Bundle(url: app)?.bundleIdentifier == Bundle.main.bundleIdentifier
+            && FileManager.default.isExecutableFile(atPath: url.path(percentEncoded: false))
+        return !installed
     }
 }
 
@@ -71,7 +79,13 @@ struct SorterView: View {
                         Text("Off keeps every file's original name. Files are still sorted into folders.")
                     }
 
-                    if !outdated.isEmpty {
+                    if Sorter.isTemporary(Bundle.main.bundlePath) {
+                        Section {
+                            Label("Move Rays to Applications, then open it from there. Folders watched from this copy stop sorting when it goes away.",
+                                  systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                    } else if !outdated.isEmpty {
                         Section {
                             UpdateAllRow(count: outdated.count, busy: model.busy) {
                                 Task { for folder in outdated { await model.update(folder) } }

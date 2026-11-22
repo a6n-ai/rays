@@ -20,6 +20,12 @@ enum Sorter {
     static let defaultPath = Bundle.main.bundleURL
         .appending(path: "Contents/MacOS/sorter").path(percentEncoded: false)
 
+    /// A DMG, an App Translocation copy (an unnotarized app opened from Downloads) or the Trash:
+    /// launch agents pointing here break once the copy goes away.
+    static func isTemporary(_ path: String) -> Bool {
+        path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/") || path.contains("/.Trash/")
+    }
+
     static func label(for folder: URL, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String {
         let homePath = canonicalPath(home)
         let dir = canonicalPath(folder)
