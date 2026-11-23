@@ -1,6 +1,6 @@
 ---
 title: "How the Rays download engine works"
-description: "Inside the Rays download engine: connections that double while they make the file faster, slow connections replaced, crash-safe resume, and the benchmarks behind each choice."
+description: "Inside the Rays download engine: connections that double while they help, slow ones replaced, crash-safe resume, and benchmarks against aria2 and curl."
 ---
 
 Rays downloads with its own engine, written in Rust. It has one goal: finish each file as fast as your line allows, without wasting requests or leaving a broken file behind. The same engine runs the Mac app, the [`dl` command](/docs/dl/) and the [MCP server](/docs/mcp/).

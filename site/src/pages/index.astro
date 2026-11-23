@@ -60,7 +60,7 @@ import icon from '../assets/icon.png';
 					<div>
 						<dt>Every connection pulls its weight</dt>
 						<dd>
-							Big files start on one connection and double, up to 16, but only while each step makes the file faster.
+							Files of 32 MB or more start on 4 connections and double, up to 16, but only while each step makes the file faster.
 							A part that finishes early takes half of the biggest part left, and a slow connection is replaced, so
 							nothing idles at the finish line.
 						</dd>
@@ -97,15 +97,21 @@ import icon from '../assets/icon.png';
 					fight each other, and your file arrives later. So Rays measures: a connection stays only while it makes the
 					download at least 10% faster, and Rays steps back down when more stop helping.
 				</p>
-				<dl class="features">
+				<dl class="stats" aria-label="Benchmarks on a test server">
 					<div>
-						<dt>Proof, not promises</dt>
-						<dd>
-							On a server that caps each connection at 2 MB/s, Rays downloads 10 times faster than aria2 on its default
-							settings. When the server drops connections at random, Rays keeps going at 41 MB/s; aria2's defaults give
-							up.
-						</dd>
+						<dt>10&times;</dt>
+						<dd>faster than aria2 on its default settings, when the server caps each connection at 2 MB/s</dd>
 					</div>
+					<div>
+						<dt>41<span> MB/s</span></dt>
+						<dd>while the server drops connections at random. aria2's defaults give up</dd>
+					</div>
+					<div>
+						<dt>1.8<span> GB/s</span></dt>
+						<dd>for a 2 GB file from a local server, faster than curl on one stream</dd>
+					</div>
+				</dl>
+				<dl class="features">
 					<div>
 						<dt>Not one wasted request</dt>
 						<dd>The first request, the one that reads the file's size, keeps downloading instead of being thrown away.</dd>
@@ -241,10 +247,13 @@ import icon from '../assets/icon.png';
 		align-content: center;
 		padding-block: 48px;
 	}
+	/* One 40rem column (the install bar's width): the pause button and the subline end on its right edge. */
 	.headline {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: 16px;
+		max-width: 40rem;
 	}
 	h1 {
 		margin: 0;
@@ -259,8 +268,41 @@ import icon from '../assets/icon.png';
 	}
 	.sub {
 		margin: 0;
-		max-width: 34ch;
+		max-width: 40rem;
 		color: var(--muted);
+		text-wrap: balance;
+	}
+	/* Benchmark numbers set as display type: the one place the page shouts. */
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 24px;
+		margin: 28px 0 8px;
+		max-width: var(--measure);
+	}
+	.stats div {
+		display: grid;
+		align-content: start;
+		gap: 8px;
+		padding-top: 16px;
+		border-top: 1px solid var(--ink);
+	}
+	.stats dt {
+		font: 500 clamp(2.5rem, 5vw, 4rem) / 1 var(--font-display);
+		letter-spacing: -0.045em;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.stats dt span {
+		font-size: 0.42em;
+		letter-spacing: -0.01em;
+		color: var(--accent);
+	}
+	.stats dd {
+		margin: 0;
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.45;
 	}
 	.features {
 		display: grid;
@@ -285,6 +327,10 @@ import icon from '../assets/icon.png';
 		line-height: 1.5;
 	}
 	@media (max-width: 600px) {
+		.stats {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 20px;
+		}
 		.top .wide {
 			display: none;
 		}
@@ -297,11 +343,16 @@ import icon from '../assets/icon.png';
 	}
 	.foot {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 20px;
+		gap: 12px 20px;
 		padding: 48px 0 40px;
 		font: 0.875rem var(--font-mono);
 		color: var(--muted);
+	}
+	.foot a,
+	.foot span {
+		white-space: nowrap;
 	}
 	.foot a {
 		color: var(--ink);
@@ -309,7 +360,7 @@ import icon from '../assets/icon.png';
 	}
 
 	.rule {
-		flex: 1;
+		flex: 1 1 2rem;
 		height: 1px;
 		background: var(--line);
 	}

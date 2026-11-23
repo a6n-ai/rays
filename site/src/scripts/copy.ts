@@ -13,10 +13,12 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')
 			message = 'Selected. Press Command C to copy.';
 		}
 		button.textContent = message === 'Copied' ? 'Copied' : 'Selected';
+		button.dataset.done = '';
 		if (status) status.textContent = message;
 		clearTimeout(timer);
 		timer = window.setTimeout(() => {
 			button.textContent = 'Copy';
+			delete button.dataset.done;
 			if (status) status.textContent = '';
 		}, 2000);
 	});

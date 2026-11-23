@@ -44,7 +44,7 @@ The random-drop row is from 2 runs.
 
 - **On a clean link, every tool runs at line speed.** Extra connections cannot beat the line itself.
 - **When a server throttles each connection, splitting matters most.** Rays is 2 to 11 times faster than aria2's default settings and curl.
-- **aria2 with `-x16` is faster on these files** because it opens 16 connections at once. Rays starts on one and doubles only while each step makes the file faster, so it takes a few seconds to reach full speed, and it never opens connections that do not help. On a 256 MiB file those seconds show. The same rule keeps Rays from slowing down a line one connection already fills, and from getting blocked by servers that limit connections.
+- **aria2 with `-x16` is faster on these files** because it opens 16 connections at once. Rays starts files of 32 MB or more on 4 connections and doubles only while each step makes the file faster, so it takes a few seconds to reach full speed, and it never opens connections that do not help. On a 256 MiB file those seconds show. The same rule keeps Rays from slowing down a line one connection already fills, and from getting blocked by servers that limit connections.
 - **Dropped connections.** aria2's default settings gave up in both drop scenarios. Rays reconnects at once and keeps every byte it received, re-downloading 0.3 MB of 256 MiB.
 - **Unthrottled.** With a 2 GiB file, Rays writes 1.8 GB/s, faster than curl on one stream and almost 5 times aria2 -x16.
 
