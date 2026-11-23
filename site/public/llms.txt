@@ -24,7 +24,9 @@
 
 ## Facts
 
-- Menu bar icon with overall progress and a panel to pause, resume and add links; the Dock icon shows progress and a count. Closing the window keeps Rays running (Settings > General > Show in menu bar).
+- Menu bar icon with a badge for downloads running, and a panel to pause, resume, add links, see the latest four downloads and open Downloads, Sorter and Cloud; the Dock icon shows progress and a count. Closing the window keeps Rays running (Settings > General > Show in menu bar).
+- Downloads list: Filter and Sort menus, pages of 50, Remove Missing, double-click to open. Copied download links are offered in a notification.
+- Browser extension popup: connection status, paste a link, Send all browser downloads to Rays. Settings > Browsers lists every browser; Brave, other Chromium and Firefox browsers, and Search are supported.
 - Requires macOS 26 or later. No account; sorting runs on the Mac and nothing is uploaded.
 - Files of 32 MB or more start on 4 connections (smaller ones on one) and double, up to 16, only while each step makes the download faster; slow connections are reconnected (details: https://rays.a6n.ai/docs/engine/); up to 5 automatic retries; downloads resume after pause or quit.
 - S3 buckets: AWS S3, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces, Google Cloud Storage (HMAC), Hetzner, Linode, Scaleway, OVHcloud, Oracle, Alibaba OSS, Supabase, Tigris, MinIO and any S3-compatible endpoint. Secret keys stay in the macOS Keychain; MCP cannot add buckets.

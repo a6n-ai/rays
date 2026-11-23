@@ -10,6 +10,7 @@ Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make
 - **Appearance**: System, Light or Dark.
 - **Download folder**: where new downloads go. **Change…** picks a folder, **Reset** goes back to `~/Downloads`. Downloads already running finish where they started.
 - **Show in menu bar**: the Rays icon in the menu bar, with download progress and quick actions. While it is on, closing the window keeps Rays running.
+- **Offer copied download links**: when you copy a download link, Rays offers to download it in a notification.
 - **Command line tool**: **Install** puts the `dl` command that ships inside Rays on your PATH; **Remove** takes it off. It never replaces another program named `dl`.
 - **Uninstall Rays…**: removes the sorter from every folder, the browser helpers and the `dl` command, then moves Rays to the Trash. **Uninstall and Delete Data** also removes history and settings. Only available when Rays is in Applications.
 - **Updates**: your version, **Check for Updates**, and whether Rays checks automatically. **Update** downloads the new version, checks it, replaces Rays and reopens it.
@@ -26,4 +27,4 @@ The main [sorter](/docs/app/sorter/) settings: whether on-device AI is ready, ho
 
 ## Browsers
 
-Install or remove the helper each browser needs for the [extension](/docs/app/browser/), with a status line per browser.
+Lists every browser on your Mac. Install or remove the helper each browser needs for the [extension](/docs/app/browser/), with a status line per browser. Browsers built on Chromium or Firefox that Rays doesn't know by name are set up the same way. Other browsers show why they aren't supported.

@@ -24,6 +24,8 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 - **Paste anything.** Links one per line, separated by commas, a whole CSV, or text with links in it. Rays finds every link. Or drop links and `.webloc` files on the window.
 - **Smart splitting.** Big files start on 4 connections. Rays doubles them only while they make the file faster, steps back down when they stop helping, and replaces a connection that is far slower than the others. [How it works](/docs/engine/).
 - **Pause, resume, quit.** Downloads continue from the bytes already saved, after a pause, a quit or a crash.
+- **Filter and sort** the Downloads list by status or type, in pages of 50, with an icon for each file's type. **Remove Missing** clears finished downloads whose file is gone. Double-click a finished download to open it.
+- **Copied links.** Copy a download link anywhere on your Mac and Rays offers to download it.
 - **Speed limit** and how many files download at once.
 - **Safe names.** The server's suggested name is cleaned, so a file can never land outside your folder.
 - **Share** finished downloads with AirDrop or the Share menu, or drag them out of the window.
@@ -49,6 +51,8 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 ## Browsers
 
 - Extensions for Chrome, Brave, Edge, Firefox and Zen add **Download with Rays** to the right-click menu.
+- A popup on the Rays toolbar button shows whether Rays is connected, lets you paste a link, and updates itself with the store.
+- Settings > Browsers lists every browser on your Mac and sets up any built on Chromium or Firefox, including Brave. Search, a WebKit browser that runs Chrome extensions, works too.
 - Optionally hand every browser download to Rays. The browser's copy is cancelled only after Rays accepts the link.
 
 [Browser extension](/docs/app/browser/)
@@ -62,6 +66,8 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 
 ## The app
 
+- The menu bar icon shows a badge with the downloads running. Its panel adds links, pauses all, lists the latest four downloads and opens Downloads, Sorter and Cloud.
+- Close the window and Rays keeps downloading from the menu bar.
 - Updates install themselves: click Update and Rays replaces itself and reopens.
 - Install with the DMG.
 - Uninstall from Settings, which also removes the sorter, browser helpers and `dl`.
