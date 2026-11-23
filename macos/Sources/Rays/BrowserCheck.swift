@@ -134,7 +134,7 @@ enum BrowserCheck {
 
     static func state(for browser: Browser, appURL: URL) -> State {
         let helper = browser.hostDir.map { helperStatus(in: supportURL($0)) } ?? .missing
-        return State(browser: browser, appURL: appURL, helper: helper, addon: addonStatus(for: browser))
+        return State(browser: browser, appURL: appURL, helper: helper, addon: addonStatus(for: browser, appURL: appURL))
     }
 
     static func helperStatus(in hostDir: URL) -> Helper {
@@ -151,22 +151,42 @@ enum BrowserCheck {
         return .ok
     }
 
-    static func addonStatus(for browser: Browser) -> Addon {
+    /// Browsers whose extension has talked to the helper, written by `dl` each time (app path: seen time).
+    static func seenBrowsers() -> Set<String> {
+        let file = supportURL("Rays/browsers.json")
+        guard let data = try? Data(contentsOf: file),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+        return Set(json.keys)
+    }
+
+    static func appKey(_ url: URL) -> String {
+        url.standardizedFileURL.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+    }
+
+    static func addonStatus(for browser: Browser, appURL: URL) -> Addon {
+        // The extension reporting in is proof it is added, and works where macOS keeps Rays out of the profile.
+        if seenBrowsers().contains(where: { appKey(URL(filePath: $0)) == appKey(appURL) }) { return .added }
         guard let support = browser.support else { return .notAdded }
         let root = supportURL(support)
         switch browser.engine {
-        case .chromium: return chromiumAddon(root: root)
+        case .chromium: return chromiumAddon(root: root, name: browser.name)
         case .firefox: return firefoxAddon(root: root)
         case .safari: return .notAdded
         }
     }
 
-    static func chromiumAddon(root: URL) -> Addon {
+    static func chromiumAddon(root: URL, name browserName: String) -> Addon {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path(percentEncoded: false))) ?? []
+        var blocked = false
         for name in names where name == "Default" || name.hasPrefix("Profile ") {
             for file in ["Secure Preferences", "Preferences"] {
-                guard let data = try? Data(contentsOf: root.appending(path: "\(name)/\(file)")),
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let data: Data
+                do { data = try Data(contentsOf: root.appending(path: "\(name)/\(file)")) } catch {
+                    blocked = blocked || (error as NSError).code == NSFileReadNoPermissionError
+                    continue
+                }
+                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let extensions = json["extensions"] as? [String: Any],
                       let settings = extensions["settings"] as? [String: Any],
                       settings[chromeID] != nil
@@ -174,7 +194,8 @@ enum BrowserCheck {
                 return .added
             }
         }
-        return .notAdded
+        // macOS keeps apps out of other apps' data unless given Full Disk Access; the extension can still report in.
+        return blocked ? .unknown("Open the Rays button in \(browserName) once so Rays can see the extension.") : .notAdded
     }
 
     static func firefoxAddon(root: URL) -> Addon {

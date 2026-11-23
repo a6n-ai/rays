@@ -34,6 +34,15 @@ async function sendAndReport(urls) {
 // A new store version is applied at once instead of when the browser next restarts the extension.
 chrome.runtime.onUpdateAvailable.addListener(() => chrome.runtime.reload());
 
+// Tells Rays this browser has the extension: macOS keeps the app out of browsers' profile folders. "urls": []
+// keeps an older helper, which only adds links, answering ok.
+function checkIn() {
+  const version = chrome.runtime.getManifest().version;
+  chrome.runtime.sendNativeMessage(HOST, { ping: true, urls: [], version }, () => void chrome.runtime.lastError);
+}
+chrome.runtime.onStartup.addListener(checkIn);
+chrome.runtime.onInstalled.addListener(checkIn);
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: MENU_ID, title: "Download with Rays", contexts: ["link", "page"] });
 });

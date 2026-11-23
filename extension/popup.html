@@ -24,13 +24,17 @@
   footer { padding: 10px 14px; display: flex; justify-content: space-between; }
   a { color: var(--muted); text-decoration: none; } a:hover { text-decoration: underline; }
   #version { color: var(--muted); }
+  #fix { margin-top: 8px; display: flex; gap: 10px; align-items: center; }
+  #fix[hidden] { display: none; }
 </style>
 </head>
 <body>
 <header><img src="icons/32.png" alt=""><b>Rays</b></header>
 <section id="status" role="status" aria-live="polite">
   <span id="dot"></span>
-  <div><div id="headline">Checking the connection…</div><div id="detail"></div></div>
+  <div><div id="headline">Checking the connection…</div><div id="detail"></div>
+    <div id="fix" hidden><button id="install">Install helper</button> <a href="https://rays.a6n.ai" target="_blank" rel="noopener">Get Rays</a></div>
+  </div>
 </section>
 <section>
   <form id="add">
@@ -45,7 +49,6 @@
 <footer>
   <a href="https://rays.a6n.ai/docs/app/browser/" target="_blank" rel="noopener">Help</a>
   <span><a href="#" id="update" hidden>Check for updates</a> <span id="version"></span></span>
-  <a href="#" id="options">Options</a>
 </footer>
 <script src="popup.js"></script>
 </body>

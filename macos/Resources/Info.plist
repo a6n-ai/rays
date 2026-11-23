@@ -16,6 +16,17 @@
 	<string>Rays</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ai.a6n.rays</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rays</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.11</string>
 	<key>CFBundleVersion</key>

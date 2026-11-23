@@ -167,10 +167,31 @@ fn handle_host_message(payload: &[u8]) -> Value {
 /// which only adds, still answers ok); anything else adds `urls`.
 fn host_reply(payload: &[u8]) -> Result<Value, String> {
     let msg: Value = serde_json::from_slice(payload).map_err(|e| format!("bad message: {e}"))?;
+    note_browser(msg.get("version").and_then(Value::as_str));
     if msg.get("ping").and_then(Value::as_bool) == Some(true) {
         return Ok(host_ping(&socket_path()));
     }
     host_add(&msg)
+}
+
+/// Records which browser runs the extension, in `browsers.json` next to the socket: the app reads it to show the
+/// extension as added, since macOS keeps it out of other browsers' profile folders. The browser is the host's
+/// parent process; keyed by its `.app` path. Best effort: a failure only leaves the old record.
+fn note_browser(version: Option<&str>) {
+    let ppid = std::os::unix::process::parent_id().to_string();
+    let Ok(out) = Command::new("ps").args(["-o", "comm=", "-p", &ppid]).output() else { return };
+    let exe = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let Some(app) = exe.find(".app/").map(|i| exe[..i + 4].to_string()) else { return };
+    let Some(dir) = socket_path().parent().map(Path::to_path_buf) else { return };
+    let file = dir.join("browsers.json");
+    let mut seen: serde_json::Map<String, Value> =
+        std::fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    seen.insert(app, json!({"seen": now, "version": version}));
+    let tmp = dir.join(format!("browsers.json.{}", std::process::id()));
+    if std::fs::write(&tmp, Value::Object(seen).to_string()).is_ok() {
+        let _ = std::fs::rename(&tmp, &file);
+    }
 }
 
 /// Whether Rays is running, and how many downloads are queued or running. Always `ok`: the host itself answered.

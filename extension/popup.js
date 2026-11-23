@@ -18,9 +18,13 @@ function show(kind, headline, detail = "") {
 
 async function check() {
   // "urls": [] keeps an older helper, which only adds links, answering ok.
-  const { reply, error } = await native({ ping: true, urls: [] });
-  if (error) {
-    show("bad", "Rays helper not installed", "In Rays, open Settings > Browsers and click Install All Helpers.");
+  const { reply, error } = await native({ ping: true, urls: [], version: chrome.runtime.getManifest().version });
+  const missing = !!error && /not found/i.test(error);
+  $("fix").hidden = !missing;
+  if (missing) {
+    show("bad", "Rays helper not installed", "Install it from Rays, then open this menu again.");
+  } else if (error) {
+    show("bad", "Couldn't reach Rays", error);
   } else if (reply.rays === true) {
     const n = reply.active || 0;
     show("ok", "Connected to Rays", n ? `${n} download${n === 1 ? "" : "s"} in progress` : "Right-click a link and choose Download with Rays.");
@@ -70,6 +74,10 @@ $("add").addEventListener("submit", async (event) => {
 
 chrome.storage.local.get("sendAll").then(({ sendAll }) => { $("sendAll").checked = !!sendAll; });
 $("sendAll").addEventListener("change", () => chrome.storage.local.set({ sendAll: $("sendAll").checked }));
-$("options").addEventListener("click", (event) => { event.preventDefault(); chrome.runtime.openOptionsPage(); });
+// Rays installs the helper for every browser when the browser hands it this link (it asks "Open Rays?" first).
+$("install").addEventListener("click", () => {
+  chrome.tabs.create({ url: "rays://install-helpers" });
+  window.close();
+});
 
 check();

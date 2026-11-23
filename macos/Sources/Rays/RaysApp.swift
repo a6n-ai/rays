@@ -86,6 +86,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
+    /// `rays://install-helpers`, from the browser extension when its helper is missing: installs the helper for every
+    /// installed browser (each only lets the Rays extension in) and shows Settings > Browsers with the result.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard urls.contains(where: { $0.scheme == "rays" && $0.host() == "install-helpers" }) else { return }
+        for browser in BrowserCheck.browsers where browser.engine != .safari && BrowserCheck.appURL(for: browser) != nil {
+            try? BrowserCheck.installHelper(browser)
+        }
+        UserDefaults.standard.set("browsers", forKey: "settingsTab")
+        Self.showInDock()
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
     /// Puts Rays back in the Dock and in front, for a window opened from the menu bar.
     static func showInDock() {
         NSApp.setActivationPolicy(.regular)
