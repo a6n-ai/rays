@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.17 (23 Nov 2026)
+
+- Downloads keep their speed when a server drops connections: a dropped connection reconnects at once and keeps every byte it received. On a test server that drops connections at random, a big file now downloads at 41 MB/s instead of 5 MB/s.
+- Secure (HTTPS) downloads use less CPU: one connection can now decrypt over 1.7 GB/s, up from under 0.5 GB/s, and connections use TLS 1.3 where the server offers it.
+- New [benchmarks](https://github.com/a6n-ai/rays/blob/main/docs/benchmarks.md) against aria2 and curl, with the script to rerun them.
+
 ## 0.1.16 (23 Nov 2026)
 
 - Install with Homebrew again: `brew install --cask a6n-ai/tap/rays`. The DMG download stays.
