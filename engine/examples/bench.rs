@@ -2,6 +2,7 @@
 //! `cargo run --release -p dl-engine --example bench -- <url> [connections,connections,...] [runs]`
 //! Runs the connection counts interleaved (1,8,1,8,...) so network drift hits both, throws away one warm-up run,
 //! then prints the median MB/s per count. Defaults: connections 1,8 and 5 measured runs.
+//! RAYS_BENCH_OUT=<path> moves the downloaded file there instead of deleting it.
 use dl_engine::{Engine, EngineConfig, JobState};
 use std::time::{Duration, Instant};
 
@@ -32,6 +33,11 @@ fn once(url: &str, connections: u32) -> Result<(f64, usize), String> {
         }
     };
     engine.shutdown();
+    // RAYS_BENCH_OUT=<path> keeps the file there, so a script can hash it outside the timed run.
+    if let (Ok(_), Some(out)) = (&result, std::env::var_os("RAYS_BENCH_OUT")) {
+        let file = std::fs::read_dir(root.join("dl")).ok().and_then(|mut d| d.next()?.ok()).ok_or("no file")?;
+        std::fs::rename(file.path(), out).map_err(|e| e.to_string())?;
+    }
     let _ = std::fs::remove_dir_all(&root);
     result
 }

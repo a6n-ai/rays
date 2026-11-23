@@ -1,12 +1,14 @@
 //! Fault-injecting HTTP/1.1 test server, so download tools can be timed on the same conditions without the
 //! noise of a real line: `cargo run --release -p dl-engine --example lab -- [flags]`, then download
-//! `http://127.0.0.1:<port>/<bytes>.bin` (zeros; any size). Keep-alive and single `bytes=a-b` ranges.
+//! `http://127.0.0.1:<port>/<bytes>.bin` (any size; byte i is `i % 251`, so misplaced ranges change the hash).
+//! Keep-alive and single `bytes=a-b` ranges.
 //!
 //! Flags (all optional): `--port 8766`, `--conn-rate B/s` cap per request, `--link-rate B/s` cap shared by all,
 //! `--latency ms` before each response, `--slow-every N` and `--slow-rate B/s` (every Nth request is slow),
 //! `--max-conns N` (503 with Retry-After: 1 above N transfers at once), `--drop-after B` (each response closes
-//! after B bytes), `--no-range` (always 200, no Accept-Ranges).
-//! `GET /stats` returns requests, 503s, peak concurrent transfers and bytes sent as JSON; `GET /reset` zeroes them.
+//! after B bytes), `--drop-percent P` (each 64 KiB chunk has a P % chance to close the connection),
+//! `--no-range` (always 200, no Accept-Ranges).
+//! `GET /sha256/<bytes>` returns the file's SHA-256 in hex. `GET /stats` returns requests, 503s, peak concurrent transfers and bytes sent as JSON; `GET /reset` zeroes them.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -14,6 +16,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
 const CHUNK: usize = 64 << 10;
+/// Prime, so the pattern does not line up with power-of-two segment or chunk boundaries.
+const PERIOD: usize = 251;
 
 #[derive(Default)]
 struct Cfg {
@@ -25,6 +29,7 @@ struct Cfg {
     slow_rate: u64,
     max_conns: u64,
     drop_after: u64,
+    drop_percent: u64,
     no_range: bool,
 }
 
@@ -96,6 +101,7 @@ fn parse_args() -> Cfg {
             "--slow-rate" => cfg.slow_rate = value,
             "--max-conns" => cfg.max_conns = value,
             "--drop-after" => cfg.drop_after = value,
+            "--drop-percent" => cfg.drop_percent = value,
             _ => panic!("unknown flag {flag}"),
         }
     }
@@ -159,6 +165,11 @@ async fn serve(sock: TcpStream, lab: &Lab) -> std::io::Result<()> {
             }
             _ => {}
         }
+        if let Some(total) = path.strip_prefix("/sha256/").and_then(|n| n.parse::<u64>().ok()) {
+            let hex = tokio::task::spawn_blocking(move || pattern_sha256(total)).await.expect("hash task");
+            reply(out, "200 OK", &[], format!("{hex}\n").as_bytes()).await?;
+            continue;
+        }
         let Some(total) = path.strip_prefix('/').and_then(|p| p.strip_suffix(".bin")).and_then(|n| n.parse::<u64>().ok())
         else {
             reply(out, "404 Not Found", &[], b"not found\n").await?;
@@ -200,16 +211,21 @@ async fn serve(sock: TcpStream, lab: &Lab) -> std::io::Result<()> {
         out.write_all(head.as_bytes()).await?;
 
         let rate = if lab.cfg.slow_every > 0 && n.is_multiple_of(lab.cfg.slow_every) { lab.cfg.slow_rate } else { lab.cfg.conn_rate };
-        let zeros = [0u8; CHUNK];
+        let pattern: Vec<u8> = (0..CHUNK + PERIOD).map(|i| (i % PERIOD) as u8).collect();
+        let mut rng = n.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
         let began = Instant::now();
         let mut sent: u64 = 0;
         while sent < len {
             if lab.cfg.drop_after > 0 && sent >= lab.cfg.drop_after {
                 return Ok(()); // closes the connection mid-body
             }
+            if lab.cfg.drop_percent > 0 && sent > 0 && xorshift(&mut rng) % 100 < lab.cfg.drop_percent {
+                return Ok(());
+            }
             let take = (len - sent).min(CHUNK as u64) as usize;
             lab.link.take(take).await;
-            out.write_all(&zeros[..take]).await?;
+            let at = ((start + sent) % PERIOD as u64) as usize;
+            out.write_all(&pattern[at..at + take]).await?;
             sent += take as u64;
             lab.stats.bytes.fetch_add(take as u64, Ordering::Relaxed);
             if rate > 0 && sent < len {
@@ -231,4 +247,33 @@ async fn reply(out: &mut TcpStream, status: &str, headers: &[(&str, &str)], body
     head += "\r\n";
     out.write_all(head.as_bytes()).await?;
     out.write_all(body).await
+}
+
+fn xorshift(x: &mut u64) -> u64 {
+    *x ^= *x << 13;
+    *x ^= *x >> 7;
+    *x ^= *x << 17;
+    *x
+}
+
+fn pattern_sha256(total: u64) -> String {
+    use sha2::{Digest, Sha256};
+    let block: Vec<u8> = (0..PERIOD * 4096).map(|i| (i % PERIOD) as u8).collect();
+    let mut hasher = Sha256::new();
+    let mut left = total;
+    while left > 0 {
+        let take = left.min(block.len() as u64) as usize;
+        hasher.update(&block[..take]);
+        left -= take as u64;
+    }
+    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[test]
+fn pattern_hash_matches_bytes() {
+    use sha2::{Digest, Sha256};
+    let n = PERIOD * 4096 + 1000;
+    let bytes: Vec<u8> = (0..n).map(|i| (i % PERIOD) as u8).collect();
+    let want: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(pattern_sha256(n as u64), want);
 }
