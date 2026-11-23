@@ -38,8 +38,8 @@ Downloads go to `~/Downloads` unless you choose another folder in **Settings > G
 
 ## In the Dock and menu bar
 
-- While files download, the Rays icon in the Dock shows a progress bar and a badge with how many are downloading.
-- The menu bar icon is Rays' stacked pages. A red badge shows how many downloads are running. Click it to open the panel.
+- While files download, the Rays icon in the Dock shows the download speed, a progress bar and a red badge with how many are downloading. The badge needs **Badge application icon** on in **System Settings > Notifications > Rays**.
+- The menu bar icon is Rays' stacked pages. A red badge shows how many downloads are running, and the speed shows next to it. Click it to open the panel.
 - The panel has a box to paste a link with **Download**, **Add Links from a File**, **Download Link from Clipboard**, **Pause All** and **Resume All**, and the latest four downloads. **See All in Rays** opens the full list. **Clear** hides them from the panel only. It also has **Downloads**, **Sorter** and **Cloud**, **Open Rays**, **Settings** and **Quit Rays**.
 - Click a finished download in the panel to open it. Right-click for **Open**, **Show in Finder**, **Remove from Rays** and **Move to Trash**.
 - Closing the window, or choosing **Keep Downloading in Menu Bar** from the Dock menu, keeps Rays running in the menu bar without a Dock icon, so downloads carry on. To quit, choose **Quit Rays** in the menu bar panel, which quits fully, or right-click Rays in the Dock and choose **Quit**. **Settings > General > Show in menu bar** turns the menu bar icon off; then closing the window quits Rays.

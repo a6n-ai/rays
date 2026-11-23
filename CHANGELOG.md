@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.1.15 (23 Nov 2026)
+
+- The Dock icon shows the download speed above its progress bar, and the menu bar shows the speed next to the icon while files download.
+- The red badges show: the menu bar badge keeps its red, and Rays asks once to show badges, which macOS needs before the Dock icon can show the number of downloads. If you said no, turn on Badge application icon in System Settings > Notifications > Rays.
+
 ## 0.1.14 (23 Nov 2026)
 
 - The menu bar icon shows a red badge with the number of downloads running.

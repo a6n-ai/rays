@@ -66,7 +66,7 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 
 ## The app
 
-- The menu bar icon shows a badge with the downloads running. Its panel adds links, pauses all, lists the latest four downloads and opens Downloads, Sorter and Cloud.
+- The menu bar and Dock icons show the download speed and a badge with the downloads running. Its panel adds links, pauses all, lists the latest four downloads and opens Downloads, Sorter and Cloud.
 - Close the window and Rays keeps downloading from the menu bar.
 - Updates install themselves: click Update and Rays replaces itself and reopens.
 - Install with the DMG.
