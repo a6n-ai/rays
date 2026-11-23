@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "node scripts/changelog.mjs && astro dev",
     "build": "node scripts/changelog.mjs && astro build && node scripts/markdown.mjs",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name rays --branch main"
+    "deploy": "npm run build && wrangler pages deploy dist --project-name rays --branch main",
+    "test": "node scripts/download.test.mjs",
+    "downloads": "node scripts/downloads.ts"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.43.1",

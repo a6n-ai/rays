@@ -9,7 +9,7 @@ const { sidebar, entry } = Astro.locals.starlightRoute;
 type Item = { type: string; label: string; isCurrent?: boolean; entries?: Item[] };
 const group = (sidebar as Item[]).find((g) => g.type === 'group' && g.entries?.some((e) => e.isCurrent));
 const crumbs = (entry.id === 'docs' ? ['Home'] : [group?.label, entry.data.title].filter(Boolean)) as string[];
-const DMG = 'https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg';
+const DMG = 'https://rays.a6n.ai/download/Rays.dmg?src=docs';
 ---
 
 <div class="rh">

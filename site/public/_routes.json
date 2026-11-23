@@ -1,5 +1,14 @@
 {
   "version": 1,
-  "include": ["/", "/releases", "/releases/", "/docs", "/docs/*"],
-  "exclude": ["/docs/*.*"]
+  "include": [
+    "/",
+    "/releases",
+    "/releases/",
+    "/docs",
+    "/docs/*",
+    "/download/*"
+  ],
+  "exclude": [
+    "/docs/*.*"
+  ]
 }

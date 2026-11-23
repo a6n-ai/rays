@@ -12,7 +12,7 @@ if (ctx) {
 	const info = {
 		name: 'Rays',
 		requires: 'macOS 26 or later',
-		dmg: 'https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg',
+		dmg: 'https://rays.a6n.ai/download/Rays.dmg?src=agent',
 		homebrew: 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays',
 		firstOpen: 'DMG installs: System Settings > Privacy & Security > Open Anyway. Homebrew skips this.',
 		cli: 'https://rays.a6n.ai/docs/dl/',

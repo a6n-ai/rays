@@ -5,7 +5,7 @@ Website and docs: [rays.a6n.ai](https://rays.a6n.ai).
 
 ## Download
 
-**[Download Rays.dmg](https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg)**: open it and drag Rays to Applications.
+**[Download Rays.dmg](https://rays.a6n.ai/download/Rays.dmg?src=github)**: open it and drag Rays to Applications.
 Requires macOS 26. Rays isn't notarized yet: if macOS blocks it on first launch, open
 System Settings > Privacy & Security and choose **Open Anyway**.
 

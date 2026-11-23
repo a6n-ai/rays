@@ -161,7 +161,8 @@ final class Updater {
             ?? body.assets.first { $0.name.hasSuffix(".dmg") }
         let zip = body.assets.first { $0.name.hasSuffix(".zip") }
         return Release(version: version, page: body.html_url, dmg: dmg?.browser_download_url,
-                       zip: zip?.browser_download_url,
+                       // Through rays.a6n.ai so updates are counted apart from new installs; it redirects to GitHub.
+                       zip: zip.flatMap { URL(string: "https://rays.a6n.ai/download/\($0.name)?src=update") },
                        sha256: zip?.digest.flatMap { $0.hasPrefix("sha256:") ? String($0.dropFirst(7)) : nil })
     }
 

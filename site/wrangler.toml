@@ -1,0 +1,8 @@
+name = "rays"
+compatibility_date = "2026-11-17"
+pages_build_output_dir = "dist"
+
+# Download counts from functions/download/[asset].js; query with scripts/downloads.sh.
+[[analytics_engine_datasets]]
+binding = "DOWNLOADS"
+dataset = "rays_downloads"
