@@ -370,6 +370,20 @@ private struct MenuBarRow: View {
         .padding(.vertical, 6)
         .background(hovering ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .onHover { hovering = $0 }
+        .contentShape(Rectangle())
+        .onTapGesture { if job.isDone { model.open(job) } }
+        .help(job.isDone ? "Open \(job.name)" : "")
+        .contextMenu {
+            if job.isDone {
+                Button("Open") { model.open(job) }
+                Button("Show in Finder") { model.reveal(job) }
+                Divider()
+            }
+            Button("Remove from Rays") { model.remove(job.id, deletePartial: false) }
+            if job.isDone, model.locate(job) != nil {
+                Button("Move to Trash", role: .destructive) { model.removeAndTrash([job]) }
+            }
+        }
     }
 
     private var status: String {

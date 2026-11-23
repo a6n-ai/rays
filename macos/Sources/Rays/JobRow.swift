@@ -93,9 +93,10 @@ struct JobRow: View {
         .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHovered)
         .dragOut(model.locate(job))
         .contextMenu { menu }
-        .onTapGesture(count: 2) {
+        // Simultaneous, so the list still selects the row: a plain double-tap gesture never fires inside List(selection:).
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
             if job.isDone { model.open(job) }
-        }
+        })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(([job.name] + statusParts.map(\.text)).joined(separator: ", "))
         .accessibilityAction(named: primary.title) { perform(primary) }
