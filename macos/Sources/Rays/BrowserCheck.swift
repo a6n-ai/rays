@@ -9,6 +9,7 @@ enum BrowserCheck {
     static let chromeID = "mgepiogdappnhmohefhalmeppkfciail"
     static let firefoxID = "rays@a6n.ai"
     static let manifestName = "\(hostName).json"
+    static let chromeHostDir = "Google/Chrome/NativeMessagingHosts"
     static let chromeStoreURL = URL(string: "https://chromewebstore.google.com/detail/\(chromeID)")!
     static let firefoxStoreURL = URL(string: "https://addons.mozilla.org/firefox/addon/\(firefoxID)/")!
     static let addonNotFoundNote = "Rays couldn't find it in any Firefox profile. Add it from Firefox Add-ons."
@@ -231,7 +232,10 @@ enum BrowserCheck {
             manifest["allowed_origins"] = ["chrome-extension://\(chromeID)/"]
         }
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
-        for hostDir in [hostDir] + [browser.alsoHostDir].compactMap({ $0 }) {
+        // Chrome's folder too for every Chromium browser: forks that keep Chrome's path (as Brave does) read it there.
+        // It is never removed for another browser, so Chrome and Brave keep it.
+        let shared = browser.engine == .chromium ? chromeHostDir : nil
+        for hostDir in NSOrderedSet(array: [hostDir, browser.alsoHostDir, shared].compactMap { $0 }).array as! [String] {
             let dir = supportURL(hostDir)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             try data.write(to: dir.appending(path: manifestName), options: .atomic)
