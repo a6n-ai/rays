@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.12 (23 Nov 2026)
+
+- Download lists (Downloads, Sorter's recent moves and Cloud) have Filter and Sort menus, pages of 50, and an icon for each file's type. Each window's toolbar has the same three buttons: recent first, settings last.
+- Copy a download link anywhere on your Mac and Rays offers to download it in a notification. Turn this off in Settings.
+- Close the window and Rays can keep downloading from the menu bar. Its menu bar panel shows the Rays icon and opens Downloads, Sorter and Cloud, or adds a link or a file of links.
+- Settings > Browsers shows the extension as added in browsers whose files macOS keeps private, such as Brave, once you've opened the Rays button there.
+- The extension menu has Install helper when the helper is missing, and updates itself as soon as the store has a new version.
+
 ## 0.1.11 (23 Nov 2026)
 
 - The browser extension has a menu: click the Rays button to see whether it's connected to Rays and how many downloads are in progress, paste a link to download, or switch Send all browser downloads to Rays on and off.
