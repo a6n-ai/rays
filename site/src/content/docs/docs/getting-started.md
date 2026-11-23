@@ -16,6 +16,7 @@ The quickest way is the DMG:
 Or with Homebrew, which skips step 3:
 
 ```sh
+brew trust a6n-ai/tap
 brew install --cask a6n-ai/tap/rays
 ```
 

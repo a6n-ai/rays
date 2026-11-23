@@ -12,6 +12,7 @@ System Settings > Privacy & Security and choose **Open Anyway**.
 Or with Homebrew (no Gatekeeper step, and `dl` is added for you):
 
 ```sh
+brew trust a6n-ai/tap                    # once: Homebrew asks you to trust third-party taps
 brew install --cask a6n-ai/tap/rays      # install
 brew upgrade --cask rays                 # update
 brew uninstall --cask rays               # uninstall (stops Rays' sorter helpers)

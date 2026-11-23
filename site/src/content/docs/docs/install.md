@@ -18,6 +18,7 @@ The optional `dl` command, for Terminal and AI agents, comes inside the app. To 
 ## Homebrew
 
 ```sh
+brew trust a6n-ai/tap
 brew install --cask a6n-ai/tap/rays
 ```
 

@@ -10,6 +10,7 @@ description: "Download files and sort folders from Terminal with dl, the command
 Homebrew puts `dl` on your PATH:
 
 ```sh
+brew trust a6n-ai/tap
 brew install --cask a6n-ai/tap/rays
 ```
 

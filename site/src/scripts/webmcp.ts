@@ -13,7 +13,7 @@ if (ctx) {
 		name: 'Rays',
 		requires: 'macOS 26 or later',
 		dmg: 'https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg',
-		homebrew: 'brew install --cask a6n-ai/tap/rays',
+		homebrew: 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays',
 		firstOpen: 'DMG installs: System Settings > Privacy & Security > Open Anyway. Homebrew skips this.',
 		cli: 'https://rays.a6n.ai/docs/dl/',
 		mcp: 'dl mcp (stdio). Claude Code: claude mcp add rays -- dl mcp',

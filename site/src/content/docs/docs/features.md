@@ -63,7 +63,7 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 ## The app
 
 - Updates install themselves: click Update and Rays replaces itself and reopens.
-- Install with the DMG or `brew install --cask a6n-ai/tap/rays`.
+- Install with the DMG or `brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays`.
 - Uninstall from Settings, which also removes the sorter, browser helpers and `dl`.
 - Light, dark or system appearance.
 
