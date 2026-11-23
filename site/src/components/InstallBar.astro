@@ -4,6 +4,7 @@ import icon from '../assets/icon.png';
 
 const DMG = 'https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg';
 const NOTES = '/releases/';
+const BREW = 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays';
 ---
 
 <div class="install">
@@ -16,12 +17,20 @@ const NOTES = '/releases/';
 		<a class="download" href={DMG}>Download for Mac</a>
 	</div>
 
+	<div class="brew">
+		<code id="brew-cmd">{BREW}</code>
+		<button type="button" class="copy" data-copy="brew-cmd">Copy</button>
+		<span class="sr-only" role="status" aria-live="polite" data-copy-status></span>
+	</div>
+
 	<details class="note">
 		<summary>Opening the DMG for the first time?</summary>
-		<p>If macOS blocks Rays, go to System Settings, Privacy &amp; Security, and choose Open Anyway.</p>
+		<p>If macOS blocks Rays, go to System Settings, Privacy &amp; Security, and choose Open Anyway. Homebrew installs skip this.</p>
 	</details>
 	<p class="note mac-only">Rays runs on Macs with macOS 26 or later.</p>
 </div>
+
+<script src="../scripts/copy.ts"></script>
 
 <style>
 	.install {
@@ -72,6 +81,42 @@ const NOTES = '/releases/';
 		filter: brightness(1.08);
 	}
 	.download:active {
+		transform: scale(0.97);
+	}
+	.brew {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 10px 10px 16px;
+		border-radius: 14px;
+		background: var(--chip);
+	}
+	.brew code {
+		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
+		font: 0.9375rem / 1.4 var(--font-mono);
+	}
+	.brew code::before {
+		content: '$ ';
+		color: var(--muted);
+	}
+	.copy {
+		flex: none;
+		min-width: 4.5rem;
+		padding: 8px 12px;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--ink);
+		font: 500 0.875rem var(--font-text);
+		cursor: pointer;
+		transition: background-color 160ms var(--ease-out);
+	}
+	.copy:hover {
+		background: var(--faint);
+	}
+	.copy:active {
 		transform: scale(0.97);
 	}
 	.note summary {

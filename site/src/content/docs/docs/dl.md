@@ -7,7 +7,14 @@ description: "Download files and sort folders from Terminal with dl, the command
 
 ## Install
 
-Open **Settings > General** and click **Install** next to **Command line tool**.
+Homebrew puts `dl` on your PATH:
+
+```sh
+brew trust a6n-ai/tap
+brew install --cask a6n-ai/tap/rays
+```
+
+With a DMG install, open **Settings > General** and click **Install** next to **Command line tool**.
 
 ## Commands
 

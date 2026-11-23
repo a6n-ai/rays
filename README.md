@@ -9,7 +9,17 @@ Website and docs: [rays.a6n.ai](https://rays.a6n.ai).
 Requires macOS 26. Rays isn't notarized yet: if macOS blocks it on first launch, open
 System Settings > Privacy & Security and choose **Open Anyway**.
 
-Rays updates itself: it shows a note when a new version is out. To uninstall, open
+Or with Homebrew (no Gatekeeper step, and `dl` is added for you):
+
+```sh
+brew trust a6n-ai/tap                    # once: Homebrew asks you to trust third-party taps
+brew install --cask a6n-ai/tap/rays      # install
+brew upgrade --cask rays                 # update
+brew uninstall --cask rays               # uninstall (stops Rays' sorter helpers)
+brew uninstall --zap --cask rays         # uninstall and delete settings, history and browser helpers
+```
+
+Rays updates itself: it shows a note when a new version is out. DMG installs uninstall from
 Settings > General > Uninstall Rays.
 
 ## Use
@@ -25,7 +35,7 @@ View > Appearance chooses System, Light or Dark.
 ## Command line and AI agents (optional)
 
 Rays works without it. `dl` ships inside Rays.app for people who want Terminal, scripts or AI agents:
-install it from **Settings > General > Command line tool**.
+install it from **Settings > General > Command line tool** (Homebrew already did).
 
 ```sh
 dl https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg   # add to the running app (opens it if needed)
@@ -59,7 +69,7 @@ open bin/Rays.app
 ```
 
 `scripts/make-dmg.sh` packs `bin/Rays.app` into a drag-to-install DMG. Pushing a `v*` tag runs
-`.github/workflows/release.yml`, which builds, publishes the zip and DMG.
+`.github/workflows/release.yml`, which builds, publishes the zip and DMG, and bumps the Homebrew cask.
 The code: a Rust engine (`engine/`) behind a SwiftUI app (`macos/`), the `dl` command (`cli/`), the
 sorter (`sorter/`, `extract/`) and the website (`site/`). Design: [docs/designs/rays.md](docs/designs/rays.md).
 

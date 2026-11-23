@@ -13,6 +13,13 @@ The quickest way is the DMG:
 2. Open it and drag **Rays** to **Applications**.
 3. Open Rays. The first time, macOS may block it: go to **System Settings > Privacy & Security** and choose **Open Anyway**.
 
+Or with Homebrew, which skips step 3:
+
+```sh
+brew trust a6n-ai/tap
+brew install --cask a6n-ai/tap/rays
+```
+
 More options, updating and uninstalling: [Install](/docs/install/).
 
 ## 2. Download a file

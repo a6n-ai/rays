@@ -69,7 +69,7 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 - The menu bar and Dock icons show the download speed and a badge with the downloads running. Its panel adds links, pauses all, lists the latest four downloads and opens Downloads, Sorter and Cloud.
 - Close the window and Rays keeps downloading from the menu bar.
 - Updates install themselves: click Update and Rays replaces itself and reopens.
-- Install with the DMG.
+- Install with the DMG or `brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays`.
 - Uninstall from Settings, which also removes the sorter, browser helpers and `dl`.
 - Light, dark or system appearance.
 
