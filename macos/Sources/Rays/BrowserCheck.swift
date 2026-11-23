@@ -87,8 +87,44 @@ enum BrowserCheck {
         let appURL: URL
         /// Built on Chromium (a `… Framework.framework` inside), so it may take the Chrome Web Store extension.
         let chromium: Bool
+        /// Built on Firefox (Gecko's `libmozglue.dylib` inside), so it may take the Firefox add-on.
+        var gecko = false
 
         var id: String { bundleID }
+    }
+
+    /// A Chromium or Firefox browser Rays doesn't know by name, set up like the ones it does: the helper in its own
+    /// data folder (Chromium) or Mozilla's shared one (Firefox), the extension looked for in its profiles. Nil when
+    /// its data folder can't be found, or it is built on neither.
+    static func discovered(_ other: OtherBrowser) -> Browser? {
+        if other.chromium, let support = dataFolder(for: other, marker: "Local State") {
+            return Browser(bundleID: other.bundleID, name: other.name, engine: .chromium,
+                           support: support, hostDir: "\(support)/NativeMessagingHosts")
+        }
+        if other.gecko {
+            return Browser(bundleID: other.bundleID, name: other.name, engine: .firefox,
+                           support: dataFolder(for: other, marker: "profiles.ini"), hostDir: "Mozilla/NativeMessagingHosts",
+                           helperNote: "Browsers built on Firefox share one helper.")
+        }
+        return nil
+    }
+
+    /// The folder in ~/Library/Application Support, up to two levels down, holding `marker` and named after the app
+    /// (its name or bundle ID, letters only): "Vivaldi", "com.operasoftware.Opera", "Thorium/User Data".
+    static func dataFolder(for other: OtherBrowser, marker: String) -> String? {
+        let fm = FileManager.default
+        let root = supportURL("")
+        let letters = { (s: String) in s.lowercased().filter(\.isLetter) }
+        let name = letters(other.name.replacingOccurrences(of: " Browser", with: "")), id = other.bundleID.lowercased()
+        guard !name.isEmpty else { return nil }
+        let top = (try? fm.contentsOfDirectory(atPath: root.path(percentEncoded: false))) ?? []
+        for entry in top.sorted() where letters(entry).contains(name) || entry.lowercased() == id {
+            for rel in [entry] + ((try? fm.contentsOfDirectory(atPath: root.appending(path: entry).path(percentEncoded: false))) ?? []).map({ "\(entry)/\($0)" })
+            where fm.fileExists(atPath: root.appending(path: "\(rel)/\(marker)").path(percentEncoded: false)) {
+                return rel
+            }
+        }
+        return nil
     }
 
     /// Apps in the Applications folders that open both web links and .html files (a download manager opens links but
@@ -108,7 +144,9 @@ enum BrowserCheck {
             let name = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") ?? bundle.object(forInfoDictionaryKey: "CFBundleName")) as? String
             let frameworks = (try? FileManager.default.contentsOfDirectory(atPath: url.appending(path: "Contents/Frameworks").path)) ?? []
             let chromium = frameworks.contains { $0.hasSuffix(" Framework.framework") && !$0.hasPrefix("Electron") }
-            return OtherBrowser(bundleID: id, name: name ?? url.deletingPathExtension().lastPathComponent, appURL: url, chromium: chromium)
+            let gecko = FileManager.default.fileExists(atPath: url.appending(path: "Contents/MacOS/libmozglue.dylib").path(percentEncoded: false))
+            return OtherBrowser(bundleID: id, name: name ?? url.deletingPathExtension().lastPathComponent, appURL: url,
+                                chromium: chromium, gecko: gecko)
         }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -271,10 +309,14 @@ final class BrowserCheckModel {
 
     /// Installed lookup runs here; file reads run off the main actor.
     func refresh() {
-        let installed = BrowserCheck.browsers.compactMap { browser in
+        var installed = BrowserCheck.browsers.compactMap { browser in
             BrowserCheck.appURL(for: browser).map { (browser, $0) }
         }
-        others = BrowserCheck.otherBrowsers()
+        var unsupported: [BrowserCheck.OtherBrowser] = []
+        for other in BrowserCheck.otherBrowsers() {
+            if let browser = BrowserCheck.discovered(other) { installed.append((browser, other.appURL)) } else { unsupported.append(other) }
+        }
+        others = unsupported
         Task {
             states = await Task.detached {
                 installed.map { BrowserCheck.state(for: $0.0, appURL: $0.1) }

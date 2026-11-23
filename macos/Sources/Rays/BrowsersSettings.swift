@@ -35,12 +35,8 @@ struct BrowsersTab: View {
                     BrowserTitle(state: state)
                 }
             }
-            if !model.others.isEmpty {
-                Section("Other browsers") {
-                    ForEach(model.others) { other in
-                        OtherBrowserRow(browser: other)
-                    }
-                }
+            ForEach(model.others) { other in
+                Section { OtherBrowserRow(browser: other) }
             }
             SavedNote()
         }
@@ -67,7 +63,7 @@ private struct OtherBrowserRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(browser.name)
                 Text(browser.chromium
-                     ? "Built on Chromium. The extension may work from the Chrome Web Store, but Rays can't set up its helper for this browser yet."
+                     ? "Built on Chromium, but Rays couldn't find its data folder. Open it once, then click Check again."
                      : "Rays can't add itself to this browser: its extension needs Chrome, Firefox or a browser built on them.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
