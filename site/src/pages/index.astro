@@ -10,6 +10,7 @@ import Newsletter from '../components/Newsletter.astro';
 import Faq from '../components/Faq.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import icon from '../assets/icon.png';
+import sorter from '../assets/sorter.png';
 ---
 
 <Base
@@ -42,6 +43,7 @@ import icon from '../assets/icon.png';
 				<p class="sub">Rays downloads from your browser, Terminal, AI assistants and Hugging Face at full line speed. Then every file lands in a folder that fits, sorted by AI that never leaves your Mac. Free.</p>
 				<InstallBar />
 			</section>
+			<Panel />
 
 			<Passage label="Why" id="why">
 				<p>
@@ -133,6 +135,16 @@ import icon from '../assets/icon.png';
 					arrives, it moves into a folder that fits, like Installers, Archives, Images or Work.
 				</p>
 				<p>Rays can even rename files from what is inside them, or keep every original name. Your call.</p>
+				<figure class="shot">
+					<Image
+						src={sorter}
+						widths={[640, 960, 1280]}
+						sizes="(max-width: 899px) 100vw, 40rem"
+						alt="The Rays Sorter setup: on-device AI ready, sort new files after 10 seconds, rename files from their content, watching Documents and Downloads."
+						loading="lazy"
+					/>
+					<figcaption>Sorter setup in the Rays app.</figcaption>
+				</figure>
 			</Passage>
 
 			<Passage label="Private" id="private">
@@ -179,7 +191,6 @@ import icon from '../assets/icon.png';
 				<span>AGPL-3.0</span>
 			</footer>
 		</main>
-		<Panel />
 	</div>
 </Base>
 
@@ -252,17 +263,18 @@ import icon from '../assets/icon.png';
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		align-items: flex-end;
 		gap: 16px;
 		max-width: 40rem;
 	}
+	/* Two lines: the lead, then the drum at the same size. Sized so the lead fills the 40rem hero column. */
 	h1 {
 		margin: 0;
 		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		column-gap: 0.3em;
-		font: 500 var(--t-hero) / 1.2 var(--font-display);
-		letter-spacing: -0.02em;
+		flex-direction: column;
+		align-items: flex-start;
+		font: 500 clamp(2.25rem, 4.4vw, 4.25rem) / 1.05 var(--font-display);
+		letter-spacing: -0.035em;
 		overflow-wrap: break-word;
 		min-width: 0;
 	}
@@ -271,6 +283,22 @@ import icon from '../assets/icon.png';
 		max-width: 40rem;
 		color: var(--muted);
 		text-wrap: balance;
+	}
+	.shot {
+		margin: 20px 0 0;
+		max-width: 40rem;
+	}
+	.shot :global(img) {
+		display: block;
+		width: 100%;
+		height: auto;
+		border-radius: var(--radius);
+		border: 1px solid var(--line);
+	}
+	.shot figcaption {
+		margin-top: 10px;
+		color: var(--muted);
+		font-size: var(--t-small);
 	}
 	/* Benchmark numbers set as display type: the one place the page shouts. */
 	.stats {

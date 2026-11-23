@@ -324,3 +324,28 @@ starlight-toc h2 {
 .sl-heading-wrapper:hover .sl-anchor-link {
 	opacity: 1;
 }
+
+/* The home page's contour land, carried into every docs page as a band behind the title, fading out downward. */
+.main-frame .content-panel:first-of-type {
+	position: relative;
+	isolation: isolate;
+}
+.main-frame .content-panel:first-of-type::before {
+	content: '';
+	position: absolute;
+	inset: 0 0 -2rem;
+	z-index: -1;
+	pointer-events: none;
+	background: var(--sl-color-accent);
+	opacity: 0.32;
+	-webkit-mask: url('/contours.svg') center / cover no-repeat, linear-gradient(#000 35%, transparent);
+	-webkit-mask-composite: source-in;
+	mask: url('/contours.svg') center / cover no-repeat, linear-gradient(#000 35%, transparent);
+	mask-composite: intersect;
+}
+
+/* Inline links get a 24px tall hit area without moving the text around them. */
+.sl-markdown-content p a,
+.sl-markdown-content li a {
+	padding-block: 0.2em;
+}

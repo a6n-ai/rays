@@ -61,11 +61,12 @@ const total = HOLD * PHRASES.length;
 	.drum {
 		position: relative;
 		display: inline-block;
-		height: 6em;
+		/* A one-line window: only the current word shows, and the next one rolls through it on each turn. */
+		height: 1.3em;
 		/* Fits the longest phrase ("screenshots."); a wider drum pushes the heading past the 40rem hero column. */
 		width: 6.6em;
 		perspective: 900px;
-		mask-image: linear-gradient(transparent, #000 32%, #000 68%, transparent);
+		mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
 		vertical-align: middle;
 	}
 	/* Pull the ring back by its radius so the front face sits at depth 0 and keeps the heading's size. */

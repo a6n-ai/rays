@@ -29,15 +29,38 @@
 			attributes: true,
 			attributeFilter: ['data-theme'],
 		});
+		// The land follows the section being read: ridges for downloads, steady terraces for sorting, flat for
+		// privacy. The renderer eases elevation and tilt itself, so a change glides instead of jumping.
+		const LAND: Record<string, { elevation: number; tilt: number }> = {
+			why: { elevation: 1, tilt: 32 },
+			downloads: { elevation: 1.8, tilt: 28 },
+			engine: { elevation: 2.3, tilt: 24 },
+			sorting: { elevation: 0.75, tilt: 40 },
+			private: { elevation: 0.15, tilt: 52 },
+			anywhere: { elevation: 1.1, tilt: 34 },
+		};
+		const sections = [...document.querySelectorAll<HTMLElement>('.passage')].filter((s) => (s.querySelector('h2')?.id ?? '') in LAND);
+		const reading = new IntersectionObserver(
+			(entries) => {
+				for (const e of entries) {
+					const id = e.target.querySelector('h2')?.id;
+					if (e.isIntersecting && id) view.update(LAND[id]);
+				}
+			},
+			{ rootMargin: '-45% 0px -45% 0px' },
+		);
+		sections.forEach((s) => reading.observe(s));
 	}
 </script>
 
 <style>
+	/* Pinned over the page grid's empty right column (same width and inset), so in the markup it can sit under the hero. */
 	.panel {
-		position: sticky;
+		position: fixed;
 		top: 12px;
+		right: max(12px, calc((100% - 1440px) / 2 + 12px));
+		width: var(--panel-w);
 		height: calc(100svh - 24px);
-		margin-top: 12px;
 		border-radius: var(--radius);
 		overflow: clip;
 		isolation: isolate;
@@ -68,8 +91,10 @@
 		.panel {
 			position: relative;
 			top: 0;
-			margin: 0 0 24px;
-			height: 30svh;
+			right: auto;
+			width: auto;
+			margin: 8px 0 16px;
+			height: 28svh;
 		}
 	}
 </style>

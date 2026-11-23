@@ -18,6 +18,18 @@ import icon from '../assets/icon.png';
 </Base>
 
 <style>
+	/* Faint contour land behind the message: the same map, with this page missing from it. */
+	:global(body):has(.missing)::before {
+		content: '';
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		pointer-events: none;
+		background: var(--accent);
+		opacity: 0.12;
+		-webkit-mask: url('/contours.svg') center / cover no-repeat;
+		mask: url('/contours.svg') center / cover no-repeat;
+	}
 	.missing {
 		display: grid;
 		justify-items: start;
