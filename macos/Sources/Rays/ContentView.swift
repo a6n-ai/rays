@@ -59,6 +59,8 @@ struct ContentView: View {
         } isTargeted: { setTargeted($0) }
         .task(id: model.generation) { await model.run() }
         .onReceive(NotificationCenter.default.publisher(for: .openSorter)) { _ in destination = .sorter }
+        .onReceive(NotificationCenter.default.publisher(for: .openCloud)) { _ in destination = .cloud }
+        .onReceive(NotificationCenter.default.publisher(for: .openDownloads)) { _ in destination = .downloads }
     }
 
     @ViewBuilder private var detail: some View {
@@ -446,6 +448,8 @@ struct SettingsToolbarButton: View {
 
 extension Notification.Name {
     static let focusAddBar = Notification.Name("ai.a6n.rays.focusAddBar")
+    static let openDownloads = Notification.Name("ai.a6n.rays.openDownloads")
+    static let openCloud = Notification.Name("ai.a6n.rays.openCloud")
 }
 
 /// First-run / empty Downloads: the three ways to start a download, as glass tiles of equal size.

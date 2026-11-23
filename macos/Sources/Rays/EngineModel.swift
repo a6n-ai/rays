@@ -321,6 +321,7 @@ enum SettingsKey {
     static let downloadsDir = "downloadsDir"
     static let sorterPath = "sorterPath"
     static let menuBar = "showsMenuBar"
+    static let clipboard = "offersCopiedLinks"
 }
 
 struct SpeedPreset: Identifiable {

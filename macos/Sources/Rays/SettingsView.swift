@@ -77,6 +77,7 @@ private struct GeneralTab: View {
     @AppStorage(SettingsKey.downloadsDir) private var customFolder = ""
     @AppStorage(SettingsKey.sorterPath) private var sorterPath = Sorter.defaultPath
     @AppStorage(SettingsKey.menuBar) private var showsMenuBar = true
+    @AppStorage(SettingsKey.clipboard) private var offersCopiedLinks = true
     let sorter: SorterModel
     @State private var folderError: String?
 
@@ -118,6 +119,14 @@ private struct GeneralTab: View {
                 SettingRow(symbol: "menubar.arrow.down.rectangle", color: .indigo,
                            title: "Show in menu bar", hint: "See and pause downloads from the menu bar. Closing the window keeps Rays running.") {
                     Toggle("Show in menu bar", isOn: $showsMenuBar)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+
+                SettingRow(symbol: "doc.on.clipboard", color: .teal,
+                           title: "Offer copied download links",
+                           hint: "When you copy a link to a file, like a .zip or .dmg, a notification offers to download it. macOS asks once to let Rays read copied links.") {
+                    Toggle("Offer copied download links", isOn: $offersCopiedLinks)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }

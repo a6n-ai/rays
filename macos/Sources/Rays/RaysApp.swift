@@ -63,8 +63,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sizeWindowOnce()
         Updater.shared.checkIfDue()
         dock = DockProgress(model: model)
+        clipboard = ClipboardWatcher(model: model)
     }
     private var dock: DockProgress?
+    private var clipboard: ClipboardWatcher?
+
+    /// Right-click on the Dock icon: hide to the menu bar, where downloads keep going and Quit Rays quits.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        let item = NSMenuItem(title: "Keep Downloading in Menu Bar", action: #selector(hideToMenuBar), keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+        return menu
+    }
+
+    /// Closes the windows and takes Rays out of the Dock; the menu bar item (turned on if it was off) brings it back.
+    @objc func hideToMenuBar() {
+        UserDefaults.standard.set(true, forKey: SettingsKey.menuBar)
+        for window in NSApp.windows where window.isVisible && window.canBecomeMain {
+            window.close()
+        }
+        NSApp.setActivationPolicy(.accessory)
+    }
+
+    /// Puts Rays back in the Dock and in front, for a window opened from the menu bar.
+    static func showInDock() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+    }
 
     /// Earlier builds opened at 640x480 and macOS keeps that size, so `defaultSize` never applies.
     /// Set the new default size once; afterwards the size the user picks is kept.

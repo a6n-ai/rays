@@ -91,89 +91,198 @@ private struct DockTile: View {
     }
 }
 
-/// The menu bar icon: a filled arrow while downloading, with the overall percent when sizes are known.
+/// The menu bar icon: Rays' own icon, with the overall percent while downloading when sizes are known.
 struct MenuBarLabel: View {
     @Environment(EngineModel.self) private var model
 
     var body: some View {
-        if model.activeJobs.isEmpty {
-            Image(systemName: "arrow.down.circle")
-        } else {
-            HStack(spacing: 3) {
-                Image(systemName: "arrow.down.circle.fill")
-                if let progress = model.overallProgress {
-                    Text(progress.formatted(.percent.precision(.fractionLength(0)))).monospacedDigit()
+        HStack(spacing: 3) {
+            Image(nsImage: Self.icon)
+            if !model.activeJobs.isEmpty, let progress = model.overallProgress {
+                Text(progress.formatted(.percent.precision(.fractionLength(0)))).monospacedDigit()
+            }
+        }
+        .accessibilityLabel(model.activeJobs.isEmpty ? "Rays" : "Rays, \(model.activeJobs.count) downloading")
+    }
+
+    /// The app icon at menu bar size. A copy: resizing NSApp's own image would also shrink the Dock icon.
+    static let icon: NSImage = {
+        let image = (NSApp.applicationIconImage.copy() as? NSImage) ?? NSImage()
+        image.size = NSSize(width: 18, height: 18)
+        return image
+    }()
+}
+
+/// The menu bar panel: add a download, what is downloading, and the rest of Rays one click away.
+struct MenuBarPanel: View {
+    @Environment(EngineModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
+    @State private var link = ""
+
+    private var recent: [JobView] {
+        let active = model.activeJobs
+        let rest = model.jobs.filter { !$0.isActive }.suffix(max(0, 4 - active.count))
+        return Array(active.prefix(6)) + rest.reversed()
+    }
+    private var paused: [JobView] { model.jobs.filter { $0.state == .paused } }
+    private var typedLinks: [String] { Links.inText(link) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 10)
+            addRow.padding(.horizontal, 14).padding(.bottom, 10)
+            Divider()
+            downloads.padding(.horizontal, 6).padding(.vertical, 6)
+            Divider()
+            VStack(spacing: 0) {
+                MenuItem("Add Links from a File…", symbol: "doc.badge.plus", action: addFromFile)
+                MenuItem("Download Link from Clipboard", symbol: "doc.on.clipboard", action: addFromClipboard)
+                if !model.activeJobs.isEmpty {
+                    // Non-resumable downloads would lose their progress, so Pause All leaves them running.
+                    MenuItem("Pause All", symbol: "pause.circle") { model.activeJobs.filter(\.resumable).forEach { model.pause($0.id) } }
+                } else if !paused.isEmpty {
+                    MenuItem("Resume All", symbol: "play.circle") { paused.forEach { model.resume($0.id) } }
                 }
             }
+            .padding(6)
+            Divider()
+            VStack(spacing: 0) {
+                MenuItem("Downloads", symbol: "arrow.down.circle") { show(.openDownloads) }
+                MenuItem("Sorter", symbol: "wand.and.stars") { show(.openSorter) }
+                MenuItem("Cloud", symbol: "cloud") { show(.openCloud) }
+            }
+            .padding(6)
+            Divider()
+            VStack(spacing: 0) {
+                MenuItem("Open Rays", symbol: "macwindow") { show(nil) }
+                MenuItem("Settings…", symbol: "gearshape") {
+                    AppDelegate.showInDock()
+                    openSettings()
+                }
+                MenuItem("Quit Rays", symbol: "power", shortcut: "⌘Q") { NSApp.terminate(nil) }
+            }
+            .padding(6)
+        }
+        .frame(width: 320)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 22, height: 22).accessibilityHidden(true)
+            Text("Rays").font(.headline)
+            Spacer()
+            if !model.activeJobs.isEmpty {
+                Text("\(model.activeJobs.count) downloading · \(byteText(model.totalSpeed))/s")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
+    }
+
+    private var addRow: some View {
+        HStack(spacing: 6) {
+            TextField("Paste a link", text: $link)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(addTyped)
+            Button("Download", action: addTyped)
+                .buttonStyle(.borderedProminent)
+                .disabled(typedLinks.isEmpty)
+        }
+    }
+
+    @ViewBuilder private var downloads: some View {
+        if recent.isEmpty {
+            Text("No downloads yet.")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(recent, id: \.id) { job in MenuBarRow(job: job) }
+            }
+        }
+    }
+
+    private func addTyped() {
+        guard !typedLinks.isEmpty else { return }
+        model.add(typedLinks.joined(separator: "\n"))
+        link = ""
+    }
+
+    // A click is a paste, so reading the clipboard here never shows macOS's paste alert.
+    private func addFromClipboard() {
+        let links = Links.inText(NSPasteboard.general.string(forType: .string) ?? "")
+        if links.isEmpty { return NSSound.beep() }
+        model.add(links.joined(separator: "\n"))
+    }
+
+    /// Text, CSV or .webloc files: every link in them is added.
+    private func addFromFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.plainText, .commaSeparatedText, .internetLocation, .url]
+        NSApp.activate()
+        guard panel.runModal() == .OK else { return }
+        let links = panel.urls.flatMap { url -> [String] in
+            if let one = Links.fromFile(url), url.pathExtension == "webloc" { return [one] }
+            return Links.inText((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+        }
+        if links.isEmpty { return NSSound.beep() }
+        model.add(links.joined(separator: "\n"))
+    }
+
+    /// Opens the window, at a sidebar page when given, and puts Rays back in the Dock if it was hidden there.
+    private func show(_ page: Notification.Name?) {
+        AppDelegate.showInDock()
+        openWindow(id: "main")
+        if let page {
+            // After the window exists, so its view is listening.
+            DispatchQueue.main.async { NotificationCenter.default.post(name: page, object: nil) }
         }
     }
 }
 
-/// The menu bar panel: what is downloading, quick actions, and a way back to the window.
-struct MenuBarPanel: View {
-    @Environment(EngineModel.self) private var model
-    @Environment(\.openWindow) private var openWindow
+/// A row that highlights on hover, like a menu item.
+private struct MenuItem: View {
+    let title: String
+    let symbol: String
+    var shortcut: String?
+    let action: () -> Void
+    @State private var hovering = false
 
-    private var recent: [JobView] {
-        let active = model.activeJobs
-        let rest = model.jobs.filter { !$0.isActive }.suffix(max(0, 5 - active.count))
-        return Array(active.prefix(8)) + rest.reversed()
+    init(_ title: String, symbol: String, shortcut: String? = nil, action: @escaping () -> Void) {
+        self.title = title
+        self.symbol = symbol
+        self.shortcut = shortcut
+        self.action = action
     }
-    private var clipboardLinks: [String] { Links.inText(NSPasteboard.general.string(forType: .string) ?? "") }
-    private var paused: [JobView] { model.jobs.filter { $0.state == .paused } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Rays").font(.headline)
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).frame(width: 18).foregroundStyle(hovering ? .white : .secondary)
+                Text(title)
                 Spacer()
-                if !model.activeJobs.isEmpty {
-                    Text("\(model.activeJobs.count) downloading · \(byteText(model.totalSpeed))/s")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
+                if let shortcut { Text(shortcut).foregroundStyle(hovering ? .white.opacity(0.8) : .secondary) }
             }
-            if recent.isEmpty {
-                Text("No downloads yet.").foregroundStyle(.secondary)
-            }
-            ForEach(recent, id: \.id) { job in MenuBarRow(job: job) }
-            Divider()
-            if !clipboardLinks.isEmpty {
-                Button {
-                    model.add(clipboardLinks.joined(separator: "\n"))
-                } label: {
-                    Label(clipboardLinks.count == 1 ? "Download Link from Clipboard" : "Download \(clipboardLinks.count) Links from Clipboard",
-                          systemImage: "doc.on.clipboard")
-                }
-            }
-            if !model.activeJobs.isEmpty {
-                // Non-resumable downloads would lose their progress, so Pause All leaves them running.
-                Button { model.activeJobs.filter(\.resumable).forEach { model.pause($0.id) } } label: {
-                    Label("Pause All", systemImage: "pause.circle")
-                }
-            } else if !paused.isEmpty {
-                Button { paused.forEach { model.resume($0.id) } } label: {
-                    Label("Resume All", systemImage: "play.circle")
-                }
-            }
-            Button {
-                openWindow(id: "main")
-                NSApp.activate()
-            } label: {
-                Label("Open Rays", systemImage: "macwindow")
-            }
-            Button { NSApp.terminate(nil) } label: { Label("Quit Rays", systemImage: "power") }
+            .foregroundStyle(hovering ? .white : .primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .background(hovering ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
-        .padding(14)
-        .frame(width: 320)
+        .onHover { hovering = $0 }
     }
 }
 
 private struct MenuBarRow: View {
     @Environment(EngineModel.self) private var model
     let job: JobView
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -187,17 +296,24 @@ private struct MenuBarRow: View {
                 Text(status).font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
             Spacer(minLength: 4)
-            if job.isActive && job.resumable {
-                Button { model.pause(job.id) } label: { Image(systemName: "pause.fill") }
-                    .help("Pause \(job.name)")
-            } else if job.state == .paused {
-                Button { model.resume(job.id) } label: { Image(systemName: "play.fill") }
-                    .help("Resume \(job.name)")
-            } else if job.isDone {
-                Button { model.reveal(job) } label: { Image(systemName: "folder") }
-                    .help("Show \(job.name) in Finder")
+            Group {
+                if job.isActive && job.resumable {
+                    Button { model.pause(job.id) } label: { Image(systemName: "pause.fill") }
+                        .help("Pause \(job.name)")
+                } else if job.state == .paused {
+                    Button { model.resume(job.id) } label: { Image(systemName: "play.fill") }
+                        .help("Resume \(job.name)")
+                } else if job.isDone {
+                    Button { model.reveal(job) } label: { Image(systemName: "folder") }
+                        .help("Show \(job.name) in Finder")
+                }
             }
+            .buttonStyle(.borderless)
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(hovering ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onHover { hovering = $0 }
     }
 
     private var status: String {
