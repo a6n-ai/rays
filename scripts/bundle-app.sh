@@ -10,7 +10,7 @@ scripts/build-engine.sh
 # keeps folder access and Keychain items. CI imports it from secrets; locally it's in the login keychain.
 identity="${RAYS_SIGN_IDENTITY:-}"
 if [ -z "$identity" ]; then
-  if security find-identity -p codesigning 2>/dev/null | grep -q '"Rays Release"'; then identity="Rays Release"; else identity=-; fi
+  if security find-identity -p codesigning 2>/dev/null | grep -q '"Rays"'; then identity="Rays"; else identity=-; fi
 fi
 [ "$identity" = - ] && echo "warning: signing ad hoc; updates will ask for folder and Keychain access again" >&2
 

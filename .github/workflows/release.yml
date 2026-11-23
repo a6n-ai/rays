@@ -64,7 +64,7 @@ jobs:
           rm -f "$RUNNER_TEMP/rays.p12"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$kp" "$kc" > /dev/null
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
-          echo "RAYS_SIGN_IDENTITY=Rays Release" >> "$GITHUB_ENV"
+          echo "RAYS_SIGN_IDENTITY=Rays" >> "$GITHUB_ENV"
 
       - name: Build Rays.app
         run: scripts/bundle-app.sh
