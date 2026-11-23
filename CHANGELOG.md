@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.1.16 (23 Nov 2026)
+
+- Install with Homebrew again: `brew install --cask a6n-ai/tap/rays`. The DMG download stays.
+- Rays is signed with a new certificate, so System Settings > General > Login Items lists Sorter as Rays instead of a6n. After this update, macOS asks once more for folder access, and for Keychain access if you saved cloud bucket keys.
+
 ## 0.1.15 (23 Nov 2026)
 
 - The Dock icon shows the download speed above its progress bar, and the menu bar shows the speed next to the icon while files download.
