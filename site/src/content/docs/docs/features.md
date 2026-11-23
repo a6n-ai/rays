@@ -14,7 +14,7 @@ Rays is free, open source (AGPL-3.0) and made for macOS 26. There is no account,
 | Automatic retries | 5, waiting 2, 5, 15, 30 and 60 seconds |
 | A stalled download | Retried after 30 seconds with no data |
 | A server that pushes back | Its lower limit is remembered for 7 days |
-| Data sent to a6n | None. No analytics, tracking or crash reporting |
+| Data sent to a6n | A download count when you install or update, and crash reports or feedback only when you email them. No analytics or tracking |
 | Price | Free |
 
 How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engine/#benchmarks).

@@ -25,6 +25,9 @@ struct RaysApp: App {
                     .pickerStyle(.inline)
                 }
             }
+            CommandGroup(after: .help) {
+                Button("Send Feedback…") { Feedback.sendFeedback() }
+            }
         }
 
         Settings {
@@ -62,6 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         sizeWindowOnce()
         Updater.shared.checkIfDue()
+        // After launch finishes, so the alert doesn't hold up the first window.
+        Task { @MainActor in Feedback.offerCrashReportIfNeeded() }
         dock = DockProgress(model: model)
         clipboard = ClipboardWatcher(model: model)
     }

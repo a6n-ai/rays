@@ -1,9 +1,9 @@
 ---
 title: Privacy policy
-description: How Rays, the Rays browser extension and rays.a6n.ai handle your data. Rays runs on your Mac and collects nothing.
+description: How Rays, the Rays browser extension and rays.a6n.ai handle your data. Rays runs on your Mac and collects no personal data.
 ---
 
-Last updated: 22 November 2026
+Last updated: 23 November 2026
 
 Rays is made by a6n. This policy covers the Rays app for Mac, the `dl` command, the Rays browser extension for Chrome, Brave, Edge, Firefox and Zen, and this website.
 
@@ -14,8 +14,9 @@ Rays is made by a6n. This policy covers the Rays app for Mac, the `dl` command, 
 - Downloads go straight from the server you chose to your Mac. They do not pass through a6n.
 - File sorting and renaming run on your Mac with Apple's on-device model. File contents and names are never uploaded.
 - Settings, download history and sorter rules are stored only on your Mac.
-- Rays has no analytics, tracking, advertising or crash reporting.
-- To check for updates, Rays asks GitHub for the latest release (`api.github.com`). GitHub sees your IP address, as with any web request. See [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
+- Rays has no analytics, tracking or advertising inside the app.
+- Crash reports are sent only if you choose to. After a crash, Rays offers to open an email to a6n with the macOS crash report attached; nothing is sent until you press Send in your mail app. Help > Send Feedback works the same way. We use these emails only to fix Rays and reply.
+- To check for updates, Rays asks GitHub for the latest release (`api.github.com`). GitHub sees your IP address, as with any web request. See [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement). An update downloads through rays.a6n.ai, which counts it as described under This website and sends it on to GitHub.
 - If you add a bucket in Cloud, Rays connects to the S3-compatible service you chose to list and download your files. That service's own privacy policy applies. Your secret key is stored in the macOS Keychain on your Mac.
 
 ## The browser extension
@@ -29,7 +30,8 @@ The extension's use of data complies with the [Chrome Web Store User Data Policy
 
 ## This website
 
-- rays.a6n.ai has no analytics or tracking cookies.
+- rays.a6n.ai has no tracking cookies and no page analytics.
+- We count downloads of Rays. Each count records the file, where the download started (this website, Homebrew, an update or a link), the version and the country Cloudflare reports for the request. It does not record your IP address or anything that identifies you, and the counts are kept for three months.
 - It is hosted on Cloudflare, which processes standard request data such as IP addresses to serve and protect the site. See [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/).
 - The update sign-up opens your own mail app with a message to hi@a6n.ai. If you send it, we keep your email address only to tell you about new versions. Ask us and we will delete it.
 
