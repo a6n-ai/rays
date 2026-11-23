@@ -11,6 +11,7 @@ Rays is free, open source (AGPL-3.0) and made for macOS 26. There is no account,
 |---|---|
 | Connections per file | 1 to 16, added only while each one makes the file faster |
 | Files at once | 1 to 10 |
+| A dropped connection | Reconnects at once from its last byte |
 | Automatic retries | 5, waiting 2, 5, 15, 30 and 60 seconds |
 | A stalled download | Retried after 30 seconds with no data |
 | A server that pushes back | Its lower limit is remembered for 7 days |

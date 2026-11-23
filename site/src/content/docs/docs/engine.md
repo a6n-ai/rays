@@ -50,7 +50,7 @@ When a part finishes early, its connection takes half of the largest part that i
 
 - Rays saves the plan of parts before it reserves the file on disk. A part's progress counts only bytes already written, so a resumed download never trusts bytes it did not save.
 - Pausing, quitting or a crash keeps every written byte. Resuming asks the server only for what is missing, and checks the file has not changed (`If-Range` with its `ETag` or date).
-- A download with no data for 30 seconds is retried. Up to 5 retries wait 2, 5, 15, 30 and 60 seconds.
+- A connection that drops after sending at least 64 KB keeps what it received and reconnects at once, continuing from its last byte. A download with no data for 30 seconds, or a connection that fails without sending data, is retried up to 5 times, waiting 2, 5, 15, 30 and 60 seconds.
 - The file is named `<name>.<id>.part` until it is complete, then renamed.
 
 ## Benchmarks
@@ -73,24 +73,29 @@ It downloads a 100 MB file from a Hetzner speed-test server with a cap of 1, 4 a
 
 ### On a test server with known faults
 
-A real line changes from minute to minute, and on a line one connection fills, every engine looks the same. So we also test on a local server that injects one fault at a time (`engine/examples/lab.rs`), with the script that runs it:
+A real line changes from minute to minute, and on a line one connection fills, every tool looks the same. So we also test on a local server that injects one fault at a time (`engine/examples/lab.rs`), against aria2 and curl, and check every file's SHA-256:
 
 ```sh
-scripts/bench-lab.sh 5 64
+scripts/bench-lab.sh 3 256
 ```
 
-| Scenario, 64 MB file | Before | Now |
-|---|---|---|
-| Clean 50 MB/s link | 1.40 s | 1.41 s |
-| Each connection capped at 2 MB/s | 12.9 s | 5.8 s |
-| One connection in three slow (256 KB/s) | 15.7 s | 6.5 s |
-| 150 ms before each response, 4 MB/s per connection | 9.2 s | 4.1 s |
-| Server allows 2 connections (503 above) | 12.0 s | 10.4 s |
-| Connection dropped every 8 MB | 9.8 s | 3.7 s |
+| Scenario, 256 MB file | Rays | aria2 -x16 | aria2 (defaults) | curl |
+|---|---|---|---|---|
+| Clean 50 MB/s link | 49.7 MB/s | 50.4 MB/s | 50.5 MB/s | 50.6 MB/s |
+| Each connection capped at 2 MB/s | 21.6 MB/s | 31.7 MB/s | 2.0 MB/s | 2.0 MB/s |
+| One connection in three slow (256 KB/s) | 18.2 MB/s | 23.4 MB/s | 4.0 MB/s | 4.0 MB/s |
+| 150 ms before each response, 4 MB/s per connection | 30.4 MB/s | 47.5 MB/s | 4.0 MB/s | 4.0 MB/s |
+| Server allows 2 connections (503 above) | 7.6 MB/s | 8.0 MB/s | 4.0 MB/s | 4.0 MB/s |
+| Every connection dropped after 8 MB | 41.5 MB/s | 50.2 MB/s | failed | 4.1 MB/s |
+| Connections dropped at random (2% of chunks) | 41.1 MB/s | 48.7 MB/s | failed | 2.5 MB/s |
+| Unthrottled, 2 GB file | 1805 MB/s | 374 MB/s | 598 MB/s | 1471 MB/s |
 
-*Median of 5 runs after a warm-up, order rotated each run, on 23 Nov 2026. "Before" is the engine that added one connection at a time and never reconnected a slow one.*
+*Median of 3 runs after a warm-up, order rotated each run, on 23 Nov 2026, on a Mac with Apple M3 Pro. aria2 -x16 opens 16 connections at once, so it is faster on these short files; Rays adds connections only while they make the file faster, which takes a few seconds and keeps it from slowing a line that one connection fills. Full results and method: [docs/benchmarks.md](https://github.com/a6n-ai/rays/blob/main/docs/benchmarks.md).*
 
 What we measured and kept:
+
+- **rustls instead of the macOS system TLS.** Over HTTPS from a local server, one connection decrypts at 1741 MB/s with rustls against 477 MB/s with Secure Transport, which also has no TLS 1.3. Certificates are still checked against the Keychain.
+- **Reconnect at once after a drop.** A connection that dropped used to wait 2 seconds and throw away up to 256 KB it had not written yet. With connections dropped at random, a 256 MB file ran at 5.4 MB/s; now it runs at 41 MB/s and re-downloads 0.3 MB.
 
 - **Batched disk writes.** Each connection gathers 256 KB before writing, instead of writing and flushing every 16 KB chunk, and the app is woken once per update instead of once per chunk. On a local 1 GB test server both versions run at about 3.4 GB/s, far above any home line, and the batched one uses about 20% less CPU (0.35 against 0.44 CPU seconds per GB).
 
