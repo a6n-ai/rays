@@ -97,7 +97,7 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(nsImage: Self.icon)
+            Image(nsImage: model.activeJobs.isEmpty ? Self.icon : Self.icon(badge: model.activeJobs.count))
             if !model.activeJobs.isEmpty, let progress = model.overallProgress {
                 Text(progress.formatted(.percent.precision(.fractionLength(0)))).monospacedDigit()
             }
@@ -107,11 +107,21 @@ struct MenuBarLabel: View {
 
     /// The stacked pages from Rays' icon as a template image, so the menu bar draws it white or black to match.
     /// Same geometry as the icon's page SVGs (1024 space, pages at 416 to 608, scale 1.18), cropped to the stack.
-    static let icon: NSImage = {
+    static let icon: NSImage = icon(badge: 0)
+
+    /// With a count, a red badge with the number of downloads at the top right. A template image can't keep the red,
+    /// so the pages are drawn in the menu bar's label color instead, read when the image is drawn.
+    static func icon(badge: Int) -> NSImage {
         let box = CGRect(x: 216, y: 156, width: 592, height: 712)
         let height: CGFloat = 17
         let scale = height / box.height
-        let image = NSImage(size: NSSize(width: (box.width * scale).rounded(.up), height: height), flipped: true) { _ in
+        let label = badge > 9 ? "9+" : "\(badge)"
+        let font = NSFont.systemFont(ofSize: 8, weight: .bold)
+        let text = NSAttributedString(string: label, attributes: [.font: font, .foregroundColor: NSColor.white])
+        let dot = NSSize(width: max(10, text.size().width + 5), height: 10)
+        let pages = (box.width * scale).rounded(.up)
+        let width = badge > 0 ? pages + dot.width / 2 : pages
+        let image = NSImage(size: NSSize(width: width, height: height), flipped: true) { _ in
             for (offset, alpha) in [(416.0, 0.35), (480.0, 0.55), (544.0, 0.75), (608.0, 1.0)] {
                 let page = NSBezierPath()
                 page.move(to: NSPoint(x: -130, y: -220))
@@ -128,15 +138,22 @@ struct MenuBarLabel: View {
                 transform.translate(x: offset - box.minX, y: offset - box.minY)
                 transform.scale(1.18)
                 page.transform(using: transform)
-                NSColor.black.withAlphaComponent(alpha).setFill()
+                (badge > 0 ? NSColor.labelColor : NSColor.black).withAlphaComponent(alpha).setFill()
                 page.fill()
+            }
+            if badge > 0 {
+                let rect = NSRect(x: width - dot.width, y: 0, width: dot.width, height: dot.height)
+                NSColor.systemRed.setFill()
+                NSBezierPath(roundedRect: rect, xRadius: dot.height / 2, yRadius: dot.height / 2).fill()
+                let size = text.size()
+                text.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
             }
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = badge == 0
         image.accessibilityDescription = "Rays"
         return image
-    }()
+    }
 }
 
 /// The menu bar panel: add a download, what is downloading, and the rest of Rays one click away.
@@ -145,11 +162,13 @@ struct MenuBarPanel: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @State private var link = ""
+    /// Clear hides what is listed now from this panel only; ids grow, so newer downloads show again.
+    @AppStorage("menuBarClearedID") private var clearedID = 0
 
+    /// The latest four: running ones first, then the newest others not cleared.
     private var recent: [JobView] {
-        let active = model.activeJobs
-        let rest = model.jobs.filter { !$0.isActive }.suffix(max(0, 4 - active.count))
-        return Array(active.prefix(6)) + rest.reversed()
+        let rest = model.jobs.filter { !$0.isActive && $0.id > UInt64(clearedID) }.reversed()
+        return Array((model.activeJobs + rest).prefix(4))
     }
     private var paused: [JobView] { model.jobs.filter { $0.state == .paused } }
     private var typedLinks: [String] { Links.inText(link) }
@@ -230,6 +249,17 @@ struct MenuBarPanel: View {
                 ForEach(recent, id: \.id) { job in MenuBarRow(job: job) }
             }
         }
+        HStack {
+            Button("See All in Rays") { show(.openDownloads) }
+            Spacer()
+            Button("Clear") { clearedID = Int(model.jobs.map(\.id).max() ?? 0) }
+                .disabled(recent.allSatisfy(\.isActive))
+                .help("Hide these downloads from this menu. They stay in Rays.")
+        }
+        .buttonStyle(.link)
+        .font(.callout)
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
     }
 
     private func addTyped() {
