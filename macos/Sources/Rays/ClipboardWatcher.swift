@@ -49,7 +49,7 @@ final class ClipboardWatcher: NSObject, UNUserNotificationCenterDelegate {
 
     private func offer(_ links: [String]) async {
         let center = UNUserNotificationCenter.current()
-        guard (try? await center.requestAuthorization(options: [.alert])) == true else { return }
+        guard (try? await center.requestAuthorization(options: [.alert, .badge])) == true else { return }
         let content = UNMutableNotificationContent()
         let first = URL(string: links[0])
         content.title = links.count == 1 ? "Download \(first?.lastPathComponent ?? "this file")?" : "Download \(links.count) copied links?"

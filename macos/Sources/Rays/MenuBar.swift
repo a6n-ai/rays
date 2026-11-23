@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import Observation
 import SwiftUI
 
@@ -22,9 +23,10 @@ extension EngineModel {
 @MainActor
 final class DockProgress {
     private let model: EngineModel
-    private var shown: (Int, Int)?
+    private var shown: (Int, Int, String)?
+    private var askedBadge = false
     private var activity: NSObjectProtocol?
-    private lazy var view = NSHostingView(rootView: DockTile(progress: nil))
+    private lazy var view = NSHostingView(rootView: DockTile(progress: nil, speed: nil))
 
     init(model: EngineModel) {
         self.model = model
@@ -43,6 +45,11 @@ final class DockProgress {
     private func update() {
         let count = model.activeJobs.count
         let progress = model.overallProgress
+        // macOS shows Dock badges only for apps allowed badges in Notifications settings; ask once.
+        if count > 0, !askedBadge {
+            askedBadge = true
+            UNUserNotificationCenter.current().requestAuthorization(options: [.badge]) { _, _ in }
+        }
         if count > 0, activity == nil {
             activity = ProcessInfo.processInfo.beginActivity(
                 options: [.userInitiated, .idleSystemSleepDisabled], reason: "Downloading files")
@@ -51,13 +58,14 @@ final class DockProgress {
             activity = nil
         }
         // Redrawing the Dock costs a little, so only whole-percent changes do.
-        let key = (count, progress.map { Int($0 * 100) } ?? -1)
+        let speed = count > 0 && model.totalSpeed > 0 ? "\(byteText(model.totalSpeed))/s" : ""
+        let key = (count, progress.map { Int($0 * 100) } ?? -1, speed)
         guard shown.map({ $0 != key }) ?? true else { return }
         shown = key
         let tile = NSApp.dockTile
         tile.badgeLabel = count > 0 ? "\(count)" : nil
         if count > 0 {
-            view.rootView = DockTile(progress: progress)
+            view.rootView = DockTile(progress: progress, speed: speed.isEmpty ? nil : speed)
             tile.contentView = view
         } else {
             tile.contentView = nil
@@ -68,10 +76,24 @@ final class DockProgress {
 
 private struct DockTile: View {
     let progress: Double?
+    let speed: String?
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Image(nsImage: NSApp.applicationIconImage).resizable()
+            if let speed {
+                // Above the progress bar: the Dock's own count badge takes the top right.
+                Text(speed)
+                    .font(.system(size: 16, weight: .bold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, progress == nil ? 10 : 28)
+            }
             if let progress {
                 Capsule()
                     .fill(.black.opacity(0.55))
@@ -97,9 +119,15 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
+            // Original, or the menu bar draws the badge as a template and the red is lost.
             Image(nsImage: model.activeJobs.isEmpty ? Self.icon : Self.icon(badge: model.activeJobs.count))
-            if !model.activeJobs.isEmpty, let progress = model.overallProgress {
-                Text(progress.formatted(.percent.precision(.fractionLength(0)))).monospacedDigit()
+                .renderingMode(model.activeJobs.isEmpty ? .template : .original)
+            if !model.activeJobs.isEmpty {
+                if model.totalSpeed > 0 {
+                    Text("\(byteText(model.totalSpeed))/s").monospacedDigit()
+                } else if let progress = model.overallProgress {
+                    Text(progress.formatted(.percent.precision(.fractionLength(0)))).monospacedDigit()
+                }
             }
         }
         .accessibilityLabel(model.activeJobs.isEmpty ? "Rays" : "Rays, \(model.activeJobs.count) downloading")
