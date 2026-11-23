@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rays</title>
+<style>
+  :root { color-scheme: light dark; --muted: #6b6b6b; --line: #e3e3e3; --ok: #188038; --warn: #b26a00; --bad: #d93025; }
+  @media (prefers-color-scheme: dark) { :root { --muted: #a0a0a0; --line: #3a3a3a; --ok: #5bb974; --warn: #f0a53b; --bad: #f28b82; } }
+  body { font: 13px -apple-system, system-ui, sans-serif; margin: 0; width: 300px; }
+  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  header img { width: 20px; height: 20px; }
+  header b { font-size: 14px; }
+  section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  #status { display: flex; gap: 8px; align-items: flex-start; }
+  #dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: none; background: var(--muted); }
+  #dot.ok { background: var(--ok); } #dot.warn { background: var(--warn); } #dot.bad { background: var(--bad); }
+  #detail { color: var(--muted); margin-top: 2px; }
+  label { display: flex; gap: 8px; align-items: center; }
+  form { display: flex; gap: 6px; }
+  input[type=url] { flex: 1; min-width: 0; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: transparent; color: inherit; }
+  button { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  #result { color: var(--muted); margin-top: 6px; }
+  #result:empty { display: none; }
+  footer { padding: 10px 14px; display: flex; justify-content: space-between; }
+  a { color: var(--muted); text-decoration: none; } a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<header><img src="icons/32.png" alt=""><b>Rays</b></header>
+<section id="status" role="status" aria-live="polite">
+  <span id="dot"></span>
+  <div><div id="headline">Checking the connection…</div><div id="detail"></div></div>
+</section>
+<section>
+  <form id="add">
+    <input type="url" id="url" placeholder="Paste a link" aria-label="Link to download" required>
+    <button type="submit">Download</button>
+  </form>
+  <div id="result" aria-live="polite"></div>
+</section>
+<section>
+  <label><input type="checkbox" id="sendAll"> Send all browser downloads to Rays</label>
+</section>
+<footer>
+  <a href="https://rays.a6n.ai/docs/app/browser/" target="_blank" rel="noopener">Help</a>
+  <a href="#" id="options">Options</a>
+</footer>
+<script src="popup.js"></script>
+</body>
+</html>

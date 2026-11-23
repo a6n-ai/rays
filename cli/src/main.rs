@@ -160,11 +160,36 @@ fn reply_bytes(reply: &Value) -> Vec<u8> {
 }
 
 fn handle_host_message(payload: &[u8]) -> Value {
-    host_add(payload).unwrap_or_else(|e| json!({"ok": false, "error": e}))
+    host_reply(payload).unwrap_or_else(|e| json!({"ok": false, "error": e}))
 }
 
-fn host_add(payload: &[u8]) -> Result<Value, String> {
+/// `{"ping": true}` reports whether the app answers (the extension sends `"urls": []` with it, so an older host,
+/// which only adds, still answers ok); anything else adds `urls`.
+fn host_reply(payload: &[u8]) -> Result<Value, String> {
     let msg: Value = serde_json::from_slice(payload).map_err(|e| format!("bad message: {e}"))?;
+    if msg.get("ping").and_then(Value::as_bool) == Some(true) {
+        return Ok(host_ping(&socket_path()));
+    }
+    host_add(&msg)
+}
+
+/// Whether Rays is running, and how many downloads are queued or running. Always `ok`: the host itself answered.
+/// Unlike `connect`, it never opens Rays: the extension asks every time its popup opens.
+fn host_ping(socket: &Path) -> Value {
+    let reply = UnixStream::connect(socket)
+        .map_err(|e| e.to_string())
+        .and_then(|s| exchange(s, &Request::List).map_err(|e| e.to_string()));
+    match reply {
+        Ok(resp) if resp.ok => {
+            let active = resp.jobs.iter().filter(|j| matches!(j.state.as_str(), "running" | "queued" | "retrying")).count();
+            json!({"ok": true, "rays": true, "active": active})
+        }
+        Ok(resp) => json!({"ok": true, "rays": false, "error": resp.error}),
+        Err(e) => json!({"ok": true, "rays": false, "error": format!("app not reachable: {e}")}),
+    }
+}
+
+fn host_add(msg: &Value) -> Result<Value, String> {
     let urls: Vec<String> = msg
         .get("urls")
         .and_then(Value::as_array)
@@ -218,5 +243,11 @@ mod tests {
         let v = handle_host_message(br#"{"urls":[]}"#);
         assert_eq!(v["ok"], true);
         assert_eq!(v["added"], 0);
+    }
+
+    #[test]
+    fn host_ping_without_app_says_rays_is_not_running() {
+        let v = host_ping(Path::new("/nonexistent/rays-test/dl.sock"));
+        assert_eq!((v["ok"].clone(), v["rays"].clone()), (json!(true), json!(false)));
     }
 }
