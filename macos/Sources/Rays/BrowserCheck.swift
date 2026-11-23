@@ -24,6 +24,8 @@ enum BrowserCheck {
         /// Relative to ~/Library/Application Support.
         let hostDir: String?
         var helperNote: String? = nil
+        /// Also written on install and removed on uninstall, for versions of the browser that read their own folder.
+        var alsoHostDir: String? = nil
 
         var id: String { bundleID }
     }
@@ -32,7 +34,10 @@ enum BrowserCheck {
         Browser(bundleID: "com.google.Chrome", name: "Google Chrome", engine: .chromium,
                 support: "Google/Chrome", hostDir: "Google/Chrome/NativeMessagingHosts"),
         Browser(bundleID: "com.brave.Browser", name: "Brave", engine: .chromium,
-                support: "BraveSoftware/Brave-Browser", hostDir: "BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+                // Brave reads helpers from Chrome's folder (seen in Brave 1.100's log: its own folder is never read).
+                support: "BraveSoftware/Brave-Browser", hostDir: "Google/Chrome/NativeMessagingHosts",
+                helperNote: "Brave and Chrome share one helper.",
+                alsoHostDir: "BraveSoftware/Brave-Browser/NativeMessagingHosts"),
         Browser(bundleID: "com.microsoft.edgemac", name: "Microsoft Edge", engine: .chromium,
                 support: "Microsoft Edge", hostDir: "Microsoft Edge/NativeMessagingHosts"),
         Browser(bundleID: "org.chromium.Chromium", name: "Chromium", engine: .chromium,
@@ -225,20 +230,24 @@ enum BrowserCheck {
         } else {
             manifest["allowed_origins"] = ["chrome-extension://\(chromeID)/"]
         }
-        let dir = supportURL(hostDir)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: dir.appending(path: manifestName), options: .atomic)
+        for hostDir in [hostDir] + [browser.alsoHostDir].compactMap({ $0 }) {
+            let dir = supportURL(hostDir)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try data.write(to: dir.appending(path: manifestName), options: .atomic)
+        }
     }
 
     /// Deletes Rays' helper manifest for this browser, and only if it is ours (name `ai.a6n.rays`).
     static func removeHelper(_ browser: Browser) throws {
         guard let hostDir = browser.hostDir else { return }
-        let file = supportURL(hostDir).appending(path: manifestName)
-        guard let data = try? Data(contentsOf: file) else { return }
-        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard json?["name"] as? String == hostName else { return }
-        try FileManager.default.removeItem(at: file)
+        for hostDir in [hostDir] + [browser.alsoHostDir].compactMap({ $0 }) {
+            let file = supportURL(hostDir).appending(path: manifestName)
+            guard let data = try? Data(contentsOf: file) else { continue }
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard json?["name"] as? String == hostName else { continue }
+            try FileManager.default.removeItem(at: file)
+        }
     }
 }
 
