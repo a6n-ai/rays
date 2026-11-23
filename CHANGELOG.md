@@ -1,5 +1,10 @@
 # Release notes
 
+## 0.1.11 (23 Nov 2026)
+
+- The browser extension has a menu: click the Rays button to see whether it's connected to Rays and how many downloads are in progress, paste a link to download, or switch Send all browser downloads to Rays on and off.
+- Settings > Browsers lists every browser on your Mac, including ones Rays can't add its extension to, with the reason.
+
 ## 0.1.10 (23 Nov 2026)
 
 - Faster downloads from servers that limit each connection: big files start on 4 connections and Rays doubles them while they make the file faster. On our test server a 64 MB file took 5.8 s instead of 12.9 s; on a line one connection fills, nothing changes.
