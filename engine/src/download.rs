@@ -33,6 +33,8 @@ const SPLIT_ALIGN: u64 = 64 << 10;
 /// Bytes a segment task gathers before one write and flush (each is a blocking-pool round trip). It must stay
 /// below `MIN_SEGMENT`: a split cuts at least that far past the recorded bytes, so it never lands in the buffer.
 const WRITE_BATCH: usize = 256 << 10;
+/// A segment connection that wrote at least this much before failing reconnects without waiting.
+const RECONNECT_AFTER: u64 = 64 << 10;
 /// The connection count is judged on 2 s windows of total throughput, sampled every `TICK`.
 const TICK: Duration = Duration::from_secs(1);
 /// Ticks ignored after a change, then the ticks whose throughput judges it. One warm tick lets a new connection
@@ -987,6 +989,13 @@ async fn segment_task(shared: Arc<Shared>, idx: usize, mut cancel: watch::Receiv
             Err(Stop::Retry(err)) => err,
             Err(other) => return Err(other),
         };
+        // A real stretch of data arrived before the drop, so the server is up: reconnect at once, as aria2 does.
+        // Waiting idled each connection most of the time on servers that drop often. A server that drops after
+        // a few bytes still backs off, so it is not hammered.
+        if received >= RECONNECT_AFTER {
+            attempt = 0;
+            continue;
+        }
         attempt = if received > 0 { 1 } else { attempt + 1 };
         if usize::from(attempt) > RETRY_WAITS.len() {
             return Err(Stop::Failed(err));
@@ -1069,10 +1078,18 @@ async fn segment_attempt(
         if pos + buf.len() as u64 >= seg_pos(shared, idx)?.1 {
             break;
         }
-        let chunk = or_cancel(cancel, tokio::time::timeout(STALL, resp.chunk()))
-            .await?
-            .map_err(|_| Stop::Retry("timeout: no data for 30 s".to_string()))?
-            .map_err(|e| Stop::Retry(format!("body: {e}")))?;
+        let chunk = match or_cancel(cancel, tokio::time::timeout(STALL, resp.chunk())).await? {
+            Ok(Ok(chunk)) => chunk,
+            failed => {
+                // Keep what arrived before the drop, so the reconnect asks only for the rest.
+                write_batch(shared, idx, &mut file, &mut buf, &mut pos, received).await?;
+                return Err(Stop::Retry(match failed {
+                    Err(_) => "timeout: no data for 30 s".to_string(),
+                    Ok(Err(e)) => format!("body: {e}"),
+                    Ok(Ok(_)) => unreachable!(),
+                }));
+            }
+        };
         let Some(bytes) = chunk else { break };
         // Read `end` after the wait: a split may have lowered it while the chunk was in transit.
         let end = seg_pos(shared, idx)?.1;
