@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 /// Reads browser files to report helper and extension status. Only `installHelper` writes, and only on a click.
 enum BrowserCheck {
@@ -67,6 +68,39 @@ enum BrowserCheck {
         let addon: Addon
 
         var id: String { browser.bundleID }
+    }
+
+    /// An installed browser Rays has no extension setup for: listed so people see why it is missing.
+    struct OtherBrowser: Identifiable, Sendable {
+        let bundleID: String
+        let name: String
+        let appURL: URL
+        /// Built on Chromium (a `… Framework.framework` inside), so it may take the Chrome Web Store extension.
+        let chromium: Bool
+
+        var id: String { bundleID }
+    }
+
+    /// Apps in the Applications folders that open both web links and .html files (a download manager opens links but
+    /// not pages), other than the browsers Rays supports. Copies elsewhere (disk images, test builds) are skipped.
+    static func otherBrowsers() -> [OtherBrowser] {
+        let ws = NSWorkspace.shared
+        let pages = Set(ws.urlsForApplications(toOpen: .html).map(\.standardizedFileURL))
+        let folders = ["/Applications/", FileManager.default.homeDirectoryForCurrentUser.appending(path: "Applications").path + "/"]
+        let known = Set(browsers.map(\.bundleID) + [Bundle.main.bundleIdentifier ?? ""])
+        var seen = Set<String>()
+        return ws.urlsForApplications(toOpen: URL(string: "https://example.com")!).compactMap { url in
+            let url = url.standardizedFileURL
+            guard pages.contains(url), folders.contains(where: url.path.hasPrefix),
+                  let bundle = Bundle(url: url), let id = bundle.bundleIdentifier,
+                  !known.contains(id), seen.insert(id).inserted
+            else { return nil }
+            let name = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") ?? bundle.object(forInfoDictionaryKey: "CFBundleName")) as? String
+            let frameworks = (try? FileManager.default.contentsOfDirectory(atPath: url.appending(path: "Contents/Frameworks").path)) ?? []
+            let chromium = frameworks.contains { $0.hasSuffix(" Framework.framework") && !$0.hasPrefix("Electron") }
+            return OtherBrowser(bundleID: id, name: name ?? url.deletingPathExtension().lastPathComponent, appURL: url, chromium: chromium)
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     /// The native host runs the copy inside the app bundle, so the manifest points there.
@@ -191,6 +225,7 @@ enum BrowserCheck {
 @Observable
 final class BrowserCheckModel {
     private(set) var states: [BrowserCheck.State] = []
+    private(set) var others: [BrowserCheck.OtherBrowser] = []
     private(set) var loaded = false
     private(set) var failures: [String: String] = [:]
 
@@ -199,6 +234,7 @@ final class BrowserCheckModel {
         let installed = BrowserCheck.browsers.compactMap { browser in
             BrowserCheck.appURL(for: browser).map { (browser, $0) }
         }
+        others = BrowserCheck.otherBrowsers()
         Task {
             states = await Task.detached {
                 installed.map { BrowserCheck.state(for: $0.0, appURL: $0.1) }

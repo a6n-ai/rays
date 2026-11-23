@@ -35,6 +35,13 @@ struct BrowsersTab: View {
                     BrowserTitle(state: state)
                 }
             }
+            if !model.others.isEmpty {
+                Section("Other browsers") {
+                    ForEach(model.others) { other in
+                        OtherBrowserRow(browser: other)
+                    }
+                }
+            }
             SavedNote()
         }
         .scrollContentBackground(.hidden)
@@ -43,6 +50,31 @@ struct BrowsersTab: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refresh()
         }
+    }
+}
+
+/// A browser Rays found but has no setup for, with what that means.
+private struct OtherBrowserRow: View {
+    let browser: BrowserCheck.OtherBrowser
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.path(percentEncoded: false)))
+                .resizable()
+                .frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(browser.name)
+                Text(browser.chromium
+                     ? "Built on Chromium. The extension may work from the Chrome Web Store, but Rays can't set up its helper for this browser yet."
+                     : "Rays can't add itself to this browser: its extension needs Chrome, Firefox or a browser built on them.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
