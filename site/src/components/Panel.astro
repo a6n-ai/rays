@@ -23,7 +23,8 @@
 			glow: 0.7,
 			speed: 0.08,
 			scrollTravel: 0.004,
-			dpr: Math.min(window.devicePixelRatio || 1, 2),
+			// Phones show a short strip, where 1x pixels look the same and scrolling stays smooth.
+			dpr: matchMedia('(max-width: 899px)').matches ? 1 : Math.min(window.devicePixelRatio || 1, 2),
 		});
 		new MutationObserver(() => view.update(theme())).observe(document.documentElement, {
 			attributes: true,
