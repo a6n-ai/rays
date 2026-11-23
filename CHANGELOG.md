@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.14 (23 Nov 2026)
+
+- The menu bar icon shows a red badge with the number of downloads running.
+- The menu bar panel lists the latest four downloads, with See All in Rays and Clear, which hides them from the panel only. Click a finished download to open it; right-click for Open, Show in Finder, Remove from Rays and Move to Trash.
+- Double-clicking a finished download in the Downloads list opens it again.
+
 ## 0.1.13 (23 Nov 2026)
 
 - Brave connects to Rays: Install Helper now also puts the helper in Chrome's folder, which is where Brave looks for it. Every browser built on Chromium gets that copy too.
