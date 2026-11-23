@@ -59,14 +59,25 @@ jobs:
         if: steps.keys.outputs.ready == 'true'
         with:
           name: extension
+      # The service-account JWT flow, signed here with the key: no IAM Credentials API or token-creator role needed.
       - name: Get access token
         if: steps.keys.outputs.ready == 'true'
         id: auth
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
-        with:
-          credentials_json: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+        env:
+          SA: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+        run: |
+          b64() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+          email=$(jq -r .client_email <<<"$SA")
+          now=$(date +%s)
+          header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64)
+          claims=$(jq -cn --arg iss "$email" --argjson iat "$now" \
+            '{iss: $iss, scope: "https://www.googleapis.com/auth/chromewebstore", aud: "https://oauth2.googleapis.com/token", iat: $iat, exp: ($iat + 3600)}' | b64)
+          sig=$(printf '%s.%s' "$header" "$claims" | openssl dgst -sha256 -sign <(jq -r .private_key <<<"$SA") | b64)
+          token=$(curl -sfS https://oauth2.googleapis.com/token \
+            -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer -d "assertion=$header.$claims.$sig" | jq -r .access_token)
+          [ -n "$token" ] && [ "$token" != null ] || { echo "::error::No access token from Google"; exit 1; }
+          echo "::add-mask::$token"
+          echo "access_token=$token" >> "$GITHUB_OUTPUT"
       - name: Upload and submit for review
         if: steps.keys.outputs.ready == 'true'
         env:
