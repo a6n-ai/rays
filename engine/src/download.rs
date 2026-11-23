@@ -360,6 +360,8 @@ struct Grow {
 
 /// A probe that gains at least this much keeps the count doubling.
 const DOUBLE_GAIN: f64 = 1.25;
+/// Added connections that each bring at least this share of an existing one's speed scaled linearly: no overshoot.
+const LINEAR_SHARE: f64 = 0.9;
 /// A doubling probe is judged on one tick: a jump of 25% or more shows in one second.
 const DOUBLE_WINDOW_TICKS: u8 = 1;
 /// Fresh files at least this big start on `BIG_START` parts, as other download managers start on 8 to 16; the
@@ -461,7 +463,10 @@ impl Grow {
                 Act::None
             }
             Stage::Warm(_, change) => {
-                let doubling_probe = matches!(change, Change::Probe) && self.doubling;
+                // While doubling, both the first count and each doubling step are judged on one tick: the start
+                // only sets the baseline the first doubling must beat by 25%, so a short window costs nothing there.
+                let doubling_probe =
+                    matches!(change, Change::Probe | Change::Rebase { probe: true, .. }) && self.doubling;
                 self.span = if doubling_probe { DOUBLE_WINDOW_TICKS } else { WINDOW_TICKS };
                 self.stage = Stage::Measure(self.span, change);
                 Act::None
@@ -486,8 +491,12 @@ impl Grow {
             Change::Probe => {
                 let doubled = self.added > 1;
                 self.doubling &= window >= self.best * DOUBLE_GAIN && target < cap;
-                // A doubling step that ends the doubling may have overshot: trim down while speed holds.
-                let trim = doubled && !self.doubling;
+                // A doubling step that ends the doubling may have overshot: trim down while speed holds. Not when
+                // every added connection pulled about as much as the ones before it (it stopped only at the cap):
+                // the trim would just cost a slower window to learn that.
+                let before = target.saturating_sub(self.added).max(1) as f64;
+                let linear = window >= self.best * (1.0 + LINEAR_SHARE * self.added as f64 / before);
+                let trim = doubled && !self.doubling && !linear;
                 self.advance(window, !trim, trim, growable, target, cap)
             }
             // Fewer is as good: keep it, and try one fewer again.
@@ -1267,11 +1276,11 @@ mod tests {
 
     #[test]
     fn grow_doubles_to_fill_a_server_that_caps_each_connection() {
-        // 2 MB/s per connection, up to 16: from one connection it reaches 16 by the 9th second (1, 2, 4, 8, 16,
-        // each doubling judged on one second), and settles there.
+        // 2 MB/s per connection, up to 16: from one connection it reaches 16 by the 8th second (1, 2, 4, 8, 16,
+        // the start and each doubling judged on one second), and holds 16 from then on: no trim at the cap.
         let t0 = Instant::now();
         let mut grow = Grow::new(t0, 0);
-        let (mut n, mut done, mut reached) = (1usize, 0.0, None);
+        let (mut n, mut done, mut reached, mut lowest_after) = (1usize, 0.0, None, usize::MAX);
         for k in 1..=12u64 {
             done += 2e6 * n as f64;
             match grow.tick(t0 + Duration::from_secs(k), done as u64, true, n, 16) {
@@ -1282,8 +1291,12 @@ mod tests {
             if n == 16 && reached.is_none() {
                 reached = Some(k);
             }
+            if reached.is_some() {
+                lowest_after = lowest_after.min(n);
+            }
         }
-        assert!(reached.is_some_and(|k| k <= 9), "reached 16 at {reached:?}");
+        assert!(reached.is_some_and(|k| k <= 8), "reached 16 at {reached:?}");
+        assert_eq!(lowest_after, 16, "dipped below the cap after reaching it");
         assert_eq!(settle(1, 16, 60, |n| 2e6 * n as f64), 16);
     }
 
