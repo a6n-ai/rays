@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.1.10 (23 Nov 2026)
+
+- Faster downloads from servers that limit each connection: big files start on 4 connections and Rays doubles them while they make the file faster. On our test server a 64 MB file took 5.8 s instead of 12.9 s; on a line one connection fills, nothing changes.
+- A connection that is far slower than the others is replaced, so one bad route no longer holds up the whole file.
+- Servers that allow only a few connections are used fully: Rays keeps the connections they accept and remembers the right number for next time (it remembered one too few before).
+- The Dock shows download progress and how many files are downloading, and the menu bar shows the overall percent with your downloads, Pause All and Resume All. Closing the window keeps Rays downloading in the menu bar; switch that off in Settings > General.
+- Downloads are no longer slowed by App Nap when Rays is in the background, and the Mac stays awake while a download runs.
+- Less CPU while downloading, and progress is saved to disk safely, so a resume after a power cut cannot leave gaps in a file.
+
 ## 0.1.9 (22 Nov 2026)
 
 - Cloud Browse works like Finder: your connected providers appear as folders, then their buckets, then each bucket's folders and files, as icons or a list with size, date and kind.
