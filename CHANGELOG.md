@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.13 (23 Nov 2026)
+
+- Brave connects to Rays: Install Helper now also puts the helper in Chrome's folder, which is where Brave looks for it. Every browser built on Chromium gets that copy too.
+- Settings > Browsers sets up any browser built on Chromium or Firefox, not only the ones Rays knows by name, and lists every other browser in the same list with the reason. Search is supported.
+- Remove Missing in the Downloads list clears finished downloads whose file was moved or deleted.
+
 ## 0.1.12 (23 Nov 2026)
 
 - Download lists (Downloads, Sorter's recent moves and Cloud) have Filter and Sort menus, pages of 50, and an icon for each file's type. Each window's toolbar has the same three buttons: recent first, settings last.
