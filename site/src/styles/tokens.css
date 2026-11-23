@@ -37,7 +37,7 @@
 
 	--measure: 60ch;
 	--gutter: clamp(16px, 4.4vw, 64px);
-	--panel-w: clamp(280px, 28vw, 440px);
+	--panel-w: clamp(300px, 32vw, 520px);
 	--radius: 20px;
 	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

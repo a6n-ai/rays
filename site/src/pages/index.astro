@@ -10,7 +10,6 @@ import Newsletter from '../components/Newsletter.astro';
 import Faq from '../components/Faq.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import icon from '../assets/icon.png';
-import sorter from '../assets/sorter.png';
 ---
 
 <Base
@@ -40,10 +39,10 @@ import sorter from '../assets/sorter.png';
 				</h1>
 				<DrumPause />
 				</div>
+				<Panel />
 				<p class="sub">Rays downloads from your browser, Terminal, AI assistants and Hugging Face at full line speed. Then every file lands in a folder that fits, sorted by AI that never leaves your Mac. Free.</p>
 				<InstallBar />
 			</section>
-			<Panel />
 
 			<Passage label="Why" id="why">
 				<p>
@@ -58,6 +57,13 @@ import sorter from '../assets/sorter.png';
 
 			<Passage label="Downloads" id="downloads">
 				<p>Paste a wall of links: one per line, comma-separated, or a whole CSV. Rays finds every one.</p>
+				<figure class="paste">
+					<pre aria-label="An example of pasted text with three links in it"><code>From the release thread:
+<mark>https://huggingface.co/openai-community/gpt2/resolve/main/model.safetensors</mark>
+"invoice", "march", <mark>https://example.com/files/invoice-march.pdf</mark>
+mirror two: <mark>https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/</mark> (latest)</code></pre>
+					<figcaption><span>3 links</span> picked out of the text, ready to download</figcaption>
+				</figure>
 				<dl class="features">
 					<div>
 						<dt>Every connection pulls its weight</dt>
@@ -83,6 +89,13 @@ import sorter from '../assets/sorter.png';
 						</dd>
 					</div>
 					<div>
+						<dt>Cloud buckets too</dt>
+						<dd>
+							Browse Amazon S3, Cloudflare R2, Backblaze B2 or any S3-compatible bucket and download with the same engine.
+							Secret keys stay in your Keychain.
+						</dd>
+					</div>
+					<div>
 						<dt>You set the pace</dt>
 						<dd>Cap the speed, and choose how many files download at once, from 1 to 10.</dd>
 					</div>
@@ -99,7 +112,22 @@ import sorter from '../assets/sorter.png';
 					fight each other, and your file arrives later. So Rays measures: a connection stays only while it makes the
 					download at least 10% faster, and Rays steps back down when more stop helping.
 				</p>
-				<dl class="stats" aria-label="Benchmarks on a test server">
+				<figure class="ramp" data-ramp>
+					<ol>
+						<li style="--n:4;--speed:0.25"><b>4</b><span class="lanes" aria-hidden="true"></span><span class="rate">8 MB/s</span></li>
+						<li style="--n:8;--speed:0.5"><b>8</b><span class="lanes" aria-hidden="true"></span><span class="rate">16 MB/s <em>kept, +100%</em></span></li>
+						<li style="--n:16;--speed:1"><b>16</b><span class="lanes" aria-hidden="true"></span><span class="rate">32 MB/s <em>kept, +100%</em></span></li>
+					</ol>
+					<figcaption>
+						Connections per step, on a server that caps each one at 2 MB/s. On a line one connection already fills, the
+						first step brings nothing, and Rays goes back down.
+					</figcaption>
+				</figure>
+				<dl class="stats" aria-label="Benchmark results">
+					<div>
+						<dt>31<span> MB/s</span></dt>
+						<dd>the full speed of a 250 Mbit/s line, for a 2 GB file over HTTPS</dd>
+					</div>
 					<div>
 						<dt>10&times;</dt>
 						<dd>faster than aria2 on its default settings, when the server caps each connection at 2 MB/s</dd>
@@ -135,20 +163,35 @@ import sorter from '../assets/sorter.png';
 					arrives, it moves into a folder that fits, like Installers, Archives, Images or Work.
 				</p>
 				<p>Rays can even rename files from what is inside them, or keep every original name. Your call.</p>
-				<figure class="shot">
-					<Image
-						src={sorter}
-						widths={[640, 960, 1280]}
-						sizes="(max-width: 899px) 100vw, 40rem"
-						alt="The Rays Sorter setup: on-device AI ready, sort new files after 10 seconds, rename files from their content, watching Documents and Downloads."
-						loading="lazy"
-					/>
-					<figcaption>Sorter setup in the Rays app.</figcaption>
-				</figure>
+				<ol class="flow" aria-label="How a file gets sorted">
+					<li><span class="step">Arrives</span><code>download (3).pdf</code><p>lands in Downloads, or any folder you add</p></li>
+					<li><span class="step">Waits</span><code>10 s to 1 hour</code><p>you choose how long, so you can open it or move it yourself first</p></li>
+					<li><span class="step">Reads</span><code>Apple on-device AI</code><p>Apple Intelligence reads what is inside, on your Mac, never in the cloud</p></li>
+					<li><span class="step">Files</span><code>Work/Invoice March.pdf</code><p>into a folder that fits, with a clear name</p></li>
+				</ol>
+				<dl class="features">
+					<div>
+						<dt>Your folders, your rules</dt>
+						<dd>Send any category where you want it, for example Work to <code>~/Documents/Work</code>.</dd>
+					</div>
+					<div>
+						<dt>Works without AI too</dt>
+						<dd>Disk images go to Installers and screenshots to Images even on a Mac without Apple Intelligence.</dd>
+					</div>
+					<div>
+						<dt>Tidy what's already there</dt>
+						<dd>New files sort themselves. For the ones that were there first, run <code>dl sort FOLDER --all</code>.</dd>
+					</div>
+					<div>
+						<dt>See every move</dt>
+						<dd>The Recent tab lists the latest moves. Click one to open the file, or show it in Finder.</dd>
+					</div>
+				</dl>
 			</Passage>
 
 			<Passage label="Private" id="private">
-				<p>Sorting runs on your Mac with Apple's on-device model. Your files are never uploaded, and there is no account to make.</p>
+				<p class="statement">Your files stay on your Mac.</p>
+				<p>Sorting runs on Apple's on-device model. Nothing is uploaded, and there is no account to make.</p>
 			</Passage>
 
 			<Passage label="Anywhere" id="anywhere">
@@ -156,11 +199,11 @@ import sorter from '../assets/sorter.png';
 					Rays comes with the <a href="/docs/dl/"><code>dl</code> command</a>, so you can download and sort from Terminal, or let AI assistants do it over MCP. The
 					Rays extension for <a href="https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail">Chrome</a> and <a href="https://addons.mozilla.org/firefox/addon/rays@a6n.ai/">Firefox</a> sends links to Rays with a right-click.
 				</p>
-				<a class="browsers slide" href="/docs/app/browser/">
+				<a class="browsers" href="/docs/app/browser/">
 					{['chrome', 'brave', 'edge', 'firefox', 'zen'].map((b) => (
 						<img src={`/browsers/${b}.svg`} alt="" width="22" height="22" loading="lazy" />
 					))}
-					<span>Get the extension</span>
+					<span class="label">Get the extension</span>
 				</a>
 				<p>Rays lives in your menu bar and Dock with progress at a glance, and keeps downloading after you close the window.</p>
 				<p>New version out? Click Update. Rays installs it and reopens.</p>
@@ -194,6 +237,20 @@ import sorter from '../assets/sorter.png';
 	</div>
 </Base>
 
+<script>
+	// The ramp starts collapsed and draws once it is on screen. Without JS, or under reduced motion, it shows at rest.
+	const ramp = document.querySelector<HTMLElement>('[data-ramp]');
+	if (ramp && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+		ramp.classList.add('idle');
+		new IntersectionObserver((entries, seen) => {
+			if (entries.some((e) => e.isIntersecting)) {
+				ramp.classList.remove('idle');
+				seen.disconnect();
+			}
+		}, { threshold: 0.4 }).observe(ramp);
+	}
+</script>
+
 <style>
 	.mark {
 		display: flex;
@@ -221,7 +278,30 @@ import sorter from '../assets/sorter.png';
 	.top a:hover {
 		color: var(--ink);
 	}
+	/* The underline draws under the label only, not under the browser icons; the icons hop in turn. */
+	.browsers .label {
+		background: linear-gradient(currentColor, currentColor) left bottom / 0 1px no-repeat;
+		padding-bottom: 2px;
+		transition: background-size 220ms var(--ease-out);
+	}
+	.browsers:hover .label,
+	.browsers:focus-visible .label {
+		background-size: 100% 1px;
+	}
+	.browsers img {
+		transition: translate 220ms var(--ease-out);
+	}
+	.browsers:hover img,
+	.browsers:focus-visible img {
+		translate: 0 -2px;
+	}
+	.browsers img:nth-child(2) { transition-delay: 30ms; }
+	.browsers img:nth-child(3) { transition-delay: 60ms; }
+	.browsers img:nth-child(4) { transition-delay: 90ms; }
+	.browsers img:nth-child(5) { transition-delay: 120ms; }
 	.browsers {
+		justify-self: start;
+		width: fit-content;
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
@@ -262,9 +342,9 @@ import sorter from '../assets/sorter.png';
 	.headline {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-start;
 		align-items: flex-end;
-		gap: 16px;
+		gap: 20px;
 		max-width: 40rem;
 	}
 	/* Two lines: the lead, then the drum at the same size. Sized so the lead fills the 40rem hero column. */
@@ -284,28 +364,156 @@ import sorter from '../assets/sorter.png';
 		color: var(--muted);
 		text-wrap: balance;
 	}
-	.shot {
-		margin: 20px 0 0;
+	.headline :global(.pause) {
+		align-self: flex-end;
+		margin-bottom: 0.9rem;
+	}
+	/* Sorting as four stops on one line: the file's name changes from the first stop to the last. */
+	.flow {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 20px;
+		margin: 16px 0 4px;
+		padding: 0;
+		list-style: none;
+		max-width: var(--measure);
+	}
+	.flow li {
+		position: relative;
+		display: grid;
+		align-content: start;
+		gap: 8px;
+		padding-top: 22px;
+		border-top: 1px solid var(--line);
+	}
+	.flow li::before {
+		content: '';
+		position: absolute;
+		top: -4px;
+		left: 0;
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--accent);
+	}
+	.flow .step {
+		font: 500 1.25rem / 1.1 var(--font-display);
+		letter-spacing: -0.02em;
+	}
+	.flow code {
+		justify-self: start;
+		max-width: 100%;
+		padding: 2px 6px;
+		border-radius: 6px;
+		background: var(--chip);
+		font-size: 0.8125rem;
+		overflow-wrap: anywhere;
+	}
+	.flow li:last-child code {
+		background: color-mix(in oklab, var(--accent), transparent 80%);
+		color: var(--ink);
+	}
+	.flow p {
+		margin: 0;
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.45;
+	}
+	.paste {
+		margin: 8px 0 0;
 		max-width: 40rem;
 	}
-	.shot :global(img) {
-		display: block;
-		width: 100%;
-		height: auto;
+	.paste pre {
+		margin: 0;
+		padding: 18px 20px;
 		border-radius: var(--radius);
-		border: 1px solid var(--line);
+		background: var(--chip);
+		overflow-x: auto;
+		font: 0.8125rem / 1.75 var(--font-mono);
+		color: var(--muted);
+		white-space: pre;
 	}
-	.shot figcaption {
+	.paste mark {
+		background: color-mix(in oklab, var(--accent), transparent 82%);
+		color: var(--ink);
+		border-radius: 4px;
+		box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent), transparent 82%);
+	}
+	.paste figcaption,
+	.ramp figcaption {
 		margin-top: 10px;
 		color: var(--muted);
 		font-size: var(--t-small);
+		max-width: var(--measure);
+	}
+	.paste figcaption span {
+		color: var(--accent);
+		font-weight: 600;
+	}
+	/* Doubling, drawn: one hairline lane per connection, and a bar as long as the speed it reached. */
+	.ramp {
+		margin: 24px 0 0;
+		max-width: 40rem;
+	}
+	.ramp ol {
+		display: grid;
+		gap: 14px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.ramp li {
+		display: grid;
+		grid-template-columns: 2.5rem minmax(0, 1fr) 10.5rem;
+		align-items: center;
+		gap: 14px;
+	}
+	.ramp b {
+		font: 500 1.75rem / 1 var(--font-display);
+		letter-spacing: -0.03em;
+		font-variant-numeric: tabular-nums;
+	}
+	.ramp .lanes {
+		height: 34px;
+		background: repeating-linear-gradient(
+			180deg,
+			var(--accent) 0 1.5px,
+			transparent 1.5px calc(34px / var(--n))
+		);
+		transform-origin: left;
+		transform: scaleX(var(--speed));
+		transition: transform 900ms var(--ease-out);
+	}
+	.ramp.idle .lanes {
+		transform: scaleX(0.02);
+	}
+	.ramp .rate {
+		font: 500 var(--t-small) / 1.3 var(--font-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.ramp em {
+		display: block;
+		font-style: normal;
+		font-weight: 400;
+		color: var(--muted);
+	}
+	.ramp li:nth-child(2) .lanes {
+		transition-delay: 160ms;
+	}
+	.ramp li:nth-child(3) .lanes {
+		transition-delay: 320ms;
+	}
+	.statement {
+		font: 500 clamp(1.75rem, 3.4vw, 3rem) / 1.1 var(--font-display);
+		letter-spacing: -0.03em;
+		color: var(--ink);
 	}
 	/* Benchmark numbers set as display type: the one place the page shouts. */
 	.stats {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 24px;
-		margin: 28px 0 8px;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 28px 32px;
+		margin: 36px 0 8px;
 		max-width: var(--measure);
 	}
 	.stats div {
@@ -316,7 +524,7 @@ import sorter from '../assets/sorter.png';
 		border-top: 1px solid var(--ink);
 	}
 	.stats dt {
-		font: 500 clamp(2.5rem, 5vw, 4rem) / 1 var(--font-display);
+		font: 500 clamp(3rem, 6.4vw, 6rem) / 0.95 var(--font-display);
 		letter-spacing: -0.045em;
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
@@ -358,6 +566,14 @@ import sorter from '../assets/sorter.png';
 		.stats {
 			grid-template-columns: minmax(0, 1fr);
 			gap: 20px;
+		}
+		.flow {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			row-gap: 24px;
+		}
+		.ramp li {
+			grid-template-columns: 2rem minmax(0, 1fr) 6.5rem;
+			gap: 10px;
 		}
 		.top .wide {
 			display: none;
