@@ -5,7 +5,6 @@
 ## Install
 
 - [Download Rays.dmg](https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg): open it and drag Rays to Applications. On first open, approve it in System Settings > Privacy & Security > Open Anyway.
-- Homebrew: `brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays` (also puts `dl` on PATH; no Gatekeeper step).
 - `dl` ships inside Rays.app; DMG installs add it to PATH from Settings > General > Command line tool.
 
 ## Docs

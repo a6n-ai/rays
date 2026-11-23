@@ -5,7 +5,7 @@ description: "Fix common Rays problems on Mac: Gatekeeper blocks, dl command not
 
 ## macOS says it can't verify Rays
 
-Rays is not notarized yet. Open **System Settings > Privacy & Security**, scroll down, and choose **Open Anyway**. Homebrew installs skip this.
+Rays is not notarized yet. Open **System Settings > Privacy & Security**, scroll down, and choose **Open Anyway**.
 
 ## `dl: app not reachable`
 
@@ -13,11 +13,11 @@ Rays is not notarized yet. Open **System Settings > Privacy & Security**, scroll
 
 ## `dl: sorter not found next to ...`
 
-The `dl` you ran is not the one inside Rays.app. Use the Homebrew `dl` or **Settings > General > Command line tool > Install**, or set `DL_SORTER`.
+The `dl` you ran is not the one inside Rays.app. Use **Settings > General > Command line tool > Install**, or set `DL_SORTER`.
 
 ## `dl: command not found`
 
-Open Rays, go to **Settings > General**, and click **Install** next to **Command line tool**. Homebrew installs add it already.
+Open Rays, go to **Settings > General**, and click **Install** next to **Command line tool**.
 
 ## A file was not sorted
 
