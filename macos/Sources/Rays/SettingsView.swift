@@ -168,7 +168,8 @@ private struct GeneralTab: View {
     }
 }
 
-private struct DownloadsTab: View {
+/// Also the Download settings page of the Downloads view.
+struct DownloadsTab: View {
     @Environment(EngineModel.self) private var model
     @AppStorage(SettingsKey.maxRunning) private var maxRunning = 3
     @AppStorage(SettingsKey.connections) private var connections = 4

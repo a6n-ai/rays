@@ -28,9 +28,10 @@ struct CloudView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ToolbarIconGroup {
-                    ForEach([(CloudTab.browse, "folder", "Browse"),
-                             (CloudTab.buckets, "externaldrive.badge.plus", "Buckets"),
-                             (CloudTab.downloads, "arrow.down.circle", "Cloud downloads")], id: \.0) { item in
+                    // Same order on every page: recent activity, the files, then settings.
+                    ForEach([(CloudTab.downloads, "clock.arrow.circlepath", "Cloud downloads"),
+                             (CloudTab.browse, "folder", "Browse"),
+                             (CloudTab.buckets, "slider.horizontal.3", "Buckets")], id: \.0) { item in
                         Button { tab = item.0 } label: {
                             ToolbarIcon(symbol: item.1, title: item.2, selected: shown == item.0)
                         }
@@ -391,14 +392,19 @@ private struct BucketBrowser: View {
 /// Downloads whose link is an s3:// object, with the same rows as the Downloads list.
 private struct CloudDownloads: View {
     @Environment(EngineModel.self) private var model
+    @State private var status = "All"
+    @State private var kind = FileKind.all
+    @State private var sort = ListSort.newest
+    @State private var page = 0
 
     var body: some View {
-        let jobs = model.jobs.filter { $0.url.hasPrefix("s3://") }
-        if jobs.isEmpty {
+        let all = model.jobs.filter { $0.url.hasPrefix("s3://") }
+        let jobs = all.listed(status: status, kind: kind, sort: sort)
+        if all.isEmpty {
             ContentUnavailableView("No cloud downloads yet", systemImage: "cloud",
                                    description: Text("Download a file from Browse and it shows up here."))
         } else {
-            List(jobs, id: \.id) { job in
+            List(Array(ListControls.page(jobs, page)), id: \.id) { job in
                 JobRow(job: job)
                     .listRowInsets(EdgeInsets(
                         top: LayoutMetrics.rowSpacing / 2,
@@ -409,6 +415,10 @@ private struct CloudDownloads: View {
             }
             .listStyle(.inset)
             .scrollContentBackground(.hidden)
+            .overlay { if jobs.isEmpty { EmptyState(symbol: "tray", title: "No downloads match") } }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                ListControls(statuses: JobView.statuses, status: $status, kind: $kind, sort: $sort, count: jobs.count, page: $page)
+            }
         }
     }
 }

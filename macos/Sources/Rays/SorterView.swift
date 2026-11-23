@@ -28,6 +28,19 @@ struct SorterView: View {
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @AppStorage("sorterShowFolders") private var showFolders = true
     @State private var removing: SorterFolder?
+    @State private var recentKind = FileKind.all
+    @State private var recentSort = ListSort.newest
+    @State private var recentPage = 0
+    /// The sorter's recent moves, filtered by kind and sorted.
+    private var recentMoves: [SorterMove] {
+        let moves = (model.status?.recent ?? []).filter { recentKind.matches($0.file) }
+        return switch recentSort {
+        case .oldest: moves.sorted { $0.time < $1.time }
+        case .name: moves.sorted { $0.file.localizedStandardCompare($1.file) == .orderedAscending }
+        default: moves.sorted { $0.time > $1.time }
+        }
+    }
+
     private var outdated: [SorterFolder] { (model.status?.folders ?? []).filter(\.needsUpdate) }
 
     @MainActor init(model: SorterModel? = nil) {
@@ -153,14 +166,19 @@ struct SorterView: View {
                         }
                     }
                 } else if tab == .recent {
-                Section("Recent activity") {
-                    let moves = model.status?.recent ?? []
+                let moves = recentMoves
+                Section {
                     if moves.isEmpty {
-                        Text("Nothing sorted yet.").foregroundStyle(.secondary)
+                        Text((model.status?.recent ?? []).isEmpty ? "Nothing sorted yet." : "No sorted files match.")
+                            .foregroundStyle(.secondary)
                     }
-                    ForEach(Array(moves.prefix(10).enumerated()), id: \.offset) { _, move in
+                    ForEach(Array(ListControls.page(moves, recentPage).enumerated()), id: \.offset) { _, move in
                         MoveRow(move: move)
                     }
+                } header: {
+                    ListControls(status: .constant(""), kind: $recentKind, sorts: [.newest, .oldest, .name],
+                                 sort: $recentSort, count: moves.count, page: $recentPage)
+                        .padding(.horizontal, -LayoutMetrics.margin)
                 }
                 }
             }
@@ -186,9 +204,10 @@ struct SorterView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ToolbarIconGroup {
-                        ForEach([(SorterTab.setup, "slider.horizontal.3", "Setup"),
+                        // Same order on every page: recent activity, the files, then settings.
+                        ForEach([(SorterTab.recent, "clock.arrow.circlepath", "Recently sorted"),
                                  (SorterTab.files, "folder", "Sorted files"),
-                                 (SorterTab.recent, "clock.arrow.circlepath", "Recently sorted")], id: \.0) { item in
+                                 (SorterTab.setup, "slider.horizontal.3", "Setup")], id: \.0) { item in
                             Button { tab = item.0 } label: {
                                 ToolbarIcon(symbol: item.1, title: item.2, selected: tab == item.0)
                             }

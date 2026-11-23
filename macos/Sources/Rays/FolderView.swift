@@ -73,10 +73,13 @@ struct FolderView: View {
     @State private var tracked = Set<String>()
     @State private var watcher = DirectoryWatcher()
     let onClose: () -> Void
+    /// Inside the Downloads page, under its own toolbar: the back button and path move into a bar above the files.
+    var embedded = false
 
-    init(root: URL, folder: URL, onClose: @escaping () -> Void) {
+    init(root: URL, folder: URL, embedded: Bool = false, onClose: @escaping () -> Void) {
         self.root = root
         self.onClose = onClose
+        self.embedded = embedded
         _current = State(initialValue: folder)
     }
 
@@ -96,8 +99,23 @@ struct FolderView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(current.lastPathComponent)
+        .safeAreaInset(edge: .top) {
+            if embedded {
+                HStack(spacing: 8) {
+                    navButton("chevron.backward") { current = current.deletingLastPathComponent() }
+                        .disabled(atRoot)
+                        .help(atRoot ? "" : "Back to \(current.deletingLastPathComponent().lastPathComponent)")
+                        .accessibilityLabel("Back")
+                    pathBar
+                    Spacer()
+                }
+                .padding(.horizontal, LayoutMetrics.margin)
+                .padding(.vertical, 6)
+            }
+        }
+        .navigationTitle(embedded ? "Rays" : current.lastPathComponent)
         .toolbar {
+            if !embedded {
             ToolbarItem(placement: .navigation) {
                 HStack(spacing: 2) {
                     navButton("chevron.backward", action: goBack)
@@ -118,6 +136,7 @@ struct FolderView: View {
             }
             .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
+            }
         }
         .onExitCommand(perform: goBack)
         .onChange(of: current, initial: true) { _, folder in

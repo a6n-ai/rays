@@ -105,40 +105,32 @@ private struct DownloadsView: View {
     @Environment(EngineModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let isDropTargeted: Bool
-    @State private var filter = Filter.all
+    @AppStorage("downloadsSection") private var section = DownloadsSection.recent
+    @State private var status = "All"
+    @State private var kind = FileKind.all
+    @State private var sort = ListSort.newest
+    @State private var page = 0
     @State private var selection = Set<UInt64>()
     @State private var removal: [JobView] = []
     /// The sorter moves finished files out of the downloads folder; rows then show where each one went.
     @State private var watcher = DirectoryWatcher()
 
-    private enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", active = "Active", finished = "Finished"
-        var id: Self { self }
-        var symbol: String {
-            switch self {
-            case .all: "tray.full"
-            case .active: "arrow.down.to.line"
-            case .finished: "checkmark"
-            }
-        }
-        func matches(_ job: JobView) -> Bool {
-            switch self {
-            case .all: true
-            case .active: !job.isFinished
-            case .finished: job.isFinished
-            }
-        }
-    }
+    /// The same three pages on every view: recent activity, the files, then settings.
+    enum DownloadsSection: String { case recent, files, settings }
 
-    private var visible: [JobView] { model.jobs.filter(filter.matches) }
+    private var matching: [JobView] { model.jobs.listed(status: status, kind: kind, sort: sort) }
+
+    private var visible: [JobView] { Array(ListControls.page(matching, page)) }
     private var selectedJobs: [JobView] { model.jobs.filter { selection.contains($0.id) } }
 
     var body: some View {
-        content
+        pageView(section)
             .safeAreaInset(edge: .top) { ExtensionBanner() }
             .safeAreaInset(edge: .bottom) {
-                AddBar(isTargeted: isDropTargeted)
-                    .disabled(model.startError != nil)
+                if section != .settings {
+                    AddBar(isTargeted: isDropTargeted)
+                        .disabled(model.startError != nil)
+                }
             }
             .navigationTitle("Rays")
             .navigationSubtitle(subtitle)
@@ -166,6 +158,22 @@ private struct DownloadsView: View {
             }
     }
 
+    @ViewBuilder private func pageView(_ section: DownloadsSection) -> some View {
+        switch section {
+        case .recent:
+            content.safeAreaInset(edge: .top, spacing: 0) {
+                if !model.jobs.isEmpty && model.startError == nil {
+                    ListControls(statuses: JobView.statuses, status: $status, kind: $kind, sort: $sort,
+                                 count: matching.count, page: $page)
+                }
+            }
+        case .files:
+            FolderView(root: EngineModel.downloadsURL, folder: EngineModel.downloadsURL, embedded: true) {}
+        case .settings:
+            DownloadsTab()
+        }
+    }
+
     @ViewBuilder private var content: some View {
         if let error = model.startError {
             ContentUnavailableView {
@@ -178,7 +186,7 @@ private struct DownloadsView: View {
         } else if model.jobs.isEmpty {
             WelcomeEmpty()
         } else if visible.isEmpty {
-            EmptyState(symbol: "tray", title: filter == .active ? "Nothing active" : "Nothing finished")
+            EmptyState(symbol: "tray", title: "No downloads match")
         } else {
             List(selection: $selection) {
                 ForEach(visible, id: \.id) { job in
@@ -205,12 +213,15 @@ private struct DownloadsView: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             ToolbarIconGroup {
-                ForEach(Filter.allCases) { item in
-                    Button { filter = item } label: {
-                        ToolbarIcon(symbol: item.symbol, title: "\(item.rawValue) downloads", selected: filter == item)
+                ForEach([(DownloadsSection.recent, "clock.arrow.circlepath", "Recent downloads"),
+                         (DownloadsSection.files, "folder", "Downloads folder"),
+                         (DownloadsSection.settings, "slider.horizontal.3", "Download settings")], id: \.0) { item in
+                    Button { section = item.0 } label: {
+                        ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
                     }
                     .buttonStyle(.plain)
-                    .help("\(item.rawValue) downloads")
+                    .help(item.2)
+                    .accessibilityAddTraits(section == item.0 ? .isSelected : [])
                 }
             }
         }
@@ -392,7 +403,7 @@ private struct GlassSymbol: View {
     }
 }
 
-private struct EmptyState: View {
+struct EmptyState: View {
     let symbol: String
     let title: String
     var message: String?

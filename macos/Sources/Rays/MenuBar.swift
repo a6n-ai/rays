@@ -105,10 +105,36 @@ struct MenuBarLabel: View {
         .accessibilityLabel(model.activeJobs.isEmpty ? "Rays" : "Rays, \(model.activeJobs.count) downloading")
     }
 
-    /// The app icon at menu bar size. A copy: resizing NSApp's own image would also shrink the Dock icon.
+    /// The stacked pages from Rays' icon as a template image, so the menu bar draws it white or black to match.
+    /// Same geometry as the icon's page SVGs (1024 space, pages at 416 to 608, scale 1.18), cropped to the stack.
     static let icon: NSImage = {
-        let image = (NSApp.applicationIconImage.copy() as? NSImage) ?? NSImage()
-        image.size = NSSize(width: 18, height: 18)
+        let box = CGRect(x: 216, y: 156, width: 592, height: 712)
+        let height: CGFloat = 17
+        let scale = height / box.height
+        let image = NSImage(size: NSSize(width: (box.width * scale).rounded(.up), height: height), flipped: true) { _ in
+            for (offset, alpha) in [(416.0, 0.35), (480.0, 0.55), (544.0, 0.75), (608.0, 1.0)] {
+                let page = NSBezierPath()
+                page.move(to: NSPoint(x: -130, y: -220))
+                page.line(to: NSPoint(x: 70, y: -220))
+                page.line(to: NSPoint(x: 170, y: -120))
+                page.line(to: NSPoint(x: 170, y: 190))
+                page.curve(to: NSPoint(x: 140, y: 220), controlPoint1: NSPoint(x: 170, y: 207), controlPoint2: NSPoint(x: 157, y: 220))
+                page.line(to: NSPoint(x: -130, y: 220))
+                page.curve(to: NSPoint(x: -170, y: 190), controlPoint1: NSPoint(x: -152, y: 220), controlPoint2: NSPoint(x: -170, y: 207))
+                page.line(to: NSPoint(x: -170, y: -190))
+                page.curve(to: NSPoint(x: -130, y: -220), controlPoint1: NSPoint(x: -170, y: -207), controlPoint2: NSPoint(x: -152, y: -220))
+                page.close()
+                var transform = AffineTransform(scale: scale)
+                transform.translate(x: offset - box.minX, y: offset - box.minY)
+                transform.scale(1.18)
+                page.transform(using: transform)
+                NSColor.black.withAlphaComponent(alpha).setFill()
+                page.fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Rays"
         return image
     }()
 }
