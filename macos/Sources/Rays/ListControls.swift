@@ -39,6 +39,8 @@ struct ListControls: View {
     @Binding var sort: ListSort
     let count: Int
     @Binding var page: Int
+    /// Shown as a Remove Missing button: clears rows whose finished file was moved or deleted.
+    var removeMissing: (() -> Void)? = nil
 
     static let pageSize = 50
     private var pages: Int { max(1, (count + Self.pageSize - 1) / Self.pageSize) }
@@ -70,6 +72,10 @@ struct ListControls: View {
                 Label(sort.rawValue, systemImage: "arrow.up.arrow.down")
             }
             .fixedSize()
+            if let removeMissing {
+                Button(action: removeMissing) { Label("Remove Missing", systemImage: "trash.slash") }
+                    .help("Remove finished downloads whose file was moved or deleted. Files that are still there stay.")
+            }
             Spacer()
             if pages > 1 {
                 Button { page -= 1 } label: { Image(systemName: "chevron.left") }

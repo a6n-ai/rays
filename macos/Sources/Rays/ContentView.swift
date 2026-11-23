@@ -164,7 +164,11 @@ private struct DownloadsView: View {
             content.safeAreaInset(edge: .top, spacing: 0) {
                 if !model.jobs.isEmpty && model.startError == nil {
                     ListControls(statuses: JobView.statuses, status: $status, kind: $kind, sort: $sort,
-                                 count: matching.count, page: $page)
+                                 count: matching.count, page: $page) {
+                        for job in model.jobs where job.isDone && model.locate(job) == nil {
+                            model.remove(job.id, deletePartial: false)
+                        }
+                    }
                 }
             }
         case .files:

@@ -52,6 +52,10 @@ enum BrowserCheck {
                 helperNote: "Zen and Firefox share one helper."),
         Browser(bundleID: "ai.perplexity.comet", name: "Comet", engine: .chromium,
                 support: "Comet", hostDir: "Comet/NativeMessagingHosts"),
+        // WebKit, but it runs Chrome Web Store extensions and reads helpers from Chrome's folder.
+        Browser(bundleID: "com.officecommun.search", name: "Search", engine: .chromium,
+                support: "Search", hostDir: "Google/Chrome/NativeMessagingHosts",
+                helperNote: "Search and Chrome share one helper."),
         Browser(bundleID: "com.apple.Safari", name: "Safari", engine: .safari, support: nil, hostDir: nil),
     ]
 
@@ -183,6 +187,8 @@ enum BrowserCheck {
     }
 
     static func chromiumAddon(root: URL, name browserName: String) -> Addon {
+        // Search keeps each extension in Extensions/<id>.
+        if FileManager.default.fileExists(atPath: root.appending(path: "Extensions/\(chromeID)").path(percentEncoded: false)) { return .added }
         let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path(percentEncoded: false))) ?? []
         var blocked = false
         for name in names where name == "Default" || name.hasPrefix("Profile ") {
