@@ -31,6 +31,9 @@ async function sendAndReport(urls) {
   }
 }
 
+// A new store version is applied at once instead of when the browser next restarts the extension.
+chrome.runtime.onUpdateAvailable.addListener(() => chrome.runtime.reload());
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: MENU_ID, title: "Download with Rays", contexts: ["link", "page"] });
 });

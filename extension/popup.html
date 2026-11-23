@@ -23,6 +23,7 @@
   #result:empty { display: none; }
   footer { padding: 10px 14px; display: flex; justify-content: space-between; }
   a { color: var(--muted); text-decoration: none; } a:hover { text-decoration: underline; }
+  #version { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -43,6 +44,7 @@
 </section>
 <footer>
   <a href="https://rays.a6n.ai/docs/app/browser/" target="_blank" rel="noopener">Help</a>
+  <span><a href="#" id="update" hidden>Check for updates</a> <span id="version"></span></span>
   <a href="#" id="options">Options</a>
 </footer>
 <script src="popup.js"></script>

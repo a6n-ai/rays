@@ -27,8 +27,28 @@ async function check() {
   } else if (reply.rays === false) {
     show("warn", "Rays isn't open", "Open Rays to download. Links you send open it.");
   } else {
-    show("ok", "Connected to Rays", "Right-click a link and choose Download with Rays.");
+    // An older Rays helper answers without saying whether the app runs.
+    show("ok", "Connected to Rays", "Update the Rays app to see downloads in progress here.");
   }
+}
+
+// Chrome-family browsers can ask their store now; Firefox checks on its own schedule.
+const update = $("update");
+$("version").textContent = `v${chrome.runtime.getManifest().version}`;
+if (chrome.runtime.requestUpdateCheck) {
+  update.hidden = false;
+  update.addEventListener("click", async (event) => {
+    event.preventDefault();
+    update.textContent = "Checking…";
+    try {
+      const { status, version } = await chrome.runtime.requestUpdateCheck();
+      // background.js reloads into the new version as soon as it is downloaded, which closes this popup.
+      update.textContent = status === "update_available" ? `Updating to ${version}…`
+        : status === "throttled" ? "Try again in a few minutes" : "Up to date";
+    } catch {
+      update.textContent = "Couldn't check";
+    }
+  });
 }
 
 $("add").addEventListener("submit", async (event) => {
