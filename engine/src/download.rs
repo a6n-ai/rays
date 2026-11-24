@@ -9,7 +9,7 @@ use crate::types::{Job, JobId, JobState, Live, Outcome, Segment};
 use reqwest::header::{
     ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_RANGE, ETAG, HeaderName, IF_RANGE, LAST_MODIFIED, RANGE,
 };
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::future::Future;
 use std::io::{self, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -61,9 +61,24 @@ impl Default for RunOpts {
     }
 }
 
+/// On macOS the default backend drives Finder through AppleScript, which raises an Automation prompt; NSFileManager does not.
 fn trash_file(path: &Path) -> io::Result<()> {
-    trash::delete(path).map_err(io::Error::other)
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        let mut ctx = trash::TrashContext::new();
+        ctx.set_delete_method(DeleteMethod::NsFileManager);
+        ctx.delete(path).map_err(io::Error::other)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        trash::delete(path).map_err(io::Error::other)
+    }
 }
+
+/// Every final path this process has produced. A replacing finish never trashes one of these, so a file
+/// another download just finished is not lost to a same-name job that finishes right after it.
+static PRODUCED: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
 
 /// Runs until the file is complete, `cancel` turns true (-> `Outcome::Paused`), or it fails for good.
 /// Mutates `live.job` (state, total, etag, last_modified, resumable, segments) and `live.done`/`live.connections`,
@@ -1180,10 +1195,10 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
     }
     tokio::fs::OpenOptions::new().write(true).open(&part).await?.sync_all().await?;
     // Only after the new bytes are whole: a failed download must not cost the old file.
-    let mut replace = if env.replace_existing { trash_existing(env, &name).await } else { None };
+    let mut replace = env.replace_existing.then_some(env.trash);
     // hard_link refuses to overwrite, so two jobs finishing together cannot clobber each other's file.
     let final_path = loop {
-        let candidate = replace.take().unwrap_or_else(|| names::unique_final(&env.dir, &name));
+        let candidate = claim_name(env.dir.clone(), name.clone(), replace.take()).await?;
         match tokio::fs::hard_link(&part, &candidate).await {
             Ok(()) => break candidate,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -1203,18 +1218,27 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
     Ok(Outcome::Done(final_path))
 }
 
-/// Moves `dir/name` to the Trash and returns that path for the new file. `None` (missing file, or the Trash
-/// failed) leaves the old file alone and the caller picks a free name.
-async fn trash_existing(env: &Env, name: &str) -> Option<PathBuf> {
-    let path = env.dir.join(name);
-    if !matches!(tokio::fs::try_exists(&path).await, Ok(true)) {
-        return None;
-    }
-    let (trash, doomed) = (env.trash, path.clone());
-    match tokio::task::spawn_blocking(move || trash(&doomed)).await {
-        Ok(Ok(())) => Some(path),
-        _ => None,
-    }
+/// Picks the name for a finished file and records it in `PRODUCED`, all under one lock. With `trash`, a
+/// same-name file that this process did not produce is moved to the Trash and its name taken; if that is not
+/// possible, the file stays and a free name is picked.
+async fn claim_name(dir: PathBuf, name: String, trash: Option<fn(&Path) -> io::Result<()>>) -> io::Result<PathBuf> {
+    tokio::task::spawn_blocking(move || {
+        let mut produced = PRODUCED.lock().unwrap_or_else(PoisonError::into_inner);
+        let path = dir.join(&name);
+        if let Some(trash) = trash
+            && !produced.contains(&path)
+            && path.exists()
+            && trash(&path).is_ok()
+        {
+            produced.insert(path.clone());
+            return path;
+        }
+        let candidate = names::unique_final(&dir, &name);
+        produced.insert(candidate.clone());
+        candidate
+    })
+    .await
+    .map_err(io::Error::other)
 }
 
 /// Resolves when `rx` turns true or its sender is dropped.

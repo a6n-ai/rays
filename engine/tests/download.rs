@@ -234,6 +234,11 @@ fn failing_trash(_: &Path) -> std::io::Result<()> {
     Err(std::io::Error::other("trash unavailable"))
 }
 
+/// Trash calls made under `dir`; other tests share the list, so each one looks only at its own folder.
+fn trashed_in(dir: &Path) -> Vec<PathBuf> {
+    TRASHED.lock().unwrap().iter().filter(|p| p.starts_with(dir)).cloned().collect()
+}
+
 async fn run_replacing(live: Arc<Live>, dir: &Path, rx: watch::Receiver<bool>, opts: download::RunOpts) -> Outcome {
     download::run(live, reqwest::Client::new(), dir, Arc::new(EventHub::new()), rx, 1, 1, unlimited(), None, None, opts).await
 }
@@ -1150,7 +1155,24 @@ async fn replace_on_moves_old_to_trash() {
     assert_eq!(path, dir.path().join("a.bin"));
     assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
     assert!(!dir.path().join("a (1).bin").exists());
-    assert_eq!(TRASHED.lock().unwrap().as_slice(), [dir.path().join("a.bin")]);
+    assert_eq!(trashed_in(dir.path()), [dir.path().join("a.bin")]);
+}
+#[tokio::test]
+async fn replace_spares_a_file_this_engine_produced() {
+    setup();
+    let srv = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // The first finish produces a.bin; the second job, same name, must not trash it.
+    let (first, rx) = job(srv.url("/file"), dir.path(), "a.bin");
+    expect_done(run_replacing(first, dir.path(), rx, download::RunOpts::default()).await);
+    std::fs::write(dir.path().join("a.bin"), b"first").unwrap();
+    let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
+    let opts = download::RunOpts { replace_existing: true, trash: fake_trash };
+    let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
+    assert_eq!(path, dir.path().join("a (1).bin"));
+    assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"first");
+    assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
+    assert!(trashed_in(dir.path()).is_empty());
 }
 #[tokio::test]
 async fn replace_on_keeps_old_when_trash_fails() {
