@@ -131,6 +131,12 @@ pub struct Job {
     pub position: i64,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Folder to save into; None means the engine's downloads dir.
+    pub dir: Option<PathBuf>,
+    /// True when `name` was set by the caller, so the server's Content-Disposition cannot rename the file.
+    pub fixed_name: bool,
+    /// Expected SHA-256 (hex). Stored only; checking it is not done yet.
+    pub sha256: Option<String>,
 }
 
 /// A job held in memory by the scheduler while the engine runs.

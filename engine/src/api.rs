@@ -51,6 +51,10 @@ impl Engine {
         self.sched.add(urls)
     }
 
+    pub fn add_to(&self, urls: Vec<String>, dir: Option<String>, names: Vec<Option<String>>) -> Vec<AddResult> {
+        self.sched.add_to(urls, dir.map(PathBuf::from), names)
+    }
+
     pub fn pause(&self, id: JobId) {
         self.sched.pause(id);
     }

@@ -63,10 +63,14 @@ pub async fn run(
     store: Option<Arc<crate::store::Store>>,
     sign: Option<SignUrl>,
 ) -> Outcome {
+    let dir = with_job(&live, |j| j.dir.clone()).unwrap_or_else(|| downloads_dir.to_path_buf());
+    if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+        return Outcome::Failed(format!("create {}: {e}", dir.display()));
+    }
     let env = Env {
         live,
         client,
-        dir: downloads_dir.to_path_buf(),
+        dir,
         hub,
         connections,
         start,
@@ -258,7 +262,7 @@ async fn run_attempt(
         if last_modified.is_some() {
             j.last_modified = last_modified;
         }
-        if let Some(name) = disposition {
+        if let Some(name) = disposition.filter(|_| !j.fixed_name) {
             j.name = name;
         }
         if total.is_some() {

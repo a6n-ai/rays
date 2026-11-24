@@ -157,7 +157,15 @@ impl Scheduler {
 
     /// Validates http/https, creates Queued jobs, starts as many as the limit allows.
     pub fn add(self: &Arc<Self>, urls: Vec<String>) -> Vec<AddResult> {
-        let results = urls.into_iter().map(|url| self.add_one(url)).collect();
+        let n = urls.len();
+        self.add_to(urls, None, vec![None; n])
+    }
+
+    /// Like `add`, saving into `dir` (None: the downloads dir). `fixed_names[i]` names job `i` and keeps the
+    /// server's Content-Disposition from renaming it.
+    pub fn add_to(self: &Arc<Self>, urls: Vec<String>, dir: Option<PathBuf>, fixed_names: Vec<Option<String>>) -> Vec<AddResult> {
+        let mut fixed = fixed_names.into_iter();
+        let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten())).collect();
         self.pump();
         results
     }
@@ -248,11 +256,11 @@ impl Scheduler {
         }
     }
 
-    fn add_one(&self, url: String) -> AddResult {
+    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>) -> AddResult {
         if let Err(error) = self.check_url(&url) {
             return AddResult { url, id: None, error: Some(error) };
         }
-        match self.insert_job(&url) {
+        match self.insert_job(&url, dir, fixed_name) {
             Ok(id) => AddResult { url, id: Some(id), error: None },
             Err(e) => AddResult { url, id: None, error: Some(e.to_string()) },
         }
@@ -272,13 +280,17 @@ impl Scheduler {
         }
     }
 
-    fn insert_job(&self, url: &str) -> Result<JobId, EngineError> {
+    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>) -> Result<JobId, EngineError> {
         let now = now_secs();
         let position = self.next_position.fetch_add(1, Ordering::Relaxed);
+        let folder = dir.clone().unwrap_or_else(|| lock(&self.dir).clone());
         let mut job = Job {
             id: 0,
             url: url.to_owned(),
-            name: names::from_url(url),
+            fixed_name: fixed_name.is_some(),
+            name: fixed_name.unwrap_or_else(|| names::from_url(url)),
+            dir,
+            sha256: None,
             part_path: PathBuf::new(),
             final_path: None,
             done: 0,
@@ -293,7 +305,7 @@ impl Scheduler {
             updated_at: now,
         };
         let id = self.store.insert(&mut job)?;
-        job.part_path = names::part_path(&lock(&self.dir), &job.name, id);
+        job.part_path = names::part_path(&folder, &job.name, id);
         // A new job owns no bytes yet: a leftover .part with the same name (ids restart with a new
         // database) would otherwise be resumed or mistaken for a finished file.
         let _ = std::fs::remove_file(&job.part_path);

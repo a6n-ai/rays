@@ -7,6 +7,7 @@ use axum::response::Response;
 use axum::routing::get;
 use dl_engine::download;
 use dl_engine::events::EventHub;
+use dl_engine::{Engine, EngineConfig, JobId};
 use dl_engine::limit::RateLimiter;
 use dl_engine::names;
 use dl_engine::types::{Job, JobState, Live, Outcome};
@@ -69,6 +70,7 @@ async fn start() -> Srv {
         .route("/noranges", get(noranges))
         .route("/404", get(missing))
         .route("/evil", get(evil))
+        .route("/named", get(named))
         .with_state(st.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -152,6 +154,13 @@ async fn evil() -> Response {
         .unwrap()
 }
 
+async fn named(State(st): State<St>) -> Response {
+    Response::builder()
+        .header(header::CONTENT_DISPOSITION, "attachment; filename=\"other.bin\"")
+        .body(Body::from(st.data.to_vec()))
+        .unwrap()
+}
+
 /// Sends headers, then never sends a body.
 async fn stall_server() -> SocketAddr {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -187,6 +196,9 @@ fn job(url: String, dir: &Path, name: &str) -> (Arc<Live>, watch::Receiver<bool>
         position: 0,
         created_at: 0,
         updated_at: 0,
+        dir: None,
+        fixed_name: false,
+        sha256: None,
     };
     let live = Live { job: Mutex::new(job), done: AtomicU64::new(0), connections: std::sync::atomic::AtomicU32::new(0), cancel: Mutex::new(tx) };
     (Arc::new(live), rx)
@@ -284,6 +296,62 @@ async fn hostile_disposition_name_is_sanitized() {
     let (live, rx) = job(srv.url("/evil"), dir.path(), "download");
     let path = expect_done(run_job(live, dir.path(), rx).await);
     assert_eq!(path, dir.path().join("evil.sh"));
+}
+
+fn engine_in(root: &Path) -> Arc<Engine> {
+    let downloads = root.join("downloads");
+    std::fs::create_dir_all(&downloads).unwrap();
+    Engine::new(EngineConfig {
+        downloads_dir: downloads.to_string_lossy().into_owned(),
+        data_dir: root.join("data").to_string_lossy().into_owned(),
+        socket_path: root.join("dl.sock").to_string_lossy().into_owned(),
+        max_running: 2,
+        connections: 1,
+        speed_limit: 0,
+    })
+    .unwrap()
+}
+
+fn wait_done(engine: &Engine, id: JobId) -> PathBuf {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match engine.snapshot().into_iter().find(|j| j.id == id).map(|j| j.state) {
+            Some(JobState::Done { path }) => return PathBuf::from(path),
+            Some(JobState::Failed { reason }) => panic!("job failed: {reason}"),
+            _ => {}
+        }
+        assert!(Instant::now() < deadline, "timed out waiting for job {id}");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn add_to_saves_in_given_dir_with_fixed_name() {
+    setup();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let srv = rt.block_on(start());
+    let root = tempfile::tempdir().unwrap();
+    let engine = engine_in(root.path());
+    let dest = root.path().join("m/sub");
+    let add = engine.add_to(
+        vec![srv.url("/named")],
+        Some(dest.to_string_lossy().into_owned()),
+        vec![Some("weights.gguf".into())],
+    );
+    let path = wait_done(&engine, add[0].id.expect("url accepted"));
+    assert_eq!(path, dest.join("weights.gguf"));
+    assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
+}
+
+#[test]
+fn add_keeps_disposition_name_in_default_dir() {
+    setup();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let srv = rt.block_on(start());
+    let root = tempfile::tempdir().unwrap();
+    let engine = engine_in(root.path());
+    let id = engine.add(vec![srv.url("/named")])[0].id.expect("url accepted");
+    assert_eq!(wait_done(&engine, id), root.path().join("downloads/other.bin"));
 }
 
 #[tokio::test]

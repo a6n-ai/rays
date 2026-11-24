@@ -26,10 +26,13 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "CREATE TABLE buckets(name TEXT PRIMARY KEY, provider TEXT NOT NULL, endpoint TEXT NOT NULL,
      region TEXT NOT NULL, access_key_id TEXT NOT NULL, path_style INTEGER NOT NULL, created_at INTEGER NOT NULL)",
     "ALTER TABLE buckets ADD COLUMN profile TEXT",
+    "ALTER TABLE jobs ADD COLUMN dir TEXT",
+    "ALTER TABLE jobs ADD COLUMN fixed_name INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE jobs ADD COLUMN sha256 TEXT",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
-                       resumable, state, error, position, created_at, updated_at, segments";
+                       resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256";
 
 pub struct Store {
     conn: Mutex<rusqlite::Connection>,
@@ -90,12 +93,13 @@ impl Store {
         let final_path = final_path_column(job);
         let part_path = job.part_path.to_string_lossy().into_owned();
         let segments = encode_segments(&job.segments);
+        let dir = job.dir.as_ref().map(|d| d.to_string_lossy().into_owned());
         let conn = self.lock()?;
         conn.execute(
             "INSERT INTO jobs (url, name, part_path, final_path, done, total, etag, last_modified, \
-             resumable, state, error, position, created_at, updated_at, segments) \
+             resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256) \
              VALUES (:url, :name, :part_path, :final_path, :done, :total, :etag, :last_modified, \
-             :resumable, :state, :error, :position, :created_at, :updated_at, :segments)",
+             :resumable, :state, :error, :position, :created_at, :updated_at, :segments, :dir, :fixed_name, :sha256)",
             named_params! {
                 ":url": job.url,
                 ":name": job.name,
@@ -112,6 +116,9 @@ impl Store {
                 ":created_at": now,
                 ":updated_at": now,
                 ":segments": segments,
+                ":dir": dir,
+                ":fixed_name": job.fixed_name,
+                ":sha256": job.sha256,
             },
         )?;
         job.id = conn.last_insert_rowid() as JobId;
@@ -124,12 +131,14 @@ impl Store {
         let final_path = final_path_column(job);
         let part_path = job.part_path.to_string_lossy().into_owned();
         let segments = encode_segments(&job.segments);
+        let dir = job.dir.as_ref().map(|d| d.to_string_lossy().into_owned());
         let conn = self.lock()?;
         conn.execute(
             "UPDATE jobs SET url = :url, name = :name, part_path = :part_path, final_path = :final_path, \
              done = :done, total = :total, etag = :etag, last_modified = :last_modified, \
              resumable = :resumable, state = :state, error = :error, position = :position, \
-             segments = :segments, updated_at = :updated_at WHERE id = :id",
+             segments = :segments, dir = :dir, fixed_name = :fixed_name, sha256 = :sha256, \
+             updated_at = :updated_at WHERE id = :id",
             named_params! {
                 ":id": job.id as i64,
                 ":url": job.url,
@@ -145,6 +154,9 @@ impl Store {
                 ":error": error,
                 ":position": job.position,
                 ":segments": segments,
+                ":dir": dir,
+                ":fixed_name": job.fixed_name,
+                ":sha256": job.sha256,
                 ":updated_at": now_secs(),
             },
         )?;
@@ -321,6 +333,9 @@ fn job_from_row(row: &Row) -> rusqlite::Result<Job> {
         position: row.get("position")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+        dir: row.get::<_, Option<String>>("dir")?.map(PathBuf::from),
+        fixed_name: row.get::<_, i64>("fixed_name")? != 0,
+        sha256: row.get("sha256")?,
     })
 }
 
@@ -367,6 +382,9 @@ mod tests {
             position: 0,
             created_at: 0,
             updated_at: 0,
+            dir: None,
+            fixed_name: false,
+            sha256: None,
         }
     }
 
@@ -401,6 +419,20 @@ mod tests {
             assert_eq!(job.id, *ids.last().unwrap());
         }
         assert!(ids.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn job_dir_name_and_hash_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut job = sample(&dir.path().join("w.part"), JobState::Paused);
+        job.dir = Some(PathBuf::from("/x/AI Models/a/b"));
+        job.fixed_name = true;
+        job.sha256 = Some("ab12".into());
+        Store::open(dir.path()).unwrap().insert(&mut job).unwrap();
+
+        let store = Store::open(dir.path()).unwrap();
+        assert_eq!(user_version(&store), MIGRATIONS.len() as i64);
+        assert_eq!(store.load_all().unwrap(), vec![job]);
     }
 
     #[test]
