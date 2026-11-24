@@ -7,7 +7,10 @@ struct ModelsView: View {
     @State private var query = ""
     @State private var results: [HfModel] = []
     @State private var repo: HfRepo?
+    @State private var openedFromResults = false
     @State private var error: String?
+    /// Bumped by every search and open; a reply is used only if no newer request started meanwhile.
+    @State private var request = 0
 
     private var text: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -45,7 +48,20 @@ struct ModelsView: View {
 
     @ViewBuilder private var content: some View {
         if let repo {
-            ModelDetailView(repo: repo, destinations: sorter.destinations).id(repo.id)
+            VStack(spacing: 0) {
+                if openedFromResults {
+                    HStack {
+                        Button { self.repo = nil; openedFromResults = false } label: {
+                            Label("Results", systemImage: "chevron.backward")
+                        }
+                        .help("Back to results")
+                        .accessibilityLabel("Back to results")
+                        Spacer()
+                    }
+                    .padding(.horizontal, LayoutMetrics.margin)
+                }
+                ModelDetailView(repo: repo, destinations: sorter.destinations).id(repo.id)
+            }
         } else if let error {
             EmptyState(symbol: "exclamationmark.triangle", title: "Couldn't load models", message: error)
         } else if text.isEmpty {
@@ -60,7 +76,7 @@ struct ModelsView: View {
     }
 
     private func resultRow(_ hit: HfModel) -> some View {
-        Button { Task { await open(hit.id) } } label: {
+        Button { Task { await open(hit.id, fromResults: true) } } label: {
             HStack(spacing: 12) {
                 Text(hit.id).lineLimit(1).truncationMode(.middle)
                 Spacer()
@@ -78,37 +94,48 @@ struct ModelsView: View {
 
     /// Runs after each pause in typing. A pasted link or org/repo opens its model directly.
     private func search() async {
+        request += 1
+        let token = request
         guard !text.isEmpty else {
             repo = nil
+            openedFromResults = false
             results = []
             error = nil
             return
         }
         try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
+        guard token == request, !Task.isCancelled else { return }
         if let id = hfRepoFromInput(input: text) {
-            await open(id)
+            await open(id, fromResults: false)
             return
         }
         repo = nil
+        openedFromResults = false
         do {
             let found = try await model.hfSearch(text)
-            guard !Task.isCancelled else { return }
+            guard token == request, !Task.isCancelled else { return }
             results = found
             error = nil
         } catch {
-            guard !Task.isCancelled else { return }
+            guard token == request, !Task.isCancelled else { return }
             results = []
             self.error = error.localizedDescription
         }
     }
 
-    private func open(_ id: String) async {
+    private func open(_ id: String, fromResults: Bool) async {
+        request += 1
+        let token = request
         do {
-            repo = try await model.hfModel(id)
+            let found = try await model.hfModel(id)
+            guard token == request, !Task.isCancelled else { return }
+            repo = found
+            openedFromResults = fromResults
             error = nil
         } catch {
+            guard token == request, !Task.isCancelled else { return }
             repo = nil
+            openedFromResults = false
             self.error = error.localizedDescription
         }
     }

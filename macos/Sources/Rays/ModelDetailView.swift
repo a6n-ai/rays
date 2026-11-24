@@ -26,11 +26,27 @@ struct ModelDetailView: View {
     private var isGGUF: Bool { repo.files.contains { $0.path.hasSuffix(".gguf") } }
     private var needsToken: Bool { repo.gated && !model.hasHFToken }
     private var notEnoughSpace: Bool { freeBytes.map { total > $0 } ?? false }
-    private var addedCount: Int {
-        (added ?? []).filter { row in
-            if case .added = row.status { return true }
+    private func count(_ match: (HfAddStatus) -> Bool) -> Int {
+        (added ?? []).filter { match($0.status) }.count
+    }
+
+    private func plural(_ n: Int) -> String { n == 1 ? "1 file" : "\(n) files" }
+
+    private var bannerText: String? {
+        let new = count { status in
+            if case .added = status { return true }
             return false
-        }.count
+        }
+        let queued = count { status in
+            if case .alreadyQueued = status { return true }
+            return false
+        }
+        switch (new, queued) {
+        case (0, 0): return nil
+        case (_, 0): return "Added \(plural(new)). Follow them in Downloads"
+        case (0, _): return "\(plural(queued)) already in Downloads. Follow them in Downloads"
+        default: return "Added \(plural(new)), \(queued) already in Downloads. Follow them in Downloads"
+        }
     }
 
     private var dir: URL {
@@ -71,6 +87,8 @@ struct ModelDetailView: View {
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
         .task(id: dir) { freeBytes = Self.freeSpace(near: dir) }
+        .onChange(of: selected) { _, _ in added = nil }
+        .onChange(of: dir) { _, _ in added = nil }
     }
 
     private var header: some View {
@@ -169,6 +187,7 @@ struct ModelDetailView: View {
         if let status = added?.first(where: { $0.path == file.path })?.status {
             switch status {
             case .alreadyThere: return ("Already downloaded", false)
+            case .alreadyQueued: return ("Already in Downloads", false)
             case .rejected(let error): return (error, true)
             default: return nil
             }
@@ -205,9 +224,9 @@ struct ModelDetailView: View {
 
     private var footer: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            if addedCount > 0 {
+            if let bannerText {
                 HStack {
-                    Text("Added \(addedCount) files. Follow them in Downloads").foregroundStyle(.secondary)
+                    Text(bannerText).foregroundStyle(.secondary)
                     Spacer()
                     Button("Show Downloads") {
                         NotificationCenter.default.post(name: .openDownloads, object: nil)
