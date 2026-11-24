@@ -70,6 +70,7 @@ const CATEGORIES: &[(&str, &str)] = &[
     ("Archives", "zip/tar/rar and other compressed bundles"),
     ("Media", "audio and video"),
     ("Code", "source code and scripts only (not data CSV/JSON exports)"),
+    ("AI Models", "machine-learning model weights and checkpoints"),
     ("Other", "manuals, articles, ebooks, anything that fits nothing above"),
 ];
 
@@ -108,8 +109,17 @@ fn is_project(dir: &Path) -> bool {
     PROJECT_MARKERS.iter().any(|m| dir.join(m).exists())
 }
 
+const MODEL_EXT: &[(&str, &str)] = &[("gguf", "GGUF"), ("safetensors", "Safetensors"), ("onnx", "ONNX"), ("mlmodel", "Core ML"),
+    ("tflite", "TFLite"), ("ckpt", "PyTorch"), ("pt", "PyTorch"), ("pth", "PyTorch")];
+
+fn model_sub(p: &Path) -> Option<&'static str> {
+    let e = ext(p);
+    MODEL_EXT.iter().find(|(x, _)| *x == e).map(|(_, sub)| *sub)
+}
+
 /// Fixed folders for files the model can't improve on; checked before calling `fm`.
 fn rule(p: &Path) -> Option<(&'static str, &'static str)> {
+    if let Some(sub) = model_sub(p) { return Some(("AI Models", sub)); }
     let name = p.file_name()?.to_string_lossy().to_lowercase();
     if name.starts_with("screenshot") || name.starts_with("screen shot") {
         return Some(("Images", "Screenshots"));
@@ -450,6 +460,37 @@ Reuse an existing subcategory only if it truly describes this file's subject (fo
     Ok(((cat, sub, name), format!("extract {extract_ms}ms fm {fm_ms}ms prompt {}ch", prompt.len() + instructions.len())))
 }
 
+/// Target dir, category dir (gets the marker), file stem, reason, indexed.
+type Planned = (PathBuf, PathBuf, String, String, bool);
+
+/// Model files skip the duplicate check and keep their original name.
+fn plan(p: &Path, index: &mut Index, root: &Path, rename: bool, layout: &config::Layout,
+        mut classify: impl FnMut(&Path) -> Result<Classified, String>) -> Result<Planned, String> {
+    let orig_stem = p.file_stem().unwrap().to_string_lossy().into_owned();
+    let model = model_sub(p).is_some();
+    let dup = if model { None } else { index.find_duplicate(p) };
+    match (dup, rule(p)) {
+        (Some(orig), _) => {
+            let rel = orig.parent().unwrap().strip_prefix(root).unwrap().to_path_buf();
+            Ok((root.join(ARCHIVE).join(rel), root.join(ARCHIVE), orig_stem, format!("duplicate of {}", orig.display()), false))
+        }
+        // Rule fixes the folder; the model still names the file from its content/metadata.
+        (None, Some((cat, sub))) => {
+            let stem = if !rename || model { orig_stem }
+                else if NO_TEXT.contains(&ext(p).as_str()) { tidy_name(&orig_stem) }
+                else { classify(p).map(|(.., s)| s).unwrap_or(orig_stem) };
+            let cat_dir = layout.cat_dir(cat);
+            Ok((cat_dir.join(sub), cat_dir, stem, format!("{cat}/{sub} rule"), !layout.is_external(cat)))
+        }
+        (None, None) => classify(p).map(|(cat, sub, stem)| {
+            let stem = if rename { stem } else { orig_stem };
+            let cat_dir = layout.cat_dir(&cat);
+            let indexed = !layout.is_external(&cat);
+            (cat_dir.join(&sub), cat_dir, stem, format!("{cat}/{sub}"), indexed)
+        }),
+    }
+}
+
 fn unique_target(dir: &Path, stem: &str, p: &Path) -> PathBuf {
     let e = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     let mut target = dir.join(format!("{stem}{e}"));
@@ -651,37 +692,12 @@ fn main() {
         if born < since || now() - modified < SETTLE.as_secs_f64() {
             continue;
         }
-        // Duplicate of an already-sorted file: mirror its location under Duplicates, keep original name, skip fm.
-        let orig_stem = p.file_stem().unwrap().to_string_lossy().into_owned();
-        // (target dir, category dir that gets the marker, file stem, reason, indexed)
-        let planned = match (index.find_duplicate(&p), rule(&p)) {
-            (Some(orig), _) => {
-                let rel = orig.parent().unwrap().strip_prefix(&root).unwrap().to_path_buf();
-                Ok((root.join(ARCHIVE).join(rel), root.join(ARCHIVE), orig_stem, format!("duplicate of {}", orig.display()), false))
-            }
-            // Rule fixes the folder; the model still names the file from its content/metadata.
-            (None, Some((cat, sub))) => {
-                let stem = if !rename {
-                    orig_stem
-                } else if NO_TEXT.contains(&ext(&p).as_str()) {
-                    tidy_name(&orig_stem)
-                } else {
-                    match classify_cached(&p, &layout, &schema, &mut cache, &cfg) {
-                        Ok(((.., s), timing)) => { log(&log_file, dry, &format!("timing {name}: {timing}")); s }
-                        Err(_) => orig_stem,
-                    }
-                };
-                let cat_dir = layout.cat_dir(cat);
-                Ok((cat_dir.join(sub), cat_dir, stem, format!("{cat}/{sub} rule"), !layout.is_external(cat)))
-            }
-            (None, None) => classify_cached(&p, &layout, &schema, &mut cache, &cfg).map(|((cat, sub, stem), timing)| {
+        let planned = plan(&p, &mut index, &root, rename, &layout, |q| {
+            classify_cached(q, &layout, &schema, &mut cache, &cfg).map(|(c, timing)| {
                 log(&log_file, dry, &format!("timing {name}: {timing}"));
-                let stem = if rename { stem } else { orig_stem };
-                let cat_dir = layout.cat_dir(&cat);
-                let indexed = !layout.is_external(&cat);
-                (cat_dir.join(&sub), cat_dir, stem, format!("{cat}/{sub}"), indexed)
-            }),
-        };
+                c
+            })
+        });
         match planned {
             Ok((dir, cat_dir, stem, why, indexed)) => {
                 let target = unique_target(&dir, &stem, &p);
@@ -729,6 +745,33 @@ mod tests {
         assert_eq!(title_case("kitchen packing sheet of the day"), "Kitchen Packing Sheet of the Day");
         assert_eq!(title_case("niit university NeuroSense PRD"), "Niit University NeuroSense PRD");
         assert_eq!(title_case("MISSED COMMS ACCOUNTS"), "Missed Comms Accounts");
+    }
+
+    #[test]
+    fn rule_sends_model_files_to_ai_models() {
+        for (f, sub) in [("a.gguf", "GGUF"), ("b.safetensors", "Safetensors"), ("c.onnx", "ONNX"), ("d.mlmodel", "Core ML"),
+            ("e.tflite", "TFLite"), ("f.ckpt", "PyTorch"), ("g.pt", "PyTorch"), ("h.pth", "PyTorch"), ("X.GGUF", "GGUF")] {
+            assert_eq!(rule(Path::new(f)), Some(("AI Models", sub)), "{f}");
+        }
+        assert_eq!(rule(Path::new("weights.bin")), None);
+    }
+
+    #[test]
+    fn model_files_skip_duplicate_check_and_keep_name() {
+        let base = std::env::temp_dir().join(format!("sorter-models-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("Downloads");
+        fs::create_dir_all(root.join("Work")).unwrap();
+        fs::write(root.join("Work/a.gguf"), "weights").unwrap();
+        fs::write(root.join("a.gguf"), "weights").unwrap();
+        let mut index = Index::load(&root, base.join("hash.json"));
+        let layout = config::Layout::new(&root, &json!({}));
+        let planned = plan(&root.join("a.gguf"), &mut index, &root, true, &layout, |_| Err("classified".into()));
+        let (dir, _, stem, why, _) = planned.unwrap();
+        assert_eq!(dir, root.join("AI Models/GGUF"));
+        assert_eq!(stem, "a");
+        assert_eq!(why, "AI Models/GGUF rule");
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
