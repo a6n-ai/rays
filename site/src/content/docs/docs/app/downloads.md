@@ -21,6 +21,7 @@ Downloads go to `~/Downloads` unless you choose another folder in **Settings > G
 - **Retries.** Up to 5 automatic retries, waiting 2 seconds at first and up to a minute.
 - **Resume.** Pause a download, or quit Rays, and it continues later from the bytes already saved. While a file is downloading it is named `<name>.<id>.part` and renamed only when it is complete.
 - **Safe names.** Rays takes the name the server suggests and cleans it, so a file can never land outside your folder.
+- **Same name.** **Settings > Downloads > If a file with the same name exists** sets what happens to a file that is already there. **Keep both** (the default) saves the new file as `name (1).ext`. **Replace** moves the old file to the Trash once the new one finishes, so a failed download never costs you the old file. The setting applies to every download. With **Keep both**, some apps, like LM Studio and llama.cpp split files, expect exact names.
 
 ## Speed and limits
 

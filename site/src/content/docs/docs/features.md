@@ -27,6 +27,7 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 - **Pause, resume, quit.** Downloads continue from the bytes already saved, after a pause, a quit or a crash.
 - **Filter and sort** the Downloads list by status or type, in pages of 50, with an icon for each file's type. **Remove Missing** clears finished downloads whose file is gone. Double-click a finished download to open it.
 - **Copied links.** Copy a download link anywhere on your Mac and Rays offers to download it.
+- **Hugging Face models.** Search Hugging Face, pick a quantization or weights format, and download it, or save it into LM Studio's models folder. [Models](/docs/app/models/)
 - **Speed limit** and how many files download at once.
 - **Safe names.** The server's suggested name is cleaned, so a file can never land outside your folder.
 - **Share** finished downloads with AirDrop or the Share menu, or drag them out of the window.
