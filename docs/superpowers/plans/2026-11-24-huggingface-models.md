@@ -181,7 +181,8 @@
 **Files:**
 - Create: `macos/Sources/Rays/ModelsView.swift`
 - Create: `macos/Sources/Rays/AIModelsFolder.swift` (`enum AIModelsFolder { static func base(downloadsDir: URL, destinations: [String: [String: String]]) -> URL; static var lmStudioModels: URL? }`)
-- Modify: `macos/Sources/Rays/ContentView.swift`. Add `DownloadsSection.models`, a toolbar icon `cube` with the title "Hugging Face models", and the `pageView` case.
+- Modify: `macos/Sources/Rays/Sidebar.swift`. Add `Destination.models` and a sidebar row **Models** (symbol `cube`) placed after Sorter and before Cloud, matching the existing rows.
+- Modify: `macos/Sources/Rays/ContentView.swift`. Route `.models?` to `ModelsView()` and persist it as `lastFolder = "models"`, following the `.sorter`/`.cloud` cases at lines 35 and 77. The toolbar matches the other pages (title "Models", `SettingsToolbarButton` last).
 
 **Interfaces:**
 - Consumes: the Task 6 wrappers; `SorterModel` destinations (`[folderPath: [category: dest]]`, loaded in `SorterModel.swift:164`).
@@ -195,7 +196,7 @@
     - File list with checkboxes and sizes, **Recommended / Select all / None**, and "N of M selected".
     - **Save to**: the path, **Choose…** (NSOpenPanel for directories), and **Save into LM Studio's models folder** when `lmStudioModels != nil`.
     - Rows with an existing same-name file show "Replaces the file there" or "Saves as name (1)", per the setting. With Keep both, they add "Some apps need exact file names".
-  - **Download** is disabled when nothing is selected or the total exceeds free space ("Not enough space: needs X, Y free"). On click it calls `addModel` and switches the section to Recent. `AlreadyThere` rows show "Already downloaded"; `Rejected` rows show their error.
+  - **Download** is disabled when nothing is selected or the total exceeds free space ("Not enough space: needs X, Y free"). On click it calls `addModel`, and the panel shows "Added N files. Follow them in Downloads" with a button that switches the sidebar to Downloads. `AlreadyThere` rows show "Already downloaded"; `Rejected` rows show their error.
   - Gated model without a token: the panel shows "This model is gated. Add your Hugging Face token in Settings" and a button that opens Settings.
 - [ ] **Step 2:** `swift build --package-path macos` prints `Build complete!`.
 - [ ] **Step 3: Manual check** with `bin/Rays.app`:

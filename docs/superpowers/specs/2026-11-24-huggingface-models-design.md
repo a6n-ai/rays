@@ -50,7 +50,7 @@ Picked A: the user wants to search by name and download, and picking files matte
 
 ### Where it lives
 
-A fourth Downloads section, **Models**, as a toolbar icon next to Recent, Files and Settings (symbol: `cube` or similar, builder's call). The user shared a reference dialog from another download manager; the layout follows its structure, in Rays' own look:
+Its own sidebar item, **Models**, alongside Downloads, Sorter and Cloud (symbol: `cube` or similar, builder's call). The user changed this from a Downloads section on 2026-11-24. The user shared a reference dialog from another download manager; the layout follows its structure, in Rays' own look:
 
 ```
 [ 🔍 qwen3 27b gguf   (name, org/repo, or a huggingface.co link) ]
@@ -122,7 +122,7 @@ With Keep both, the Models panel notes on affected rows that some apps (LM Studi
 
 ## Calls made in this doc (user can override)
 
-- Models is a section in the Downloads window, not a separate sidebar item.
+- Models is its own sidebar item (user's choice).
 - Default folder `~/Downloads/AI Models/<org>/<model>/`.
 - Token is optional, in Settings, in Keychain.
 - GGUF repos default to `Q4_K_M` (+ `mmproj`); other repos to one weights format plus configs and tokenizer.
