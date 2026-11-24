@@ -53,6 +53,7 @@ final class EngineModel {
                 connections: UInt32(min(16, max(1, defaults.integer(forKey: SettingsKey.connections)))),
                 speedLimit: UInt64(max(0, defaults.integer(forKey: SettingsKey.speedLimit))))
             let engine = try Engine(config: config)
+            engine.setReplaceExisting(on: defaults.bool(forKey: SettingsKey.replaceExisting))
             self.engine = engine
             jobs = engine.snapshot()
             jobs.forEach(track)
@@ -182,6 +183,29 @@ final class EngineModel {
         defaults.set(count, forKey: SettingsKey.maxRunning)
         engine?.setMaxRunning(n: UInt32(count))
     }
+
+    func setReplaceExisting(_ on: Bool) {
+        defaults.set(on, forKey: SettingsKey.replaceExisting)
+        engine?.setReplaceExisting(on: on)
+    }
+
+    func hfSearch(_ query: String) async throws -> [HfModel] {
+        guard let engine else { return [] }
+        return try await engine.hfSearch(query: query)
+    }
+
+    func hfModel(_ repo: String) async throws -> HfRepo {
+        guard let engine else { throw EngineError.Io(msg: "The Rays engine is not running.") }
+        return try await engine.hfModel(repo: repo)
+    }
+
+    func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) -> [HfAdd] {
+        engine?.addHf(repo: repo, sha: sha, files: files, destDir: dir.path(percentEncoded: false)) ?? []
+    }
+
+    func setHFToken(_ token: String?) throws { try engine?.setHfToken(token: token) }
+
+    var hasHFToken: Bool { engine?.hasHfToken() ?? false }
 
     /// nil resets to the user's Downloads folder. The engine is asked first, so a failure saves nothing.
     func setDownloadsDir(_ url: URL?) throws {
@@ -318,6 +342,7 @@ enum SettingsKey {
     static let speedLimit = "speedLimitBytes"
     static let connections = "connectionsPerFile"
     static let maxRunning = "maxRunning"
+    static let replaceExisting = "replaceExisting"
     static let downloadsDir = "downloadsDir"
     static let sorterPath = "sorterPath"
     static let menuBar = "showsMenuBar"

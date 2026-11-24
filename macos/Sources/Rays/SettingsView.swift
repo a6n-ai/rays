@@ -174,8 +174,12 @@ struct DownloadsTab: View {
     @AppStorage(SettingsKey.maxRunning) private var maxRunning = 3
     @AppStorage(SettingsKey.connections) private var connections = 4
     @AppStorage(SettingsKey.speedLimit) private var speedLimit = 0
+    @AppStorage(SettingsKey.replaceExisting) private var replaceExisting = false
     @State private var customMode = false
     @State private var customMB = 0.0
+    @State private var token = ""
+    @State private var hasToken = false
+    @State private var tokenError: String?
 
     /// Sentinel tag for the Custom… row; presets are tagged with their byte counts.
     private let customTag = -1
@@ -206,6 +210,11 @@ struct DownloadsTab: View {
                     .pickerStyle(.menu)
                     .fixedSize()
                 }
+
+                Picker("If a file with the same name exists", selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) })) {
+                    Text("Keep both").tag(false)
+                    Text("Replace (old file goes to the Trash)").tag(true)
+                }
             }
 
             Section {
@@ -232,11 +241,47 @@ struct DownloadsTab: View {
                 }
             }
 
+            Section {
+                HStack {
+                    SecureField("Access token", text: $token)
+                    if hasToken { Text("Saved").foregroundStyle(.secondary) }
+                    Button("Save", action: saveToken)
+                        .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Remove") { setToken(nil) }
+                        .disabled(!hasToken)
+                }
+                if let tokenError { ErrorLine(text: tokenError) }
+            } header: {
+                Text("Hugging Face")
+            } footer: {
+                Text("Needed for gated and private models. Sent only to huggingface.co. Stored in Keychain.")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+            }
+
             SavedNote()
         }
         .scrollContentBackground(.hidden)
         .formStyle(.grouped)
-        .onAppear { customMB = Double(speedLimit) / 1_000_000 }
+        .onAppear {
+            customMB = Double(speedLimit) / 1_000_000
+            hasToken = model.hasHFToken
+        }
+    }
+
+    private func saveToken() {
+        setToken(token.trimmingCharacters(in: .whitespacesAndNewlines))
+        if tokenError == nil { token = "" }
+    }
+
+    private func setToken(_ value: String?) {
+        do {
+            try model.setHFToken(value)
+            tokenError = nil
+        } catch {
+            tokenError = EngineModel.message(for: error)
+        }
+        hasToken = model.hasHFToken
     }
 
     private var limitSelection: Binding<Int> {
