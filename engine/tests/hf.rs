@@ -38,6 +38,7 @@ struct Hf {
     cdn: u16,
     data: Arc<Vec<u8>>,
     auths: Auths,
+    flips: Arc<AtomicUsize>,
 }
 
 fn auth_of(headers: &HeaderMap) -> Option<String> {
@@ -76,6 +77,14 @@ async fn resolve(State(st): State<Hf>, headers: HeaderMap, Path((org, _name, _sh
         "gated" => StatusCode::UNAUTHORIZED,
         "lic" => StatusCode::FORBIDDEN,
         "open" => return Response::new(Body::from(st.data.to_vec())),
+        // The first answer has a flipped first byte, so the first download fails its hash; later ones are right.
+        "flip" => {
+            let mut body = st.data.to_vec();
+            if st.flips.fetch_add(1, Ordering::SeqCst) == 0 {
+                body[0] ^= 0xff;
+            }
+            return Response::new(Body::from(body));
+        }
         _ => {
             return Response::builder()
                 .status(StatusCode::FOUND)
@@ -89,7 +98,7 @@ async fn resolve(State(st): State<Hf>, headers: HeaderMap, Path((org, _name, _sh
 
 async fn fake_hf(cdn: u16) -> (SocketAddr, Auths) {
     let auths: Auths = Arc::default();
-    let st = Hf { cdn, data: Arc::new(data()), auths: auths.clone() };
+    let st = Hf { cdn, data: Arc::new(data()), auths: auths.clone(), flips: Arc::default() };
     let app = Router::new()
         .route("/api/models", get(search))
         .route("/api/models/{org}/{name}", get(model))
@@ -460,12 +469,32 @@ async fn sha_checked_on_finish() {
     assert!(std::fs::read(path).unwrap() == data());
 
     let bad = dir.path().join("bad");
-    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some("0".repeat(64)))], &bad);
+    let res = sched.add_hf("flip/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &bad);
     let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
     let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
     assert!(matches!(&v.state, JobState::Failed { reason } if reason == "Checksum didn't match"), "{:?}", v.state);
     assert_eq!(v.done, 0);
     assert!(std::fs::read_dir(&bad).unwrap().next().is_none(), "the file or its .part was left behind");
+
+    sched.resume(id);
+    let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    let JobState::Done { path } = v.state else { unreachable!() };
+    assert!(std::fs::read(path).unwrap() == data());
+    let names: Vec<String> = std::fs::read_dir(&bad).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    assert_eq!(names, vec!["w.gguf".to_string()], "no .part left behind");
+}
+
+/// Starts a download that stalls at DROP_AT, pauses it, shuts the engine down and reopens it on the same data dir.
+async fn stall_pause_and_reopen(root: &FsPath, base: String, dest: &FsPath, sha: String) -> (Arc<Scheduler>, JobId) {
+    let (sched, _) = scheduler(root, base.clone());
+    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, Some(sha))], dest);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
+    sched.pause(id);
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Paused)).await;
+    sched.shutdown();
+    drop(sched);
+    (scheduler_with(root, base, Arc::new(MemorySecrets::default())), id)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -473,22 +502,42 @@ async fn restart_keeps_dir_name_hash() {
     let (cdn, _) = fake_cdn().await;
     let (hf, _) = fake_hf(cdn).await;
     let dir = tempfile::tempdir().unwrap();
-    let base = format!("http://127.0.0.1:{}", hf.port());
     let dest = dir.path().join("models/org/m");
+    let (sched, id) = stall_pause_and_reopen(dir.path(), format!("http://127.0.0.1:{}", hf.port()), &dest, data_sha()).await;
 
-    let (sched, _) = scheduler(dir.path(), base.clone());
-    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &dest);
-    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
-    wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
-    sched.pause(id);
-    wait_for(&sched, id, |v| matches!(v.state, JobState::Paused)).await;
-    sched.shutdown();
-    drop(sched);
-
-    let sched = scheduler_with(dir.path(), base, Arc::new(MemorySecrets::default()));
     sched.resume(id);
     let done = wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
     let JobState::Done { path } = done.state else { unreachable!() };
     assert_eq!(FsPath::new(&path), dest.join("w.gguf"));
     assert!(std::fs::read(&path).unwrap() == data());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn restart_keeps_the_hash_for_the_check() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("models/org/m");
+    let (sched, id) = stall_pause_and_reopen(dir.path(), format!("http://127.0.0.1:{}", hf.port()), &dest, "0".repeat(64)).await;
+
+    sched.resume(id);
+    let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
+    assert!(matches!(&v.state, JobState::Failed { reason } if reason == "Checksum didn't match"), "{:?}", v.state);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn add_again_while_queued_is_not_a_second_job() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("models");
+    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
+
+    let again = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    assert_eq!(again[0].status, HfAddStatus::AlreadyQueued { id });
+    assert_eq!(sched.views().len(), 1, "the second add made a job");
+    sched.shutdown();
 }

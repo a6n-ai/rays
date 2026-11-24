@@ -219,6 +219,17 @@ impl Scheduler {
         results
     }
 
+    /// A job that has not finished for the same folder and name, or the same URL. Done and Failed jobs do not count.
+    fn pending_twin(&self, folder: &Path, name: &str, url: &str) -> Option<JobId> {
+        let default = lock(&self.dir).clone();
+        lock(&self.jobs).iter().find_map(|live| {
+            let job = lock(&live.job);
+            let job_dir = job.dir.as_deref().unwrap_or(default.as_path());
+            let same_file = (job_dir == folder && job.name == name) || job.url == url;
+            (same_file && !matches!(job.state, JobState::Done { .. } | JobState::Failed { .. })).then_some(job.id)
+        })
+    }
+
     fn add_hf_file(&self, repo: &str, sha: &str, dest_dir: &Path, file: &hf::HfFile) -> hf::HfAddStatus {
         let rejected = |error: &str| hf::HfAddStatus::Rejected { error: error.to_owned() };
         if !is_plain_abs(dest_dir) {
@@ -233,6 +244,9 @@ impl Scheduler {
         let Some(url) = hf::file_url(&self.hf_base, repo, sha, &file.path) else {
             return rejected("not a Hugging Face file");
         };
+        if let Some(id) = self.pending_twin(&parent, &name, &url) {
+            return hf::HfAddStatus::AlreadyQueued { id };
+        }
         let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone());
         match (res.id, res.error) {
             (Some(id), _) => hf::HfAddStatus::Added { id },

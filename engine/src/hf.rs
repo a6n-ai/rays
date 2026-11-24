@@ -129,6 +129,8 @@ pub enum HfAddStatus {
     Added { id: JobId },
     /// A file of the same name and size is already at the target, so no job was made.
     AlreadyThere,
+    /// A job for this file is waiting, running or paused; `id` is that job.
+    AlreadyQueued { id: JobId },
     Rejected { error: String },
 }
 
