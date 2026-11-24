@@ -1,6 +1,7 @@
 //! Queue order, concurrency limit, and job lifecycle. See design doc "Engine API".
 use crate::download::{self, SignUrl};
 use crate::events::EventHub;
+use crate::hf;
 use crate::limit::RateLimiter;
 use crate::names;
 use crate::cloud;
@@ -35,6 +36,10 @@ pub struct Scheduler {
     client: reqwest::Client,
     /// Secret keys of S3 buckets, by bucket name.
     secrets: Arc<dyn Secrets>,
+    /// Holds the Hugging Face token under `hf::TOKEN_ACCOUNT`.
+    hf_secrets: Arc<dyn Secrets>,
+    /// Hugging Face site without a trailing slash; `https://huggingface.co` unless a test points it elsewhere.
+    hf_base: String,
     jobs: Mutex<Vec<Arc<Live>>>,
     speed: Mutex<HashMap<JobId, (Instant, u64, u64)>>,
     /// Ids whose download task has not returned yet. A paused job keeps its slot until its task stops,
@@ -77,6 +82,8 @@ impl Scheduler {
         connections: u32,
         speed_limit: u64,
         secrets: Arc<dyn Secrets>,
+        hf_secrets: Arc<dyn Secrets>,
+        hf_base: String,
     ) -> Result<Arc<Scheduler>, EngineError> {
         let loaded = store.load_all()?;
         let next_position = loaded.iter().map(|j| j.position).max().map_or(0, |p| p + 1);
@@ -115,6 +122,8 @@ impl Scheduler {
             limiter: Arc::new(RateLimiter::new(speed_limit)),
             client,
             secrets,
+            hf_secrets,
+            hf_base,
             jobs: Mutex::new(lives),
             speed: Mutex::new(HashMap::new()),
             inflight: Mutex::new(HashSet::new()),
@@ -430,6 +439,33 @@ impl Scheduler {
         signer.list(&self.client, prefix, token.as_deref()).await
     }
 
+    pub async fn hf_search(&self, query: &str) -> Result<Vec<hf::HfModel>, EngineError> {
+        hf::search(&self.client, &self.hf_base, self.hf_token().as_deref(), query).await
+    }
+
+    pub async fn hf_model(&self, repo: &str) -> Result<hf::HfRepo, EngineError> {
+        hf::model(&self.client, &self.hf_base, self.hf_token().as_deref(), repo).await
+    }
+
+    /// `None` or an empty token deletes the saved one.
+    pub fn set_hf_token(&self, token: Option<&str>) -> Result<(), EngineError> {
+        match token.filter(|t| !t.is_empty()) {
+            Some(token) => self.hf_secrets.set(hf::TOKEN_ACCOUNT, token),
+            None => {
+                self.hf_secrets.delete(hf::TOKEN_ACCOUNT);
+                Ok(())
+            }
+        }
+    }
+
+    pub fn has_hf_token(&self) -> bool {
+        self.hf_token().is_some()
+    }
+
+    fn hf_token(&self) -> Option<String> {
+        self.hf_secrets.get(hf::TOKEN_ACCOUNT)
+    }
+
     fn bucket(&self, name: &str) -> Result<BucketConfig, String> {
         self.buckets().into_iter().find(|b| b.name == name).ok_or_else(|| format!("no bucket named {name} in Rays"))
     }
@@ -482,7 +518,8 @@ impl Scheduler {
             let dir = lock(&self.dir).clone();
             let hub = Arc::clone(&self.hub);
             let connections = self.connections.load(Ordering::Relaxed);
-            let opts = download::RunOpts { replace_existing: self.replace_existing.load(Ordering::Relaxed), ..Default::default() };
+            let hf = download::HfAccess { host: download::host_port(&self.hf_base).unwrap_or_default(), token: self.hf_token() };
+            let opts = download::RunOpts { replace_existing: self.replace_existing.load(Ordering::Relaxed), hf, ..Default::default() };
             let limiter = Arc::clone(&self.limiter);
             let store = Arc::clone(&self.store);
             let url = lock(&live.job).url.clone();

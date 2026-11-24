@@ -1,5 +1,6 @@
 //! UniFFI-exported `Engine` object: owns the tokio runtime and wires the modules together.
 use crate::events::EventHub;
+use crate::hf::{self, HfModel, HfRepo};
 use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
@@ -28,6 +29,7 @@ impl Engine {
             .build()?;
         let store = Arc::new(Store::open(Path::new(&config.data_dir))?);
         let hub = Arc::new(EventHub::new());
+        let hf_base = config.hf_base.unwrap_or_else(|| "https://huggingface.co".into()).trim_end_matches('/').to_owned();
         let sched = Scheduler::new(
             rt.handle().clone(),
             store,
@@ -36,7 +38,9 @@ impl Engine {
             config.max_running,
             config.connections.max(1),
             config.speed_limit,
-            Arc::new(Keychain),
+            Arc::new(Keychain(s3::KEYCHAIN_SERVICE)),
+            Arc::new(Keychain(hf::KEYCHAIN_SERVICE)),
+            hf_base,
         )?;
         let socket_path = PathBuf::from(&config.socket_path);
         {
@@ -182,6 +186,27 @@ impl Engine {
     pub async fn list_bucket(&self, bucket: String, prefix: String, token: Option<String>) -> Result<Listing, EngineError> {
         let sched = Arc::clone(&self.sched);
         self.rt.spawn(async move { sched.list_bucket(&bucket, &prefix, token).await }).await.map_err(join_error)?
+    }
+
+    /// Models matching `query`, most downloaded first. Sends the saved token, so gated repos list.
+    pub async fn hf_search(&self, query: String) -> Result<Vec<HfModel>, EngineError> {
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { sched.hf_search(&query).await }).await.map_err(join_error)?
+    }
+
+    /// One model's commit and files, with the LFS sha256 of each big file. `repo` is `org/name`.
+    pub async fn hf_model(&self, repo: String) -> Result<HfRepo, EngineError> {
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { sched.hf_model(&repo).await }).await.map_err(join_error)?
+    }
+
+    /// Saves the Hugging Face token in the Keychain; `None` deletes it.
+    pub fn set_hf_token(&self, token: Option<String>) -> Result<(), EngineError> {
+        self.sched.set_hf_token(token.as_deref())
+    }
+
+    pub fn has_hf_token(&self) -> bool {
+        self.sched.has_hf_token()
     }
 
     /// Pauses running jobs, saves state, removes the socket file.

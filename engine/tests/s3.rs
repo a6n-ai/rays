@@ -101,7 +101,7 @@ async fn bucket_lists_and_downloads_with_signed_ranged_requests() {
     let secrets = Arc::new(MemorySecrets::default());
     let downloads = dir.path().join("downloads");
     std::fs::create_dir_all(&downloads).unwrap();
-    let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, secrets.clone()).unwrap();
+    let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, secrets.clone(), Arc::new(MemorySecrets::default()), "https://huggingface.co".into()).unwrap();
 
     // Bad keys never get saved.
     let wrong = BucketConfig { access_key_id: "WRONG".into(), ..bucket(addr) };
@@ -226,7 +226,7 @@ async fn live_bucket_lists_and_downloads() {
     let store = Arc::new(Store::open(&dir.path().join("data")).unwrap());
     let downloads = dir.path().join("downloads");
     std::fs::create_dir_all(&downloads).unwrap();
-    let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, Arc::new(MemorySecrets::default())).unwrap();
+    let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, Arc::new(MemorySecrets::default()), Arc::new(MemorySecrets::default()), "https://huggingface.co".into()).unwrap();
     sched.add_bucket(cfg.clone(), std::env::var("RAYS_S3_SECRET").unwrap_or_default()).await.unwrap();
     let folder = object.rfind('/').map_or("", |i| &object[..=i]);
     let listing = sched.list_bucket(&cfg.name, folder, None).await.unwrap();
@@ -257,7 +257,7 @@ async fn socket_requests_add_list_browse_and_remove_buckets() {
     let store = Arc::new(Store::open(&dir.path().join("data")).unwrap());
     let downloads = dir.path().join("downloads");
     std::fs::create_dir_all(&downloads).unwrap();
-    let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, Arc::new(MemorySecrets::default())).unwrap();
+    let sched = Scheduler::new(tokio::runtime::Handle::current(), store, Arc::new(EventHub::new()), downloads, 2, 4, 0, Arc::new(MemorySecrets::default()), Arc::new(MemorySecrets::default()), "https://huggingface.co".into()).unwrap();
     let sock = dir.path().join("dl.sock");
     tokio::spawn(ipc::serve(ipc::bind(&sock).unwrap(), sched));
 

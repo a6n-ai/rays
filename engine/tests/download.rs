@@ -329,6 +329,7 @@ fn engine_in(root: &Path) -> Arc<Engine> {
         max_running: 2,
         connections: 1,
         speed_limit: 0,
+        hf_base: None,
     })
     .unwrap()
 }
@@ -1150,7 +1151,7 @@ async fn replace_on_moves_old_to_trash() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("a.bin"), b"old").unwrap();
     let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
-    let opts = download::RunOpts { replace_existing: true, trash: fake_trash };
+    let opts = download::RunOpts { replace_existing: true, trash: fake_trash, ..Default::default() };
     let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
     assert_eq!(path, dir.path().join("a.bin"));
     assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
@@ -1167,7 +1168,7 @@ async fn replace_spares_a_file_this_engine_produced() {
     expect_done(run_replacing(first, dir.path(), rx, download::RunOpts::default()).await);
     std::fs::write(dir.path().join("a.bin"), b"first").unwrap();
     let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
-    let opts = download::RunOpts { replace_existing: true, trash: fake_trash };
+    let opts = download::RunOpts { replace_existing: true, trash: fake_trash, ..Default::default() };
     let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
     assert_eq!(path, dir.path().join("a (1).bin"));
     assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"first");
@@ -1181,7 +1182,7 @@ async fn replace_on_keeps_old_when_trash_fails() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("a.bin"), b"old").unwrap();
     let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
-    let opts = download::RunOpts { replace_existing: true, trash: failing_trash };
+    let opts = download::RunOpts { replace_existing: true, trash: failing_trash, ..Default::default() };
     let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
     assert_eq!(path, dir.path().join("a (1).bin"));
     assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"old");

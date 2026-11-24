@@ -47,17 +47,46 @@ const HOLD_TICKS: u8 = 15;
 const CONN_FAIL_WINDOW: Duration = Duration::from_secs(10);
 
 /// Engine settings one run reads. `Default` has every setting off.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct RunOpts {
     /// A finished file replaces one already holding its name (that one goes to the Trash) instead of getting a new name.
     pub replace_existing: bool,
     /// Moves a file to the Trash. Injected so tests never touch the real Trash.
     pub trash: fn(&Path) -> io::Result<()>,
+    pub hf: HfAccess,
 }
 
 impl Default for RunOpts {
     fn default() -> Self {
-        RunOpts { replace_existing: false, trash: trash_file }
+        RunOpts { replace_existing: false, trash: trash_file, hf: HfAccess::default() }
+    }
+}
+
+/// The Hugging Face site and the saved token. `host` is `host:port`; the default (empty) matches no URL.
+#[derive(Clone, Default)]
+pub struct HfAccess {
+    pub host: String,
+    pub token: Option<String>,
+}
+
+impl HfAccess {
+    fn covers(&self, url: &str) -> bool {
+        !self.host.is_empty() && host_port(url).as_deref() == Some(self.host.as_str())
+    }
+}
+
+/// `host:port` of an http(s) URL, the form `HfAccess::host` holds.
+pub fn host_port(url: &str) -> Option<String> {
+    let u = reqwest::Url::parse(url).ok()?;
+    Some(format!("{}:{}", u.host_str()?, u.port_or_known_default()?))
+}
+
+/// The failure text for a status. Gating on Hugging Face gets a fix the user can make; other hosts keep the status.
+fn http_failure(hf: &HfAccess, url: &str, status: u16) -> String {
+    match status {
+        401 if hf.covers(url) => "This model is gated: add your Hugging Face token in Settings".into(),
+        403 if hf.covers(url) => "Accept this model's license on huggingface.co".into(),
+        _ => format!("HTTP {status}"),
     }
 }
 
@@ -114,6 +143,7 @@ pub async fn run(
         sign,
         replace_existing: opts.replace_existing,
         trash: opts.trash,
+        hf: opts.hf,
         retry_hint: Arc::new(AtomicU64::new(0)),
         dirty: Arc::new(AtomicBool::new(false)),
     };
@@ -202,6 +232,7 @@ struct Env {
     /// Set from the engine's replace setting when the job starts; see `RunOpts`.
     replace_existing: bool,
     trash: fn(&Path) -> io::Result<()>,
+    hf: HfAccess,
     /// Server-requested wait (Retry-After), in ms, consumed by the next retry sleep.
     retry_hint: Arc<AtomicU64>,
     /// Set by a retry, a 429/503 or a connection failure; a run that set it keeps the remembered limit.
@@ -254,7 +285,7 @@ async fn run_attempt(
     }
     let have = tokio::fs::metadata(&part).await.map(|m| m.len()).unwrap_or(0);
 
-    let mut req = env.client.get(env.request_url(&url));
+    let mut req = env.get(&url);
     if have > 0 {
         req = req.header(RANGE, format!("bytes={have}-"));
         if let Some(v) = &validator {
@@ -286,7 +317,7 @@ async fn run_attempt(
             env.note_retry_after(&resp);
             return Err(Stop::Retry(format!("HTTP {status}")));
         }
-        _ => return Err(Stop::Failed(format!("HTTP {status}"))),
+        _ => return Err(Stop::Failed(http_failure(&env.hf, &url, status))),
     }
 
     let ranged = status == 206;
@@ -1078,7 +1109,7 @@ async fn segment_attempt(
     let mut resp = match first {
         Some(resp) => resp,
         None => {
-            let mut req = shared.env.client.get(shared.env.request_url(&shared.url)).header(RANGE, format!("bytes={from}-{}", end - 1));
+            let mut req = shared.env.get(&shared.url).header(RANGE, format!("bytes={from}-{}", end - 1));
             if let Some(v) = &shared.validator {
                 req = req.header(IF_RANGE, v.as_str());
             }
@@ -1115,7 +1146,7 @@ async fn segment_attempt(
                     shared.env.note_retry_after(&resp);
                     return Err(Stop::Retry(format!("HTTP {status}")));
                 }
-                status => return Err(Stop::Failed(format!("HTTP {status}"))),
+                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, status))),
             }
             resp
         }
@@ -1274,6 +1305,17 @@ fn retryable(status: u16) -> bool {
 impl Env {
     fn request_url(&self, url: &str) -> String {
         self.sign.as_ref().map_or_else(|| url.to_owned(), |sign| sign())
+    }
+
+    /// A GET for `url`. The Hugging Face token rides along only on requests to the HF host;
+    /// reqwest drops it when a redirect leaves that host.
+    fn get(&self, url: &str) -> reqwest::RequestBuilder {
+        let target = self.request_url(url);
+        let req = self.client.get(&target);
+        match &self.hf.token {
+            Some(token) if self.hf.covers(&target) => req.bearer_auth(token),
+            _ => req,
+        }
     }
 
     /// Lifts a remembered limit by one after a clean finish; a no-op for hosts without a row.

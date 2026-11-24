@@ -15,6 +15,9 @@ pub struct EngineConfig {
     pub connections: u32,
     /// Global cap in bytes per second across all downloads; 0 means unlimited.
     pub speed_limit: u64,
+    /// Hugging Face site; `None` means https://huggingface.co. Tests point it at a local server.
+    #[uniffi(default = None)]
+    pub hf_base: Option<String>,
 }
 
 #[derive(uniffi::Enum, Clone, Debug, PartialEq, Eq)]

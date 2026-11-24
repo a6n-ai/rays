@@ -9,7 +9,7 @@ use std::time::Duration;
 
 /// Each GET is signed as it is sent; S3 checks the signature only when a request starts.
 const SIGN_FOR: Duration = Duration::from_secs(3600);
-const KEYCHAIN_SERVICE: &str = "ai.a6n.rays.s3";
+pub const KEYCHAIN_SERVICE: &str = "ai.a6n.rays.s3";
 
 /// A bucket Rays can browse and download from. The secret key is never part of it.
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]
@@ -105,21 +105,22 @@ pub trait Secrets: Send + Sync {
     fn delete(&self, bucket: &str);
 }
 
-pub struct Keychain;
+/// The Keychain service name is the field, so each kind of secret gets its own.
+pub struct Keychain(pub &'static str);
 
 impl Secrets for Keychain {
     fn get(&self, bucket: &str) -> Option<String> {
-        let bytes = security_framework::passwords::get_generic_password(KEYCHAIN_SERVICE, bucket).ok()?;
+        let bytes = security_framework::passwords::get_generic_password(self.0, bucket).ok()?;
         String::from_utf8(bytes).ok()
     }
 
     fn set(&self, bucket: &str, secret: &str) -> Result<(), EngineError> {
-        security_framework::passwords::set_generic_password(KEYCHAIN_SERVICE, bucket, secret.as_bytes())
+        security_framework::passwords::set_generic_password(self.0, bucket, secret.as_bytes())
             .map_err(|e| EngineError::Io { msg: format!("keychain: {e}") })
     }
 
     fn delete(&self, bucket: &str) {
-        let _ = security_framework::passwords::delete_generic_password(KEYCHAIN_SERVICE, bucket);
+        let _ = security_framework::passwords::delete_generic_password(self.0, bucket);
     }
 }
 

@@ -1,11 +1,125 @@
-//! Hugging Face repo input parsing and file grouping. Pure logic; the HTTP client lives elsewhere.
+//! Hugging Face repo input parsing, file grouping, and the API client for search and model info.
+use crate::types::EngineError;
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
+
+/// Keychain service and account for the Hugging Face token; the S3 keys live under `ai.a6n.rays.s3`.
+pub const KEYCHAIN_SERVICE: &str = "ai.a6n.rays.hf";
+pub const TOKEN_ACCOUNT: &str = "token";
 
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct HfFile {
     pub path: String,
     pub size: u64,
     pub sha256: Option<String>,
+}
+
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct HfModel {
+    pub id: String,
+    pub downloads: u64,
+    pub likes: u64,
+    pub gated: bool,
+    pub gguf: bool,
+}
+
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct HfRepo {
+    pub id: String,
+    pub sha: String,
+    pub gated: bool,
+    pub downloads: u64,
+    pub likes: u64,
+    pub files: Vec<HfFile>,
+}
+
+#[derive(Deserialize)]
+struct WireModel {
+    id: String,
+    #[serde(default)]
+    sha: String,
+    #[serde(default)]
+    gated: serde_json::Value,
+    #[serde(default)]
+    downloads: u64,
+    #[serde(default)]
+    likes: u64,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    siblings: Vec<WireSibling>,
+}
+
+#[derive(Deserialize)]
+struct WireSibling {
+    rfilename: String,
+    #[serde(default)]
+    size: u64,
+    lfs: Option<WireLfs>,
+}
+
+#[derive(Deserialize)]
+struct WireLfs {
+    sha256: String,
+}
+
+/// `gated` is `false`, `"auto"` or `"manual"`; only the strings gate.
+fn gated(v: &serde_json::Value) -> bool {
+    matches!(v.as_str(), Some("auto" | "manual"))
+}
+
+pub async fn search(client: &reqwest::Client, base: &str, token: Option<&str>, query: &str) -> Result<Vec<HfModel>, EngineError> {
+    let url = reqwest::Url::parse_with_params(
+        &format!("{base}/api/models"),
+        [
+            ("search", query),
+            ("sort", "downloads"),
+            ("direction", "-1"),
+            ("limit", "30"),
+            ("expand[]", "gated"),
+            ("expand[]", "downloads"),
+            ("expand[]", "likes"),
+            ("expand[]", "tags"),
+        ],
+    )
+    .map_err(|e| EngineError::InvalidUrl { msg: e.to_string() })?;
+    let models: Vec<WireModel> = get_json(client, url, token).await?;
+    Ok(models
+        .into_iter()
+        .map(|m| HfModel { gguf: m.tags.iter().any(|t| t == "gguf"), gated: gated(&m.gated), id: m.id, downloads: m.downloads, likes: m.likes })
+        .collect())
+}
+
+pub async fn model(client: &reqwest::Client, base: &str, token: Option<&str>, repo: &str) -> Result<HfRepo, EngineError> {
+    let url = reqwest::Url::parse(&format!("{base}/api/models/{repo}?blobs=true")).map_err(|e| EngineError::InvalidUrl { msg: e.to_string() })?;
+    let m: WireModel = get_json(client, url, token).await?;
+    Ok(HfRepo {
+        gated: gated(&m.gated),
+        files: m
+            .siblings
+            .into_iter()
+            .map(|s| HfFile { path: s.rfilename, size: s.size, sha256: s.lfs.map(|l| l.sha256) })
+            .collect(),
+        id: m.id,
+        sha: m.sha,
+        downloads: m.downloads,
+        likes: m.likes,
+    })
+}
+
+async fn get_json<T: DeserializeOwned>(client: &reqwest::Client, url: reqwest::Url, token: Option<&str>) -> Result<T, EngineError> {
+    let mut req = client.get(url);
+    if let Some(token) = token {
+        req = req.bearer_auth(token);
+    }
+    let resp = req.send().await.map_err(|e| EngineError::Io { msg: format!("hugging face: {e}") })?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(EngineError::Io { msg: format!("hugging face answered HTTP {}", status.as_u16()) });
+    }
+    let body = resp.bytes().await.map_err(|e| EngineError::Io { msg: format!("hugging face: {e}") })?;
+    serde_json::from_slice(&body).map_err(|e| EngineError::Io { msg: format!("hugging face reply: {e}") })
 }
 
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]

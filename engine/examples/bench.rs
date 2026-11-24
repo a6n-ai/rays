@@ -16,6 +16,7 @@ fn once(url: &str, connections: u32) -> Result<(f64, usize), String> {
         max_running: 1,
         connections,
         speed_limit: 0,
+        hf_base: None,
     })
     .map_err(|e| e.to_string())?;
     let start = Instant::now();

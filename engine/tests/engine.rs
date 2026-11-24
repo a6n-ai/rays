@@ -155,6 +155,7 @@ fn config(root: &Path, max_running: u32) -> EngineConfig {
         max_running,
         connections: 1,
         speed_limit: 0,
+        hf_base: None,
     }
 }
 
