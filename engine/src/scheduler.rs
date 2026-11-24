@@ -8,7 +8,7 @@ use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
 use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, now_secs};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, AtomicBool, AtomicI64, AtomicU64, Ordering, AtomicU32};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
@@ -51,6 +51,16 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 fn is_active(state: &JobState) -> bool {
     matches!(state, JobState::Running | JobState::Retrying { .. })
+}
+
+/// Absolute, and no `..`, so a job's folder cannot climb out of where the caller meant.
+fn is_plain_abs(dir: &Path) -> bool {
+    dir.is_absolute() && !dir.components().any(|c| matches!(c, Component::ParentDir))
+}
+
+/// One plain file name: it joins onto the job's folder without leaving it.
+fn valid_file_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', '\0'])
 }
 
 impl Scheduler {
@@ -164,6 +174,12 @@ impl Scheduler {
     /// Like `add`, saving into `dir` (None: the downloads dir). `fixed_names[i]` names job `i` and keeps the
     /// server's Content-Disposition from renaming it.
     pub fn add_to(self: &Arc<Self>, urls: Vec<String>, dir: Option<PathBuf>, fixed_names: Vec<Option<String>>) -> Vec<AddResult> {
+        if dir.as_ref().is_some_and(|d| !is_plain_abs(d)) {
+            return urls
+                .into_iter()
+                .map(|url| AddResult { url, id: None, error: Some("destination must be an absolute path with no ..".to_owned()) })
+                .collect();
+        }
         let mut fixed = fixed_names.into_iter();
         let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten())).collect();
         self.pump();
@@ -259,6 +275,9 @@ impl Scheduler {
     fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>) -> AddResult {
         if let Err(error) = self.check_url(&url) {
             return AddResult { url, id: None, error: Some(error) };
+        }
+        if fixed_name.as_deref().is_some_and(|n| !valid_file_name(n)) {
+            return AddResult { url, id: None, error: Some("file name must be one path component".to_owned()) };
         }
         match self.insert_job(&url, dir, fixed_name) {
             Ok(id) => AddResult { url, id: Some(id), error: None },

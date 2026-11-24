@@ -354,6 +354,23 @@ fn add_keeps_disposition_name_in_default_dir() {
     assert_eq!(wait_done(&engine, id), root.path().join("downloads/other.bin"));
 }
 
+#[test]
+fn add_rejects_unsafe_dir_and_file_name_without_a_job() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = engine_in(root.path());
+    let url = "https://example.com/f.bin".to_string();
+    let dir = root.path().join("ok").to_string_lossy().into_owned();
+    for name in ["../x", "/abs", "a/b", ""] {
+        let r = engine.add_to(vec![url.clone()], Some(dir.clone()), vec![Some(name.into())]).remove(0);
+        assert!(r.id.is_none() && r.error.is_some(), "name {name:?} accepted");
+    }
+    for bad_dir in ["rel/dir".to_string(), "/tmp/../x".to_string()] {
+        let r = engine.add_to(vec![url.clone()], Some(bad_dir.clone()), vec![None]).remove(0);
+        assert!(r.id.is_none() && r.error.is_some(), "dir {bad_dir:?} accepted");
+    }
+    assert!(engine.snapshot().is_empty());
+}
+
 #[tokio::test]
 async fn cancel_pauses_stalled_body() {
     setup();
