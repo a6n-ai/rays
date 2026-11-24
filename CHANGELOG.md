@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.19 (24 Nov 2026)
+
+- Sorter's Recent tab opens files again. Clicking a file the sorter had renamed did nothing; now double-click opens it.
+- Recent looks like the Downloads list: a ✓ on each file, a round button that shows the file in Finder, and Move Back, Share and More on hover. **Move Back** returns a file to the folder it came from, under its original name, and the sorter leaves it there.
+- Files moved or deleted since they were sorted show as such, with a button to remove them from the list. **Remove Missing** clears them all.
+- Right-click a file in Sorter's Files tab for **Open**, **Show in Finder** and **Copy Path**.
+- Selected rows in Downloads and Recent are a darker grey, the same shape as the hover highlight, instead of blue.
+
 ## 0.1.18 (24 Nov 2026)
 
 - Downloads reach full speed sooner on servers that limit the speed of each connection. Rays now doubles its connections as long as each step pays off, so on a test server that caps each connection at 2 MB/s, a 256 MB file downloads at 24 MB/s instead of 21.5 MB/s, and on a server 150 ms away at 34 MB/s instead of 30 MB/s.
