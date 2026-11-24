@@ -197,7 +197,7 @@ async fn every_part_request_is_signed_fresh() {
         sha256: None,
     };
     let live = Arc::new(Live { job: Mutex::new(job), done: AtomicU64::new(0), connections: AtomicU32::new(0), cancel: Mutex::new(tx) });
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 4, 2, Arc::new(RateLimiter::new(0)), None, Some(sign)).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 4, 2, Arc::new(RateLimiter::new(0)), None, Some(sign), download::RunOpts::default()).await;
     let Outcome::Done(path) = out else { panic!("{out:?}") };
     assert_eq!(Sha256::digest(std::fs::read(path).unwrap()), Sha256::digest(data.as_slice()));
     // The probe plus one ranged request for the second part, each with its own signature.

@@ -11,7 +11,7 @@ use reqwest::header::{
 };
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
-use std::io::SeekFrom;
+use std::io::{self, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
@@ -46,6 +46,25 @@ const HOLD_TICKS: u8 = 15;
 /// Connection failures this close together on different segments suggest the server blocks extra connections.
 const CONN_FAIL_WINDOW: Duration = Duration::from_secs(10);
 
+/// Engine settings one run reads. `Default` has every setting off.
+#[derive(Clone, Copy)]
+pub struct RunOpts {
+    /// A finished file replaces one already holding its name (that one goes to the Trash) instead of getting a new name.
+    pub replace_existing: bool,
+    /// Moves a file to the Trash. Injected so tests never touch the real Trash.
+    pub trash: fn(&Path) -> io::Result<()>,
+}
+
+impl Default for RunOpts {
+    fn default() -> Self {
+        RunOpts { replace_existing: false, trash: trash_file }
+    }
+}
+
+fn trash_file(path: &Path) -> io::Result<()> {
+    trash::delete(path).map_err(io::Error::other)
+}
+
 /// Runs until the file is complete, `cancel` turns true (-> `Outcome::Paused`), or it fails for good.
 /// Mutates `live.job` (state, total, etag, last_modified, resumable, segments) and `live.done`/`live.connections`,
 /// calling `hub.state_changed` / `hub.progress`. `store` is only used to save a split plan before the
@@ -62,6 +81,7 @@ pub async fn run(
     limiter: Arc<RateLimiter>,
     store: Option<Arc<crate::store::Store>>,
     sign: Option<SignUrl>,
+    opts: RunOpts,
 ) -> Outcome {
     let dir = with_job(&live, |j| j.dir.clone()).unwrap_or_else(|| downloads_dir.to_path_buf());
     if let Err(e) = tokio::fs::create_dir_all(&dir).await {
@@ -77,6 +97,8 @@ pub async fn run(
         limiter,
         store,
         sign,
+        replace_existing: opts.replace_existing,
+        trash: opts.trash,
         retry_hint: Arc::new(AtomicU64::new(0)),
         dirty: Arc::new(AtomicBool::new(false)),
     };
@@ -162,6 +184,9 @@ struct Env {
     store: Option<Arc<crate::store::Store>>,
     /// Makes a fresh signed URL for each request (S3 links); `None` uses the job URL as is.
     sign: Option<SignUrl>,
+    /// Set from the engine's replace setting when the job starts; see `RunOpts`.
+    replace_existing: bool,
+    trash: fn(&Path) -> io::Result<()>,
     /// Server-requested wait (Retry-After), in ms, consumed by the next retry sleep.
     retry_hint: Arc<AtomicU64>,
     /// Set by a retry, a 429/503 or a connection failure; a run that set it keeps the remembered limit.
@@ -1154,9 +1179,11 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
         return Err(Stop::Retry(format!("size mismatch: {len} bytes, expected {total:?}")));
     }
     tokio::fs::OpenOptions::new().write(true).open(&part).await?.sync_all().await?;
+    // Only after the new bytes are whole: a failed download must not cost the old file.
+    let mut replace = if env.replace_existing { trash_existing(env, &name).await } else { None };
     // hard_link refuses to overwrite, so two jobs finishing together cannot clobber each other's file.
     let final_path = loop {
-        let candidate = names::unique_final(&env.dir, &name);
+        let candidate = replace.take().unwrap_or_else(|| names::unique_final(&env.dir, &name));
         match tokio::fs::hard_link(&part, &candidate).await {
             Ok(()) => break candidate,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -1174,6 +1201,20 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
         j.final_path = Some(final_path.clone());
     });
     Ok(Outcome::Done(final_path))
+}
+
+/// Moves `dir/name` to the Trash and returns that path for the new file. `None` (missing file, or the Trash
+/// failed) leaves the old file alone and the caller picks a free name.
+async fn trash_existing(env: &Env, name: &str) -> Option<PathBuf> {
+    let path = env.dir.join(name);
+    if !matches!(tokio::fs::try_exists(&path).await, Ok(true)) {
+        return None;
+    }
+    let (trash, doomed) = (env.trash, path.clone());
+    match tokio::task::spawn_blocking(move || trash(&doomed)).await {
+        Ok(Ok(())) => Some(path),
+        _ => None,
+    }
 }
 
 /// Resolves when `rx` turns true or its sender is dropped.

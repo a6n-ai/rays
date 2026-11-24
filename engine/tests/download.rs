@@ -215,11 +215,27 @@ async fn run_conn(
     connections: u32,
     limiter: Arc<RateLimiter>,
 ) -> Outcome {
-    download::run(live, reqwest::Client::new(), &dir, Arc::new(EventHub::new()), rx, connections, 2, limiter, None, None).await
+    download::run(live, reqwest::Client::new(), &dir, Arc::new(EventHub::new()), rx, connections, 2, limiter, None, None, download::RunOpts::default()).await
 }
 
 fn unlimited() -> Arc<RateLimiter> {
     Arc::new(RateLimiter::new(0))
+}
+
+/// Paths the fake Trash was asked to remove; the real Trash is never touched.
+static TRASHED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+fn fake_trash(path: &Path) -> std::io::Result<()> {
+    TRASHED.lock().unwrap().push(path.to_path_buf());
+    std::fs::remove_file(path)
+}
+
+fn failing_trash(_: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::other("trash unavailable"))
+}
+
+async fn run_replacing(live: Arc<Live>, dir: &Path, rx: watch::Receiver<bool>, opts: download::RunOpts) -> Outcome {
+    download::run(live, reqwest::Client::new(), dir, Arc::new(EventHub::new()), rx, 1, 1, unlimited(), None, None, opts).await
 }
 
 fn expect_done(out: Outcome) -> PathBuf {
@@ -547,7 +563,7 @@ async fn split_starting_on_one_part_streams_on_the_probe_connection() {
     let dir = tempfile::tempdir().unwrap();
     let (live, rx) = job(format!("{}/big", srv.base), dir.path(), "big.bin");
     let check = live.clone();
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 4, 1, unlimited(), None, None).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 4, 1, unlimited(), None, None, download::RunOpts::default()).await;
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&big_data()));
     // A fast local link finishes before growth's first probe: the probe's response carried the whole file.
     assert_eq!(srv.ranged_hits.load(Ordering::SeqCst), 0, "the probe's stream was not reused");
@@ -1017,7 +1033,7 @@ async fn per_connection_limit_grows_past_three() {
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "big.bin");
     let sampler = Sampler::start(live.clone());
     // Starts on one part, as the app does, and must still climb on a link that limits each connection.
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 6, 1, unlimited(), None, None).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 6, 1, unlimited(), None, None, download::RunOpts::default()).await;
     let path = expect_done(out);
     let hist = sampler.finish();
     assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data));
@@ -1072,7 +1088,7 @@ async fn rate_limit_429_is_remembered_and_caps_the_next_download() {
     let host = "127.0.0.1";
 
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "first.bin");
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None, download::RunOpts::default()).await;
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&data));
     assert!(link.rejected.load(Ordering::SeqCst) > 0, "server never answered 429");
     let (max, _) = store.host_limit(host).unwrap().expect("limit remembered");
@@ -1080,7 +1096,7 @@ async fn rate_limit_429_is_remembered_and_caps_the_next_download() {
 
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "second.bin");
     let sampler = Sampler::start(live.clone());
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None, download::RunOpts::default()).await;
     let hist = sampler.finish();
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&data));
     let peak = peak(&hist);
@@ -1103,10 +1119,49 @@ async fn clean_split_under_a_remembered_limit_relaxes_it_by_one() {
 
     let (live, rx) = job(format!("http://{addr}/"), dir.path(), "big.bin");
     let sampler = Sampler::start(live.clone());
-    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None).await;
+    let out = download::run(live, reqwest::Client::new(), dir.path(), Arc::new(EventHub::new()), rx, 8, 2, unlimited(), Some(store.clone()), None, download::RunOpts::default()).await;
     let hist = sampler.finish();
     assert_eq!(sha(&std::fs::read(expect_done(out)).unwrap()), sha(&data));
     let peak = peak(&hist);
     assert!(peak <= 3, "{peak} connections against a limit of 3");
     assert_eq!(store.host_limit(host).unwrap().map(|l| l.0), Some(4));
+}
+#[tokio::test]
+async fn replace_off_keeps_both() {
+    setup();
+    let srv = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.bin"), b"old").unwrap();
+    let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
+    let path = expect_done(run_replacing(live, dir.path(), rx, download::RunOpts::default()).await);
+    assert_eq!(path, dir.path().join("a (1).bin"));
+    assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"old");
+    assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
+}
+#[tokio::test]
+async fn replace_on_moves_old_to_trash() {
+    setup();
+    let srv = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.bin"), b"old").unwrap();
+    let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
+    let opts = download::RunOpts { replace_existing: true, trash: fake_trash };
+    let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
+    assert_eq!(path, dir.path().join("a.bin"));
+    assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
+    assert!(!dir.path().join("a (1).bin").exists());
+    assert_eq!(TRASHED.lock().unwrap().as_slice(), [dir.path().join("a.bin")]);
+}
+#[tokio::test]
+async fn replace_on_keeps_old_when_trash_fails() {
+    setup();
+    let srv = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.bin"), b"old").unwrap();
+    let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
+    let opts = download::RunOpts { replace_existing: true, trash: failing_trash };
+    let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
+    assert_eq!(path, dir.path().join("a (1).bin"));
+    assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"old");
+    assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
 }

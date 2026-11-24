@@ -28,6 +28,8 @@ pub struct Scheduler {
     max_running: AtomicUsize,
     /// Connections per file for downloads started from now on.
     connections: AtomicU32,
+    /// Downloads started from now on replace a same-name file (see `download::RunOpts`).
+    replace_existing: AtomicBool,
     /// One bucket shared by every transfer, so the cap is global.
     limiter: Arc<RateLimiter>,
     client: reqwest::Client,
@@ -109,6 +111,7 @@ impl Scheduler {
             dir: Mutex::new(downloads_dir),
             max_running: AtomicUsize::new((max_running as usize).max(1)),
             connections: AtomicU32::new(connections.clamp(1, MAX_CONNECTIONS)),
+            replace_existing: AtomicBool::new(false),
             limiter: Arc::new(RateLimiter::new(speed_limit)),
             client,
             secrets,
@@ -155,6 +158,10 @@ impl Scheduler {
 
     pub fn set_connections(&self, n: u32) {
         self.connections.store(n.clamp(1, MAX_CONNECTIONS), Ordering::Relaxed);
+    }
+    /// Applies to downloads started after this call.
+    pub fn set_replace_existing(&self, on: bool) {
+        self.replace_existing.store(on, Ordering::Relaxed);
     }
 
     pub fn difficult_hosts(&self) -> Vec<HostView> {
@@ -475,13 +482,14 @@ impl Scheduler {
             let dir = lock(&self.dir).clone();
             let hub = Arc::clone(&self.hub);
             let connections = self.connections.load(Ordering::Relaxed);
+            let opts = download::RunOpts { replace_existing: self.replace_existing.load(Ordering::Relaxed), ..Default::default() };
             let limiter = Arc::clone(&self.limiter);
             let store = Arc::clone(&self.store);
             let url = lock(&live.job).url.clone();
             let sign = self.sign_for(&url);
             self.rt.spawn(async move {
                 let outcome = match sign {
-                    Ok(sign) => download::run(live, client, &dir, hub, rx, connections, 1, limiter, Some(store), sign).await,
+                    Ok(sign) => download::run(live, client, &dir, hub, rx, connections, 1, limiter, Some(store), sign, opts).await,
                     Err(reason) => Outcome::Failed(reason),
                 };
                 sched.finish(id, outcome);

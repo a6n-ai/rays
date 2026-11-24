@@ -88,6 +88,10 @@ impl Engine {
     pub fn set_connections(&self, n: u32) {
         self.sched.set_connections(n);
     }
+    /// Downloads finishing after this call replace a same-name file (moved to the Trash) instead of keeping both.
+    pub fn set_replace_existing(&self, on: bool) {
+        self.sched.set_replace_existing(on);
+    }
 
     pub fn snapshot(&self) -> Vec<JobView> {
         self.sched.views()
