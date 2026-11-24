@@ -42,6 +42,8 @@ impl Engine {
             Arc::new(Keychain(hf::KEYCHAIN_SERVICE)),
             hf_base,
         )?;
+        let warm = Arc::clone(&sched);
+        rt.spawn_blocking(move || warm.warm_hf_token());
         let socket_path = PathBuf::from(&config.socket_path);
         {
             let _g = rt.enter();

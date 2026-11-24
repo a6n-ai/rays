@@ -81,7 +81,7 @@ pub fn host_port(url: &str) -> Option<String> {
     Some(format!("{}:{}", u.host_str()?, u.port_or_known_default()?))
 }
 
-/// The failure text for a status. Gating on Hugging Face gets a fix the user can make; other hosts keep the status.
+/// The failure text for a status. `url` is the URL that answered, after redirects, so a CDN's 401 keeps its status.
 fn http_failure(hf: &HfAccess, url: &str, status: u16) -> String {
     match status {
         401 if hf.covers(url) => "This model is gated: add your Hugging Face token in Settings".into(),
@@ -317,7 +317,7 @@ async fn run_attempt(
             env.note_retry_after(&resp);
             return Err(Stop::Retry(format!("HTTP {status}")));
         }
-        _ => return Err(Stop::Failed(http_failure(&env.hf, &url, status))),
+        _ => return Err(Stop::Failed(http_failure(&env.hf, resp.url().as_str(), status))),
     }
 
     let ranged = status == 206;
@@ -1146,7 +1146,7 @@ async fn segment_attempt(
                     shared.env.note_retry_after(&resp);
                     return Err(Stop::Retry(format!("HTTP {status}")));
                 }
-                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, status))),
+                status => return Err(Stop::Failed(http_failure(&shared.env.hf, resp.url().as_str(), status))),
             }
             resp
         }

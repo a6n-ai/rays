@@ -91,7 +91,16 @@ pub async fn search(client: &reqwest::Client, base: &str, token: Option<&str>, q
         .collect())
 }
 
+/// `org/name` with only letters, digits, `.`, `_` and `-`: nothing that could change the path or query.
+fn valid_repo(repo: &str) -> bool {
+    let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    matches!(repo.split_once('/'), Some((org, name)) if ok(org) && ok(name))
+}
+
 pub async fn model(client: &reqwest::Client, base: &str, token: Option<&str>, repo: &str) -> Result<HfRepo, EngineError> {
+    if !valid_repo(repo) {
+        return Err(EngineError::InvalidUrl { msg: format!("not a Hugging Face repo: {repo}") });
+    }
     let url = reqwest::Url::parse(&format!("{base}/api/models/{repo}?blobs=true")).map_err(|e| EngineError::InvalidUrl { msg: e.to_string() })?;
     let m: WireModel = get_json(client, url, token).await?;
     Ok(HfRepo {

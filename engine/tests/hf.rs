@@ -8,7 +8,9 @@ use axum::response::Response;
 use axum::routing::get;
 use dl_engine::events::EventHub;
 use dl_engine::hf::HfFile;
-use dl_engine::s3::MemorySecrets;
+use dl_engine::s3::{MemorySecrets, Secrets};
+use dl_engine::types::EngineError;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use dl_engine::scheduler::Scheduler;
 use dl_engine::store::Store;
 use dl_engine::types::{JobId, JobState, JobView};
@@ -113,6 +115,10 @@ async fn fake_cdn() -> (u16, Seen) {
             let (body, log) = (body.clone(), log.clone());
             tokio::spawn(async move {
                 let Some(head) = read_head(&mut sock).await else { return };
+                if head.split_whitespace().nth(1).is_some_and(|p| p.contains("deny")) {
+                    let _ = sock.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+                    return;
+                }
                 let auth = header_value(&head, "authorization");
                 let range = header_value(&head, "range");
                 log.lock().unwrap().push((auth, range.clone()));
@@ -157,11 +163,15 @@ fn header_value(head: &str, name: &str) -> Option<String> {
 }
 
 fn scheduler(root: &FsPath, hf_base: String) -> (Arc<Scheduler>, Arc<MemorySecrets>) {
+    let hf_secrets = Arc::new(MemorySecrets::default());
+    (scheduler_with(root, hf_base, hf_secrets.clone()), hf_secrets)
+}
+
+fn scheduler_with(root: &FsPath, hf_base: String, hf_secrets: Arc<dyn Secrets>) -> Arc<Scheduler> {
     let store = Arc::new(Store::open(&root.join("data")).unwrap());
     let downloads = root.join("downloads");
     std::fs::create_dir_all(&downloads).unwrap();
-    let hf_secrets = Arc::new(MemorySecrets::default());
-    let sched = Scheduler::new(
+    Scheduler::new(
         tokio::runtime::Handle::current(),
         store,
         Arc::new(EventHub::new()),
@@ -170,11 +180,30 @@ fn scheduler(root: &FsPath, hf_base: String) -> (Arc<Scheduler>, Arc<MemorySecre
         1,
         0,
         Arc::new(MemorySecrets::default()),
-        hf_secrets.clone(),
+        hf_secrets,
         hf_base,
     )
-    .unwrap();
-    (sched, hf_secrets)
+    .unwrap()
+}
+
+/// Counts token reads, so a test can see whether a download touched the Keychain at all.
+#[derive(Default)]
+struct Counting {
+    inner: MemorySecrets,
+    gets: AtomicUsize,
+}
+
+impl Secrets for Counting {
+    fn get(&self, bucket: &str) -> Option<String> {
+        self.gets.fetch_add(1, Ordering::SeqCst);
+        self.inner.get(bucket)
+    }
+    fn set(&self, bucket: &str, secret: &str) -> Result<(), EngineError> {
+        self.inner.set(bucket, secret)
+    }
+    fn delete(&self, bucket: &str) {
+        self.inner.delete(bucket)
+    }
 }
 
 fn add(sched: &Arc<Scheduler>, dir: &FsPath, url: String) -> JobId {
@@ -285,4 +314,70 @@ async fn no_token_no_header() {
     let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/open/m/resolve/abc/w.gguf", hf.port()));
     wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
     assert_eq!(*auths.lock().unwrap(), vec![None]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cdn_401_after_redirect_keeps_status() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/bounce/m/resolve/abc/deny", hf.port()));
+    let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
+    assert!(matches!(&v.state, JobState::Failed { reason } if reason == "HTTP 401"), "{:?}", v.state);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn non_hf_401_and_403_keep_status() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), "http://127.0.0.1:1".into());
+    for (org, want) in [("gated", "HTTP 401"), ("lic", "HTTP 403")] {
+        let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/{org}/m/resolve/abc/w.gguf", hf.port()));
+        let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
+        assert!(matches!(&v.state, JobState::Failed { reason } if reason == want), "{:?}", v.state);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn non_hf_download_never_reads_token() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, auths) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(Counting::default());
+    let sched = scheduler_with(dir.path(), "http://127.0.0.1:1".into(), secrets.clone());
+    let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/open/m/resolve/abc/w.gguf", hf.port()));
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    assert_eq!(secrets.gets.load(Ordering::SeqCst), 0);
+    assert_eq!(*auths.lock().unwrap(), vec![None]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn hf_job_reads_token_once() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, auths) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(Counting::default());
+    let sched = scheduler_with(dir.path(), format!("http://127.0.0.1:{}", hf.port()), secrets.clone());
+    sched.set_hf_token(Some("t")).unwrap();
+    for name in ["a.gguf", "b.gguf"] {
+        let url = format!("http://127.0.0.1:{}/open/m/resolve/abc/{name}", hf.port());
+        let id = sched.add_to(vec![url], Some(dir.path().to_path_buf()), vec![None])[0].id.unwrap();
+        wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    }
+    assert_eq!(secrets.gets.load(Ordering::SeqCst), 0, "set_hf_token fills the cache");
+    assert_eq!(*auths.lock().unwrap(), vec![Some("Bearer t".to_string()), Some("Bearer t".to_string())]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn model_rejects_bad_repo() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, auths) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    for bad in ["x?blobs=false&a=", "a#", "org/m/extra", "org/", "/m", "", "org/m?x", "org/a b"] {
+        assert!(matches!(sched.hf_model(bad).await, Err(EngineError::InvalidUrl { .. })), "{bad} was not rejected");
+    }
+    assert!(auths.lock().unwrap().is_empty(), "a bad repo reached the hf server");
 }

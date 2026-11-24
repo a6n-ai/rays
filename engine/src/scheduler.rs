@@ -40,6 +40,8 @@ pub struct Scheduler {
     hf_secrets: Arc<dyn Secrets>,
     /// Hugging Face site without a trailing slash; `https://huggingface.co` unless a test points it elsewhere.
     hf_base: String,
+    /// The saved token once read: `None` until the first read, then `Some(token or None)`.
+    hf_token_cache: Mutex<Option<Option<String>>>,
     jobs: Mutex<Vec<Arc<Live>>>,
     speed: Mutex<HashMap<JobId, (Instant, u64, u64)>>,
     /// Ids whose download task has not returned yet. A paused job keeps its slot until its task stops,
@@ -124,6 +126,7 @@ impl Scheduler {
             secrets,
             hf_secrets,
             hf_base,
+            hf_token_cache: Mutex::new(None),
             jobs: Mutex::new(lives),
             speed: Mutex::new(HashMap::new()),
             inflight: Mutex::new(HashSet::new()),
@@ -439,31 +442,46 @@ impl Scheduler {
         signer.list(&self.client, prefix, token.as_deref()).await
     }
 
-    pub async fn hf_search(&self, query: &str) -> Result<Vec<hf::HfModel>, EngineError> {
-        hf::search(&self.client, &self.hf_base, self.hf_token().as_deref(), query).await
+    pub async fn hf_search(self: &Arc<Self>, query: &str) -> Result<Vec<hf::HfModel>, EngineError> {
+        let token = self.hf_token_off_thread().await;
+        hf::search(&self.client, &self.hf_base, token.as_deref(), query).await
     }
 
-    pub async fn hf_model(&self, repo: &str) -> Result<hf::HfRepo, EngineError> {
-        hf::model(&self.client, &self.hf_base, self.hf_token().as_deref(), repo).await
+    pub async fn hf_model(self: &Arc<Self>, repo: &str) -> Result<hf::HfRepo, EngineError> {
+        let token = self.hf_token_off_thread().await;
+        hf::model(&self.client, &self.hf_base, token.as_deref(), repo).await
     }
 
     /// `None` or an empty token deletes the saved one.
     pub fn set_hf_token(&self, token: Option<&str>) -> Result<(), EngineError> {
-        match token.filter(|t| !t.is_empty()) {
-            Some(token) => self.hf_secrets.set(hf::TOKEN_ACCOUNT, token),
-            None => {
-                self.hf_secrets.delete(hf::TOKEN_ACCOUNT);
-                Ok(())
-            }
+        let token = token.filter(|t| !t.is_empty());
+        match token {
+            Some(token) => self.hf_secrets.set(hf::TOKEN_ACCOUNT, token)?,
+            None => self.hf_secrets.delete(hf::TOKEN_ACCOUNT),
         }
+        *lock(&self.hf_token_cache) = Some(token.map(str::to_owned));
+        Ok(())
     }
 
     pub fn has_hf_token(&self) -> bool {
         self.hf_token().is_some()
     }
 
+    /// Reads the Keychain once, the first time the token is needed; later reads come from memory.
+    /// Blocking: call it off the runtime workers (see `warm_hf_token`, `hf_token_off_thread`).
     fn hf_token(&self) -> Option<String> {
-        self.hf_secrets.get(hf::TOKEN_ACCOUNT)
+        let mut cache = lock(&self.hf_token_cache);
+        cache.get_or_insert_with(|| self.hf_secrets.get(hf::TOKEN_ACCOUNT)).clone()
+    }
+
+    /// Loads the token now, on the caller's blocking thread, so later reads never block a worker.
+    pub fn warm_hf_token(&self) {
+        self.hf_token();
+    }
+
+    async fn hf_token_off_thread(self: &Arc<Self>) -> Option<String> {
+        let sched = Arc::clone(self);
+        self.rt.spawn_blocking(move || sched.hf_token()).await.ok().flatten()
     }
 
     fn bucket(&self, name: &str) -> Result<BucketConfig, String> {
@@ -518,11 +536,14 @@ impl Scheduler {
             let dir = lock(&self.dir).clone();
             let hub = Arc::clone(&self.hub);
             let connections = self.connections.load(Ordering::Relaxed);
-            let hf = download::HfAccess { host: download::host_port(&self.hf_base).unwrap_or_default(), token: self.hf_token() };
+            let url = lock(&live.job).url.clone();
+            // Only a Hugging Face job may read the token, so other downloads never touch the Keychain.
+            let host = download::host_port(&self.hf_base).unwrap_or_default();
+            let token = if download::host_port(&url).as_deref() == Some(host.as_str()) { self.hf_token() } else { None };
+            let hf = download::HfAccess { host, token };
             let opts = download::RunOpts { replace_existing: self.replace_existing.load(Ordering::Relaxed), hf, ..Default::default() };
             let limiter = Arc::clone(&self.limiter);
             let store = Arc::clone(&self.store);
-            let url = lock(&live.job).url.clone();
             let sign = self.sign_for(&url);
             self.rt.spawn(async move {
                 let outcome = match sign {
