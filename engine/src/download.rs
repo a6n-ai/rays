@@ -1225,6 +1225,20 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
         return Err(Stop::Retry(format!("size mismatch: {len} bytes, expected {total:?}")));
     }
     tokio::fs::OpenOptions::new().write(true).open(&part).await?.sync_all().await?;
+    if let Some(expected) = with_job(&env.live, |j| j.sha256.clone()) {
+        let hashed = part.clone();
+        let actual = tokio::task::spawn_blocking(move || sha256_hex(&hashed)).await.map_err(io::Error::other)??;
+        if actual != expected.to_ascii_lowercase() {
+            let _ = tokio::fs::remove_file(&part).await;
+            // Forget the plan too, so a Resume starts from zero instead of asking for ranges of a deleted file.
+            with_job(&env.live, |j| {
+                j.segments.clear();
+                j.done = 0;
+            });
+            env.live.done.store(0, Ordering::Relaxed);
+            return Ok(Outcome::Failed("Checksum didn't match".to_owned()));
+        }
+    }
     // Only after the new bytes are whole: a failed download must not cost the old file.
     let mut replace = env.replace_existing.then_some(env.trash);
     // hard_link refuses to overwrite, so two jobs finishing together cannot clobber each other's file.
@@ -1247,6 +1261,21 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
         j.final_path = Some(final_path.clone());
     });
     Ok(Outcome::Done(final_path))
+}
+
+fn sha256_hex(path: &Path) -> io::Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = io::Read::read(&mut file, &mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Picks the name for a finished file and records it in `PRODUCED`, all under one lock. With `trash`, a

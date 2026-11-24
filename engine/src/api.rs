@@ -1,6 +1,6 @@
 //! UniFFI-exported `Engine` object: owns the tokio runtime and wires the modules together.
 use crate::events::EventHub;
-use crate::hf::{self, HfModel, HfRepo};
+use crate::hf::{self, HfAdd, HfFile, HfModel, HfRepo};
 use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
@@ -200,6 +200,11 @@ impl Engine {
     pub async fn hf_model(&self, repo: String) -> Result<HfRepo, EngineError> {
         let sched = Arc::clone(&self.sched);
         self.rt.spawn(async move { sched.hf_model(&repo).await }).await.map_err(join_error)?
+    }
+
+    /// Queues a Hugging Face commit's files under `dest_dir`, one result per file, in order.
+    pub fn add_hf(&self, repo: String, sha: String, files: Vec<HfFile>, dest_dir: String) -> Vec<HfAdd> {
+        self.sched.add_hf(&repo, &sha, files, Path::new(&dest_dir))
     }
 
     /// Saves the Hugging Face token in the Keychain; `None` deletes it.

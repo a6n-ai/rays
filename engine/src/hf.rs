@@ -1,8 +1,9 @@
 //! Hugging Face repo input parsing, file grouping, and the API client for search and model info.
-use crate::types::EngineError;
+use crate::types::{EngineError, JobId};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
+use std::path::{Component, Path, PathBuf};
 
 /// Keychain service and account for the Hugging Face token; the S3 keys live under `ai.a6n.rays.s3`.
 pub const KEYCHAIN_SERVICE: &str = "ai.a6n.rays.hf";
@@ -93,8 +94,42 @@ pub async fn search(client: &reqwest::Client, base: &str, token: Option<&str>, q
 
 /// `org/name` with only letters, digits, `.`, `_` and `-`: nothing that could change the path or query.
 fn valid_repo(repo: &str) -> bool {
-    let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    let ok = |s: &str| !matches!(s, "" | "." | "..") && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
     matches!(repo.split_once('/'), Some((org, name)) if ok(org) && ok(name))
+}
+
+/// `<base>/<org>/<name>/resolve/<sha>/<path>`, each part of `path` percent-encoded. None for a bad repo or sha.
+pub fn file_url(base: &str, repo: &str, sha: &str, path: &str) -> Option<String> {
+    if !valid_repo(repo) || sha.is_empty() || !sha.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    let mut url = reqwest::Url::parse(&format!("{base}/{repo}/resolve/{sha}")).ok()?;
+    url.path_segments_mut().ok()?.extend(path.split('/'));
+    Some(url.into())
+}
+
+/// The parent folder and file name for a repo path under `dest_dir`. None for an absolute path, any `..`, or no name.
+pub fn hf_target(dest_dir: &Path, path: &str) -> Option<(PathBuf, String)> {
+    let p = Path::new(path);
+    if p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir)) {
+        return None;
+    }
+    let name = p.file_name()?.to_str()?.to_owned();
+    Some((dest_dir.join(p.parent()?), name))
+}
+
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct HfAdd {
+    pub path: String,
+    pub status: HfAddStatus,
+}
+
+#[derive(uniffi::Enum, Clone, Debug, PartialEq)]
+pub enum HfAddStatus {
+    Added { id: JobId },
+    /// A file of the same name and size is already at the target, so no job was made.
+    AlreadyThere,
+    Rejected { error: String },
 }
 
 pub async fn model(client: &reqwest::Client, base: &str, token: Option<&str>, repo: &str) -> Result<HfRepo, EngineError> {

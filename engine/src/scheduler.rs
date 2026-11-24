@@ -200,9 +200,44 @@ impl Scheduler {
                 .collect();
         }
         let mut fixed = fixed_names.into_iter();
-        let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten())).collect();
+        let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten(), None)).collect();
         self.pump();
         results
+    }
+
+    /// Queues each file of a Hugging Face commit as `dest_dir/<its repo path>`, with its SHA-256 when one is
+    /// published. A file already there with the same size is skipped; the rest follow the same-name setting.
+    pub fn add_hf(self: &Arc<Self>, repo: &str, sha: &str, files: Vec<hf::HfFile>, dest_dir: &Path) -> Vec<hf::HfAdd> {
+        let results = files
+            .into_iter()
+            .map(|file| {
+                let status = self.add_hf_file(repo, sha, dest_dir, &file);
+                hf::HfAdd { path: file.path, status }
+            })
+            .collect();
+        self.pump();
+        results
+    }
+
+    fn add_hf_file(&self, repo: &str, sha: &str, dest_dir: &Path, file: &hf::HfFile) -> hf::HfAddStatus {
+        let rejected = |error: &str| hf::HfAddStatus::Rejected { error: error.to_owned() };
+        if !is_plain_abs(dest_dir) {
+            return rejected("destination must be an absolute path with no ..");
+        }
+        let Some((parent, name)) = hf::hf_target(dest_dir, &file.path) else {
+            return rejected("unsafe file path");
+        };
+        if std::fs::metadata(parent.join(&name)).is_ok_and(|m| m.is_file() && m.len() == file.size) {
+            return hf::HfAddStatus::AlreadyThere;
+        }
+        let Some(url) = hf::file_url(&self.hf_base, repo, sha, &file.path) else {
+            return rejected("not a Hugging Face file");
+        };
+        let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone());
+        match (res.id, res.error) {
+            (Some(id), _) => hf::HfAddStatus::Added { id },
+            (None, error) => rejected(&error.unwrap_or_default()),
+        }
     }
 
     pub fn pause(self: &Arc<Self>, id: JobId) {
@@ -291,14 +326,14 @@ impl Scheduler {
         }
     }
 
-    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>) -> AddResult {
+    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>) -> AddResult {
         if let Err(error) = self.check_url(&url) {
             return AddResult { url, id: None, error: Some(error) };
         }
         if fixed_name.as_deref().is_some_and(|n| !valid_file_name(n)) {
             return AddResult { url, id: None, error: Some("file name must be one path component".to_owned()) };
         }
-        match self.insert_job(&url, dir, fixed_name) {
+        match self.insert_job(&url, dir, fixed_name, sha256) {
             Ok(id) => AddResult { url, id: Some(id), error: None },
             Err(e) => AddResult { url, id: None, error: Some(e.to_string()) },
         }
@@ -318,7 +353,7 @@ impl Scheduler {
         }
     }
 
-    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>) -> Result<JobId, EngineError> {
+    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>) -> Result<JobId, EngineError> {
         let now = now_secs();
         let position = self.next_position.fetch_add(1, Ordering::Relaxed);
         let folder = dir.clone().unwrap_or_else(|| lock(&self.dir).clone());
@@ -328,7 +363,7 @@ impl Scheduler {
             fixed_name: fixed_name.is_some(),
             name: fixed_name.unwrap_or_else(|| names::from_url(url)),
             dir,
-            sha256: None,
+            sha256,
             part_path: PathBuf::new(),
             final_path: None,
             done: 0,

@@ -138,7 +138,7 @@ pub struct Job {
     pub dir: Option<PathBuf>,
     /// True when `name` was set by the caller, so the server's Content-Disposition cannot rename the file.
     pub fixed_name: bool,
-    /// Expected SHA-256 (hex). Stored only; checking it is not done yet.
+    /// Expected SHA-256 (hex), checked when the download finishes.
     pub sha256: Option<String>,
 }
 

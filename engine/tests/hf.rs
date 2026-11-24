@@ -7,9 +7,10 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::Response;
 use axum::routing::get;
 use dl_engine::events::EventHub;
-use dl_engine::hf::HfFile;
+use dl_engine::hf::{HfAddStatus, HfFile};
 use dl_engine::s3::{MemorySecrets, Secrets};
 use dl_engine::types::EngineError;
+use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use dl_engine::scheduler::Scheduler;
 use dl_engine::store::Store;
@@ -92,7 +93,7 @@ async fn fake_hf(cdn: u16) -> (SocketAddr, Auths) {
     let app = Router::new()
         .route("/api/models", get(search))
         .route("/api/models/{org}/{name}", get(model))
-        .route("/{org}/{name}/resolve/{sha}/{file}", get(resolve))
+        .route("/{org}/{name}/resolve/{sha}/{*file}", get(resolve))
         .with_state(st);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -376,8 +377,118 @@ async fn model_rejects_bad_repo() {
     let (hf, auths) = fake_hf(cdn).await;
     let dir = tempfile::tempdir().unwrap();
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
-    for bad in ["x?blobs=false&a=", "a#", "org/m/extra", "org/", "/m", "", "org/m?x", "org/a b"] {
+    for bad in ["x?blobs=false&a=", "a#", "org/m/extra", "org/", "/m", "", "org/m?x", "org/a b", "org/..", "../m"] {
         assert!(matches!(sched.hf_model(bad).await, Err(EngineError::InvalidUrl { .. })), "{bad} was not rejected");
     }
     assert!(auths.lock().unwrap().is_empty(), "a bad repo reached the hf server");
+}
+
+fn file(path: &str, size: u64, sha256: Option<String>) -> HfFile {
+    HfFile { path: path.into(), size, sha256 }
+}
+
+fn data_sha() -> String {
+    Sha256::digest(data()).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn adds_into_repo_paths() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("tmp/AI Models/open/m");
+    let files = vec![file("w.gguf", SIZE as u64, None), file("onnx/m.onnx", SIZE as u64, None)];
+    let res = sched.add_hf("open/m", "abc", files, &dest);
+    assert_eq!(res.len(), 2);
+    for r in &res {
+        let HfAddStatus::Added { id } = r.status else { panic!("{r:?}") };
+        wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    }
+    assert!(std::fs::read(dest.join("w.gguf")).unwrap() == data());
+    assert!(std::fs::read(dest.join("onnx/m.onnx")).unwrap() == data());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejects_unsafe_paths() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("tmp/AI Models/open/m");
+    let files = vec![file("../x", 1, None), file("/etc/x", 1, None), file("a/../../x", 1, None)];
+    let res = sched.add_hf("open/m", "abc", files, &dest);
+    assert_eq!(res.len(), 3);
+    for r in &res {
+        assert!(matches!(r.status, HfAddStatus::Rejected { .. }), "{r:?}");
+    }
+    assert!(sched.views().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn already_there_by_size() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("tmp/AI Models/open/m");
+    std::fs::create_dir_all(dest.join("onnx")).unwrap();
+    std::fs::write(dest.join("w.gguf"), vec![0u8; SIZE]).unwrap();
+    std::fs::write(dest.join("onnx/m.onnx"), b"old").unwrap();
+    let files = vec![file("w.gguf", SIZE as u64, None), file("onnx/m.onnx", SIZE as u64, None)];
+    let res = sched.add_hf("open/m", "abc", files, &dest);
+    assert_eq!(res[0].status, HfAddStatus::AlreadyThere);
+    let HfAddStatus::Added { id } = res[1].status else { panic!("{:?}", res[1]) };
+    assert_eq!(sched.views().len(), 1, "the file already there made no job");
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    assert_eq!(std::fs::read(dest.join("onnx/m.onnx")).unwrap(), b"old");
+    assert!(std::fs::read(dest.join("onnx/m (1).onnx")).unwrap() == data());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sha_checked_on_finish() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+
+    let good = dir.path().join("good");
+    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &good);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    let done = wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    let JobState::Done { path } = done.state else { unreachable!() };
+    assert!(std::fs::read(path).unwrap() == data());
+
+    let bad = dir.path().join("bad");
+    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some("0".repeat(64)))], &bad);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
+    assert!(matches!(&v.state, JobState::Failed { reason } if reason == "Checksum didn't match"), "{:?}", v.state);
+    assert_eq!(v.done, 0);
+    assert!(std::fs::read_dir(&bad).unwrap().next().is_none(), "the file or its .part was left behind");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn restart_keeps_dir_name_hash() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let base = format!("http://127.0.0.1:{}", hf.port());
+    let dest = dir.path().join("models/org/m");
+
+    let (sched, _) = scheduler(dir.path(), base.clone());
+    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &dest);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
+    sched.pause(id);
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Paused)).await;
+    sched.shutdown();
+    drop(sched);
+
+    let sched = scheduler_with(dir.path(), base, Arc::new(MemorySecrets::default()));
+    sched.resume(id);
+    let done = wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    let JobState::Done { path } = done.state else { unreachable!() };
+    assert_eq!(FsPath::new(&path), dest.join("w.gguf"));
+    assert!(std::fs::read(&path).unwrap() == data());
 }
