@@ -2,7 +2,7 @@
 
 Rays against aria2 and curl on the same downloads, on a local test server that injects one fault at a time, plus a TLS comparison and a run on a real line. Every finished file is checked against the server's SHA-256 after the clock stops; a wrong byte counts as a failed run.
 
-**Machine:** Mac with Apple M3 Pro (11 cores), macOS 27.2.1. **Tools:** Rays engine at `e04c0f4`, aria2 1.37.0, curl 8.7.1. **Date:** 23 Nov 2026.
+**Machine:** Mac with Apple M3 Pro (11 cores), macOS 27.2.1. **Tools:** Rays engine at `969c274`, aria2 1.37.0, curl 8.7.1. **Date:** 24 Nov 2026. The unthrottled and drop-after-8 MB rows are from `e04c0f4` on 23 Nov; the change since then only affects how fast Rays adds connections on throttled servers.
 
 ## Rerun them
 
@@ -25,27 +25,25 @@ All scenarios except `unthrottled` cap the whole link at 50 MB/s.
 
 | Scenario, 256 MiB file | Rays | aria2 -x16 | aria2 | curl |
 |---|---|---|---|---|
-| Clean link | 49.7 MB/s | 50.4 MB/s | 50.5 MB/s | 50.6 MB/s |
-| Each connection capped at 2 MB/s | 21.6 MB/s | 31.7 MB/s | 2.0 MB/s | 2.0 MB/s |
-| One connection in three slow (256 KB/s), others 4 MB/s | 18.2 MB/s | 23.4 MB/s | 4.0 MB/s | 4.0 MB/s |
-| 150 ms before each response, 4 MB/s per connection | 30.4 MB/s | 47.5 MB/s | 4.0 MB/s | 4.0 MB/s |
+| Clean link | 49.5 MB/s | 50.3 MB/s | 50.5 MB/s | 50.6 MB/s |
+| Each connection capped at 2 MB/s | 24.4 MB/s | 31.7 MB/s | 2.0 MB/s | 2.0 MB/s |
+| One connection in three slow (256 KB/s), others 4 MB/s | 18.0 MB/s | 23.3 MB/s | 4.0 MB/s | 4.0 MB/s |
+| 150 ms before each response, 4 MB/s per connection | 33.8 MB/s | 47.6 MB/s | 4.0 MB/s | 4.0 MB/s |
 | Server allows 2 connections (503 above), 4 MB/s each | 7.6 MB/s | 8.0 MB/s | 4.0 MB/s | 4.0 MB/s |
 | Every connection dropped after 8 MB, 8 MB/s each | 41.5 MB/s | 50.2 MB/s | failed | 4.1 MB/s |
-| 2% of 64 KB chunks drop the connection, 8 MB/s each | 41.1 MB/s | 48.7 MB/s | failed | 2.5 MB/s |
+| 2% of 64 KB chunks drop the connection, 8 MB/s each | 43.6 MB/s | 49.1 MB/s | failed | 2.5 MB/s |
 | Unthrottled localhost | 1074 MB/s | 261 MB/s | 706 MB/s | 1220 MB/s |
 
 | Scenario, 2 GiB file | Rays | aria2 -x16 | aria2 | curl |
 |---|---|---|---|---|
 | Unthrottled localhost | **1805 MB/s** | 374 MB/s | 598 MB/s | 1471 MB/s |
 
-The random-drop row is from 2 runs.
-
 ## Reading the numbers
 
 - **On a clean link, every tool runs at line speed.** Extra connections cannot beat the line itself.
-- **When a server throttles each connection, splitting matters most.** Rays is 2 to 11 times faster than aria2's default settings and curl.
+- **When a server throttles each connection, splitting matters most.** Rays is 2 to 12 times faster than aria2's default settings and curl.
 - **aria2 with `-x16` is faster on these files** because it opens 16 connections at once. Rays starts files of 32 MB or more on 4 connections and doubles only while each step makes the file faster, so it takes a few seconds to reach full speed, and it never opens connections that do not help. On a 256 MiB file those seconds show. The same rule keeps Rays from slowing down a line one connection already fills, and from getting blocked by servers that limit connections.
-- **Dropped connections.** aria2's default settings gave up in both drop scenarios. Rays reconnects at once and keeps every byte it received, re-downloading 0.3 MB of 256 MiB.
+- **Dropped connections.** aria2's default settings gave up in both drop scenarios. Rays reconnects at once and keeps every byte it received, re-downloading 0.1 MB of 256 MiB.
 - **Unthrottled.** With a 2 GiB file, Rays writes 1.8 GB/s, faster than curl on one stream and almost 5 times aria2 -x16.
 
 ## TLS: rustls against the macOS system TLS

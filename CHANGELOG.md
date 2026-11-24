@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.1.18 (24 Nov 2026)
+
+- Downloads reach full speed sooner on servers that limit the speed of each connection. Rays now doubles its connections as long as each step pays off, so on a test server that caps each connection at 2 MB/s, a 256 MB file downloads at 24 MB/s instead of 21.5 MB/s, and on a server 150 ms away at 34 MB/s instead of 30 MB/s.
+
 ## 0.1.17 (23 Nov 2026)
 
 - Downloads keep their speed when a server drops connections: a dropped connection reconnects at once and keeps every byte it received. On a test server that drops connections at random, a big file now downloads at 41 MB/s instead of 5 MB/s.

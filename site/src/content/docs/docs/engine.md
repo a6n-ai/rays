@@ -81,21 +81,21 @@ scripts/bench-lab.sh 3 256
 
 | Scenario, 256 MB file | Rays | aria2 -x16 | aria2 (defaults) | curl |
 |---|---|---|---|---|
-| Clean 50 MB/s link | 49.7 MB/s | 50.4 MB/s | 50.5 MB/s | 50.6 MB/s |
-| Each connection capped at 2 MB/s | 21.6 MB/s | 31.7 MB/s | 2.0 MB/s | 2.0 MB/s |
-| One connection in three slow (256 KB/s) | 18.2 MB/s | 23.4 MB/s | 4.0 MB/s | 4.0 MB/s |
-| 150 ms before each response, 4 MB/s per connection | 30.4 MB/s | 47.5 MB/s | 4.0 MB/s | 4.0 MB/s |
+| Clean 50 MB/s link | 49.5 MB/s | 50.3 MB/s | 50.5 MB/s | 50.6 MB/s |
+| Each connection capped at 2 MB/s | 24.4 MB/s | 31.7 MB/s | 2.0 MB/s | 2.0 MB/s |
+| One connection in three slow (256 KB/s) | 18.0 MB/s | 23.3 MB/s | 4.0 MB/s | 4.0 MB/s |
+| 150 ms before each response, 4 MB/s per connection | 33.8 MB/s | 47.6 MB/s | 4.0 MB/s | 4.0 MB/s |
 | Server allows 2 connections (503 above) | 7.6 MB/s | 8.0 MB/s | 4.0 MB/s | 4.0 MB/s |
 | Every connection dropped after 8 MB | 41.5 MB/s | 50.2 MB/s | failed | 4.1 MB/s |
-| Connections dropped at random (2% of chunks) | 41.1 MB/s | 48.7 MB/s | failed | 2.5 MB/s |
+| Connections dropped at random (2% of chunks) | 43.6 MB/s | 49.1 MB/s | failed | 2.5 MB/s |
 | Unthrottled, 2 GB file | 1805 MB/s | 374 MB/s | 598 MB/s | 1471 MB/s |
 
-*Median of 3 runs after a warm-up, order rotated each run, on 23 Nov 2026, on a Mac with Apple M3 Pro. aria2 -x16 opens 16 connections at once, so it is faster on these short files; Rays adds connections only while they make the file faster, which takes a few seconds and keeps it from slowing a line that one connection fills. Full results and method: [docs/benchmarks.md](https://github.com/a6n-ai/rays/blob/main/docs/benchmarks.md).*
+*Median of 3 runs after a warm-up, order rotated each run, on 24 Nov 2026, on a Mac with Apple M3 Pro. aria2 -x16 opens 16 connections at once, so it is faster on these short files; Rays adds connections only while they make the file faster, which takes a few seconds and keeps it from slowing a line that one connection fills. Full results and method: [docs/benchmarks.md](https://github.com/a6n-ai/rays/blob/main/docs/benchmarks.md).*
 
 What we measured and kept:
 
 - **rustls instead of the macOS system TLS.** Over HTTPS from a local server, one connection decrypts at 1741 MB/s with rustls against 477 MB/s with Secure Transport, which also has no TLS 1.3. Certificates are still checked against the Keychain.
-- **Reconnect at once after a drop.** A connection that dropped used to wait 2 seconds and throw away up to 256 KB it had not written yet. With connections dropped at random, a 256 MB file ran at 5.4 MB/s; now it runs at 41 MB/s and re-downloads 0.3 MB.
+- **Reconnect at once after a drop.** A connection that dropped used to wait 2 seconds and throw away up to 256 KB it had not written yet. With connections dropped at random, a 256 MB file ran at 5.4 MB/s; now it runs at 43 MB/s and re-downloads 0.1 MB.
 
 - **Batched disk writes.** Each connection gathers 256 KB before writing, instead of writing and flushing every 16 KB chunk, and the app is woken once per update instead of once per chunk. On a local 1 GB test server both versions run at about 3.4 GB/s, far above any home line, and the batched one uses about 20% less CPU (0.35 against 0.44 CPU seconds per GB).
 
