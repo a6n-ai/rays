@@ -25,6 +25,8 @@ struct ContentView: View {
                         destination = .sorter
                     } else if path == "cloud" {
                         destination = .cloud
+                    } else if path == "models" {
+                        destination = .models
                     } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
                         destination = .folder(URL(filePath: path, directoryHint: .isDirectory))
                     }
@@ -34,6 +36,7 @@ struct ContentView: View {
                     case .folder(let url)?: lastFolder = url.path(percentEncoded: false)
                     case .sorter?: lastFolder = "sorter"
                     case .cloud?: lastFolder = "cloud"
+                    case .models?: lastFolder = "models"
                     default: lastFolder = ""
                     }
                 }
@@ -78,6 +81,8 @@ struct ContentView: View {
                     SorterView()
                 case .cloud?:
                     CloudView()
+                case .models?:
+                    ModelsView()
                 default:
                     DownloadsView(isDropTargeted: isDropTargeted)
                 }

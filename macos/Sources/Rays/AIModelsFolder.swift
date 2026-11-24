@@ -1,0 +1,18 @@
+import Foundation
+
+/// Where model downloads go by default: the sorter's AI Models destination for Downloads, else a folder inside it.
+enum AIModelsFolder {
+    static func base(downloadsDir: URL, destinations: [String: [String: String]]) -> URL {
+        if let path = destinations[downloadsDir.path(percentEncoded: false)]?["AI Models"], path.hasPrefix("/") {
+            return URL(filePath: path, directoryHint: .isDirectory)
+        }
+        return downloadsDir.appending(path: "AI Models", directoryHint: .isDirectory)
+    }
+
+    /// Shown only when LM Studio has been installed (its ~/.lmstudio folder exists).
+    static var lmStudioModels: URL? {
+        let lmStudio = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".lmstudio", directoryHint: .isDirectory)
+        guard FileManager.default.fileExists(atPath: lmStudio.path(percentEncoded: false)) else { return nil }
+        return lmStudio.appending(path: "models", directoryHint: .isDirectory)
+    }
+}

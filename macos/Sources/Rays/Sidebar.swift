@@ -3,6 +3,7 @@ import SwiftUI
 enum Destination: Hashable {
     case downloads
     case sorter
+    case models
     case folder(URL)
     case cloud
 }
@@ -53,6 +54,8 @@ struct SidebarView: View {
                     .tag(Destination.downloads)
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
+                Label("Models", systemImage: "cube")
+                    .tag(Destination.models)
                 Label("Cloud", systemImage: "cloud")
                     .tag(Destination.cloud)
             } header: {
