@@ -14,10 +14,21 @@ The sorter watches the folders you choose. A few seconds after a new file arrive
 | Archives | Zip, tar, rar and other compressed files |
 | Media | Audio and video |
 | Code | Source code and scripts |
-| AI Models | Loose model files: `.gguf`, `.safetensors`, `.onnx`, `.mlmodel`, `.tflite`, `.ckpt`, `.pt` and `.pth` |
+| AI Models | Loose model files, sorted into a subfolder by type (see below) |
 | Other | Manuals, articles, ebooks, anything else |
 
-Model files keep their names and are not checked for duplicates. Model folders, like one Rays downloaded from [Models](/docs/app/models/), are left alone.
+Model files go into a subfolder by type:
+
+- `.gguf` → GGUF
+- `.safetensors` → Safetensors
+- `.onnx` → ONNX
+- `.mlmodel` → Core ML
+- `.tflite` → TFLite
+- `.ckpt`, `.pt` and `.pth` → PyTorch
+
+They keep their names and are not checked for duplicates. Model folders, like one Rays downloaded from [Models](/docs/app/models/), are left alone.
+
+Like other categories, AI Models can go to another folder under **Where files go**.
 
 Sorting runs on your Mac with Apple's on-device model. Nothing is uploaded.
 
