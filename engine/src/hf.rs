@@ -18,12 +18,14 @@ pub struct HfVersion {
 }
 
 const PREFERRED: [&str; 9] = ["Q4_K_M", "Q4_K_S", "Q5_K_M", "Q4_0", "Q5_K_S", "Q5_0", "Q6_K", "Q8_0", "IQ4_XS"];
-const WEIGHT_EXTS: [&str; 8] = ["safetensors", "bin", "pt", "pth", "ckpt", "onnx", "msgpack", "h5"];
+/// Checkpoint formats in priority order; pt, pth and ckpt are one tier.
+const WEIGHT_TIERS: [&[&str]; 6] = [&["safetensors"], &["bin"], &["pt", "pth", "ckpt"], &["h5"], &["msgpack"], &["onnx"]];
 const SKIPPED_DIRS: [&str; 4] = ["onnx/", "coreml/", "openvino/", "original/"];
+const NON_MODEL_ROOTS: [&str; 9] = ["datasets", "spaces", "api", "docs", "collections", "papers", "settings", "organizations", "models"];
 
 #[uniffi::export]
 pub fn hf_repo_from_input(input: String) -> Option<String> {
-    let input = input.trim();
+    let input = input.split(['?', '#']).next().unwrap_or_default().trim();
     if input.chars().any(char::is_whitespace) {
         return None;
     }
@@ -42,7 +44,7 @@ pub fn hf_repo_from_input(input: String) -> Option<String> {
     let mut segs = rest.split('/');
     let org = segs.next()?;
     let repo = segs.next()?;
-    if org.is_empty() || repo.is_empty() || (!from_url && segs.next().is_some()) {
+    if org.is_empty() || repo.is_empty() || NON_MODEL_ROOTS.contains(&org) || (!from_url && segs.next().is_some()) {
         return None;
     }
     Some(format!("{org}/{repo}"))
@@ -66,7 +68,7 @@ fn group_versions(files: &[HfFile]) -> Vec<HfVersion> {
     let mut groups: BTreeMap<String, Vec<(bool, &HfFile)>> = BTreeMap::new();
     for f in files {
         let Some(stem) = gguf_stem(&f.path) else { continue };
-        if basename(&f.path).to_ascii_lowercase().starts_with("mmproj") {
+        if basename(&f.path).to_ascii_lowercase().contains("mmproj") {
             mmprojs.push(f);
             continue;
         }
@@ -102,20 +104,34 @@ fn group_versions(files: &[HfFile]) -> Vec<HfVersion> {
     versions
 }
 
-/// Non-GGUF repos: root configs plus weights. Safetensors win over other weight formats, and
-/// subfolder weights (onnx/, original/, ...) count only when no other weights exist.
+/// Non-GGUF repos: root configs plus one weight format, the highest tier present. Subfolder
+/// weights (onnx/, original/, ...) count only when no other weights exist. The index file is
+/// included only for the chosen format.
 fn default_checkpoint(files: &[HfFile]) -> Vec<String> {
-    let primary = |f: &HfFile| ext_is(&f.path, &WEIGHT_EXTS) && !SKIPPED_DIRS.iter().any(|d| f.path.starts_with(d));
-    let any_primary = files.iter().any(primary);
-    let in_pool = |f: &HfFile| ext_is(&f.path, &WEIGHT_EXTS) && (!any_primary || primary(f));
-    let any_safetensors = files.iter().any(|f| in_pool(f) && ext_is(&f.path, &["safetensors"]));
+    let is_weight = |f: &HfFile| WEIGHT_TIERS.iter().any(|t| ext_is(&f.path, t)) && !is_training_artifact(&f.path);
+    let in_primary = |f: &HfFile| !SKIPPED_DIRS.iter().any(|d| f.path.starts_with(d));
+    let any_primary = files.iter().any(|f| is_weight(f) && in_primary(f));
+    let in_pool = |f: &HfFile| is_weight(f) && (!any_primary || in_primary(f));
+    let tier: &[&str] = WEIGHT_TIERS
+        .iter()
+        .copied()
+        .find(|t| files.iter().any(|f| in_pool(f) && ext_is(&f.path, t)))
+        .unwrap_or(&[]);
+    let index = match tier {
+        ["safetensors"] => "model.safetensors.index.json",
+        ["bin"] => "pytorch_model.bin.index.json",
+        _ => "",
+    };
     files
         .iter()
-        .filter(|f| {
-            is_config(&f.path) || (in_pool(f) && (!any_safetensors || ext_is(&f.path, &["safetensors"])))
-        })
+        .filter(|f| is_config(&f.path) || f.path == index || (in_pool(f) && ext_is(&f.path, tier)))
         .map(|f| f.path.clone())
         .collect()
+}
+
+fn is_training_artifact(path: &str) -> bool {
+    let n = basename(path).to_ascii_lowercase();
+    matches!(n.as_str(), "training_args.bin" | "optimizer.pt" | "scheduler.pt") || n.starts_with("rng_state")
 }
 
 fn is_config(path: &str) -> bool {
@@ -124,9 +140,21 @@ fn is_config(path: &str) -> bool {
     }
     let n = path.to_ascii_lowercase();
     n.starts_with("tokenizer")
-        || n == "merges.txt"
-        || n == "vocab.txt"
-        || (n.ends_with(".json") && (n.contains("config") || n.ends_with(".index.json")))
+        || matches!(
+            n.as_str(),
+            "merges.txt"
+                | "vocab.txt"
+                | "vocab.json"
+                | "special_tokens_map.json"
+                | "added_tokens.json"
+                | "chat_template.json"
+                | "chat_template.jinja"
+                | "spiece.model"
+                | "sentencepiece.bpe.model"
+                | "preprocessor_config.json"
+                | "processor_config.json"
+        )
+        || (n.ends_with(".json") && n.contains("config"))
 }
 
 fn ext_is(path: &str, exts: &[&str]) -> bool {
@@ -319,5 +347,82 @@ mod tests {
     fn recommended_bin_when_no_safetensors() {
         let files = vec![f("config.json", 1), f("pytorch_model.bin", 1), f("README.md", 1)];
         assert_eq!(hf_recommended(files), vec!["config.json", "pytorch_model.bin"]);
+    }
+
+    #[test]
+    fn mmproj_anywhere_in_name() {
+        let versions = hf_versions(vec![
+            f("model-Q4_K_M.gguf", 4_000),
+            f("gemma-3-4b-it-mmproj-F16.gguf", 800),
+        ]);
+        assert_eq!(versions.len(), 1);
+        assert_eq!(versions[0].label, "Q4_K_M");
+        assert_eq!(versions[0].files, vec!["model-Q4_K_M.gguf", "gemma-3-4b-it-mmproj-F16.gguf"]);
+        assert_eq!(versions[0].size, 4_800);
+    }
+
+    #[test]
+    fn one_weight_format_only() {
+        let files = vec![
+            f("pytorch_model.bin", 1),
+            f("tf_model.h5", 1),
+            f("flax_model.msgpack", 1),
+            f("training_args.bin", 1),
+            f("config.json", 1),
+        ];
+        let mut got = hf_recommended(files);
+        got.sort();
+        assert_eq!(got, vec!["config.json", "pytorch_model.bin"]);
+    }
+
+    #[test]
+    fn training_artifacts_excluded() {
+        let files = vec![
+            f("pytorch_model.bin", 1),
+            f("optimizer.pt", 1),
+            f("scheduler.pt", 1),
+            f("rng_state_0.pth", 1),
+        ];
+        assert_eq!(hf_recommended(files), vec!["pytorch_model.bin"]);
+    }
+
+    #[test]
+    fn safetensors_skips_bin_index() {
+        let files = vec![
+            f("model.safetensors", 1),
+            f("pytorch_model.bin.index.json", 1),
+            f("model.safetensors.index.json", 1),
+        ];
+        assert_eq!(hf_recommended(files), vec!["model.safetensors", "model.safetensors.index.json"]);
+    }
+
+    #[test]
+    fn tokenizer_files_included() {
+        let files = vec![
+            f("config.json", 1),
+            f("vocab.json", 1),
+            f("merges.txt", 1),
+            f("special_tokens_map.json", 1),
+            f("model.safetensors", 1),
+        ];
+        assert_eq!(
+            hf_recommended(files),
+            vec!["config.json", "vocab.json", "merges.txt", "special_tokens_map.json", "model.safetensors"]
+        );
+    }
+
+    #[test]
+    fn non_model_urls_rejected() {
+        assert_eq!(hf_repo_from_input("https://huggingface.co/datasets/org/repo".into()), None);
+        assert_eq!(hf_repo_from_input("https://huggingface.co/spaces/org/repo".into()), None);
+    }
+
+    #[test]
+    fn query_and_fragment_cut() {
+        assert_eq!(
+            hf_repo_from_input("https://huggingface.co/Qwen/Qwen3-8B?library=gguf".into()),
+            Some("Qwen/Qwen3-8B".into())
+        );
+        assert_eq!(hf_repo_from_input("Qwen/Qwen3-8B#readme".into()), Some("Qwen/Qwen3-8B".into()));
     }
 }
