@@ -31,9 +31,16 @@ struct SorterView: View {
     @State private var recentKind = FileKind.all
     @State private var recentSort = ListSort.newest
     @State private var recentPage = 0
+    @State private var recentSelection: Int?
+    /// Moves removed from the list, one key per line. Kept in the app so the sorter's log stays untouched.
+    @AppStorage("sorterHiddenMoves") private var hiddenMoves = ""
+    private var allRecent: [SorterMove] {
+        let hidden = Set(hiddenMoves.split(separator: "\n").map(String.init))
+        return (model.status?.recent ?? []).filter { !hidden.contains($0.key) }
+    }
     /// The sorter's recent moves, filtered by kind and sorted.
     private var recentMoves: [SorterMove] {
-        let moves = (model.status?.recent ?? []).filter { recentKind.matches($0.file) }
+        let moves = allRecent.filter { recentKind.matches($0.file) }
         return switch recentSort {
         case .oldest: moves.sorted { $0.time < $1.time }
         case .name: moves.sorted { $0.file.localizedStandardCompare($1.file) == .orderedAscending }
@@ -47,6 +54,50 @@ struct SorterView: View {
         _model = State(initialValue: model ?? SorterModel())
     }
 
+    private var recentList: some View {
+        let moves = recentMoves
+        return Group {
+            if moves.isEmpty {
+                EmptyState(symbol: "tray", title: allRecent.isEmpty ? "Nothing sorted yet" : "No sorted files match")
+            } else {
+                // Same list as Downloads: inset style, hidden separators, rows that highlight on hover.
+                List {
+                    ForEach(Array(ListControls.page(moves, recentPage).enumerated()), id: \.offset) { index, move in
+                        MoveRow(move: move, isSelected: recentSelection == index) { hide([move]) }
+                            .contentShape(Rectangle())
+                            .onTapGesture { recentSelection = index }
+                            .listRowInsets(EdgeInsets(
+                                top: LayoutMetrics.rowSpacing / 2,
+                                leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
+                                bottom: LayoutMetrics.rowSpacing / 2,
+                                trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
+                            .listRowSeparator(.hidden)
+                    }
+                }
+                .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                .scrollEdgeEffectStyle(.soft, for: .all)
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !allRecent.isEmpty {
+                ListControls(status: .constant(""), kind: $recentKind, sorts: [.newest, .oldest, .name],
+                             sort: $recentSort, count: moves.count, page: $recentPage) {
+                    hide(allRecent.filter { !FileManager.default.fileExists(atPath: $0.to) })
+                }
+            }
+        }
+    }
+
+    /// Only keys still in the sorter's recent list are kept, so the stored set can't grow forever.
+    private func hide(_ moves: [SorterMove]) {
+        let current = Set((model.status?.recent ?? []).map(\.key))
+        var hidden = Set(hiddenMoves.split(separator: "\n").map(String.init)).intersection(current)
+        hidden.formUnion(moves.map(\.key))
+        hiddenMoves = hidden.sorted().joined(separator: "\n")
+        recentSelection = nil
+    }
+
     private var watchedCount: Int { model.status?.folders.filter(\.watching).count ?? 0 }
 
     var body: some View {
@@ -54,6 +105,8 @@ struct SorterView: View {
             Group {
             if tab == .files {
                 SorterFilesTable(model: model)
+            } else if tab == .recent {
+                recentList
             } else {
             Form {
                 if tab == .setup {
@@ -165,21 +218,6 @@ struct SorterView: View {
                             }
                         }
                     }
-                } else if tab == .recent {
-                let moves = recentMoves
-                Section {
-                    if moves.isEmpty {
-                        Text((model.status?.recent ?? []).isEmpty ? "Nothing sorted yet." : "No sorted files match.")
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(Array(ListControls.page(moves, recentPage).enumerated()), id: \.offset) { _, move in
-                        MoveRow(move: move)
-                    }
-                } header: {
-                    ListControls(status: .constant(""), kind: $recentKind, sorts: [.newest, .oldest, .name],
-                                 sort: $recentSort, count: moves.count, page: $recentPage)
-                        .padding(.horizontal, -LayoutMetrics.margin)
-                }
                 }
             }
             .formStyle(.grouped)
@@ -340,46 +378,152 @@ private struct FolderRow: View {
 
 private struct MoveRow: View {
     let move: SorterMove
+    var isSelected = false
+    var onRemove: () -> Void = {}
+    @State private var isHovered = false
     private static let relative = RelativeDateTimeFormatter()
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .center, spacing: LayoutMetrics.gap) {
             Image(nsImage: NSWorkspace.shared.icon(for: UTType(filenameExtension: URL(filePath: move.file).pathExtension) ?? .data))
                 .resizable()
-                .frame(width: 20, height: 20)
+                .frame(width: LayoutMetrics.iconSize, height: LayoutMetrics.iconSize)
+                .overlay(alignment: .bottomTrailing) {
+                    if exists {
+                        Image(systemName: "checkmark.circle.fill")
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .green)
+                            .font(.system(size: 14))
+                    }
+                }
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(move.file)
+                    .font(.body.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text("→ \(placeText)")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer(minLength: 8)
-            // A static string: `Text(date, style: .relative)` redraws every second, which keeps the CPU awake.
-            Text(Self.relative.localizedString(for: Date(timeIntervalSince1970: move.time), relativeTo: .now))
+                    .help(move.file)
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: exists ? "folder" : "questionmark.folder").font(.system(size: 12))
+                        Text(exists ? placeText : "Moved or deleted since").truncationMode(.middle)
+                    }
+                    // A static string: `Text(date, style: .relative)` redraws every second, which keeps the CPU awake.
+                    Text(Self.relative.localizedString(for: Date(timeIntervalSince1970: move.time), relativeTo: .now))
+                }
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Button(action: reveal) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.blue)
-                    .frame(width: 26, height: 24)
-                    .contentShape(Rectangle())
+                .lineLimit(1)
             }
-            .buttonStyle(.borderless)
-            .help("Show in Finder")
-            .accessibilityLabel("Show \(move.file) in Finder")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if exists {
+            Button(action: revert) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovered ? 1 : 0)
+            .help("Move back to \(URL(filePath: move.from).lastPathComponent)")
+            .accessibilityLabel("Move \(move.file) back")
+            ShareLink(item: url) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovered ? 1 : 0)
+            .help("Share or AirDrop \(move.file)")
+            .accessibilityLabel("Share \(move.file)")
+            }
+            Menu { menu } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                    .contentShape(Circle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .opacity(isHovered ? 1 : 0)
+            .help("More actions")
+            .accessibilityLabel("More actions for \(move.file)")
+            if exists {
+                // The recommended action, always visible, as on a finished download.
+                Button(action: reveal) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.blue)
+                        .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Show \(move.file) in Finder")
+                .accessibilityLabel("Show \(move.file) in Finder")
+            } else {
+                // Gone since it was sorted: the only useful action left, as on a missing download.
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Remove \(move.file) from the list")
+                .accessibilityLabel("Remove \(move.file) from the list")
+            }
         }
+        .frame(height: LayoutMetrics.rowHeight)
+        .padding(.horizontal, LayoutMetrics.hoverInset)
+        // In the row background, so hover fills the same full-width cell as the selection.
+        .listRowBackground(RowHighlight(selected: isSelected, hovered: isHovered))
         .contentShape(Rectangle())
-        .onTapGesture(perform: open)
-        .help("Click to open")
+        .onHover { isHovered = $0 }
+        // Simultaneous, so the parent's single-click selection still fires.
+        .simultaneousGesture(TapGesture(count: 2).onEnded(open))
+        .contextMenu { menu }
+        .help("Double-click to open")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Open", open)
         .accessibilityAction(named: "Show in Finder", reveal)
+        .accessibilityAction(named: "Move Back", revert)
+    }
+
+    @ViewBuilder private var menu: some View {
+        if exists { fileActions }
+        Button(role: .destructive, action: onRemove) { Label("Remove from List", systemImage: "minus.circle") }
+    }
+
+    @ViewBuilder private var fileActions: some View {
+        Button(action: open) { Label("Open", systemImage: "arrow.up.forward.app") }
+        Button(action: reveal) { Label("Show in Finder", systemImage: "folder") }
+        Button {
+            NSSharingService(named: .sendViaAirDrop)?.perform(withItems: [url])
+        } label: {
+            Label("AirDrop", systemImage: "dot.radiowaves.up.forward")
+        }
+        ShareLink(item: url) { Label("Share…", systemImage: "square.and.arrow.up") }
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.path(percentEncoded: false), forType: .string)
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.doc")
+        }
+        Divider()
+        Button(action: revert) { Label("Move Back", systemImage: "arrow.uturn.backward") }
+        Divider()
     }
 
     /// "Work › Invoices" when the file went inside the folder it came from, otherwise the full path.
@@ -389,11 +533,25 @@ private struct MoveRow: View {
         return move.to.dropFirst(base.count).split(separator: "/").joined(separator: " › ")
     }
 
-    private var url: URL { URL(filePath: move.to).appending(path: move.file) }
+    /// `to` is the full new path; the sorter may have renamed the file, so never append `file` to it.
+    private var url: URL { URL(filePath: move.to) }
+
+    private var exists: Bool { FileManager.default.fileExists(atPath: move.to) }
 
     private func open() { NSWorkspace.shared.open(url) }
 
     private func reveal() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+
+    /// Back under its original name. The sorter won't take it again: it skips files born before its last run.
+    private func revert() {
+        let back = URL(filePath: move.from).appending(path: move.file)
+        do {
+            try FileManager.default.moveItem(at: url, to: back)
+            NSWorkspace.shared.activateFileViewerSelecting([back])
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
 }
 
 #if DEBUG
@@ -445,4 +603,9 @@ private struct UpdateAllRow: View {
         }
         .accessibilityElement(children: .combine)
     }
+}
+
+private extension SorterMove {
+    /// Stable across status reloads: a move is one file landing at one path at one time.
+    var key: String { "\(Int(time))|\(to)" }
 }

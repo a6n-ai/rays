@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct JobRow: View {
     @Environment(EngineModel.self) private var model
     let job: JobView
+    var isSelected = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirmStop = false
     @State private var confirmRemove = false
@@ -88,12 +89,13 @@ struct JobRow: View {
         }
         .frame(height: LayoutMetrics.rowHeight)
         .padding(.horizontal, LayoutMetrics.hoverInset)
-        .background(.quaternary.opacity(isHovered ? 0.6 : 0), in: .rect(cornerRadius: 10))
+        // In the row background, so hover fills the same full-width cell as the selection.
+        .listRowBackground(RowHighlight(selected: isSelected, hovered: isHovered))
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHovered)
         .dragOut(model.locate(job))
         .contextMenu { menu }
-        // Simultaneous, so the list still selects the row: a plain double-tap gesture never fires inside List(selection:).
+        // Simultaneous, so the parent's single-click selection still fires.
         .simultaneousGesture(TapGesture(count: 2).onEnded {
             if job.isDone { model.open(job) }
         })
@@ -350,5 +352,17 @@ struct JobRow: View {
 private extension View {
     @ViewBuilder func dragOut(_ url: URL?) -> some View {
         if let url { draggable(url) } else { self }
+    }
+}
+
+/// Hover and selection share one grey rounded cell, selection a step darker. Replaces the blue system highlight.
+struct RowHighlight: View {
+    let selected: Bool
+    let hovered: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10)
+            .fill(.primary.opacity(selected ? 0.14 : hovered ? 0.07 : 0))
+            .padding(.horizontal, 10)
     }
 }

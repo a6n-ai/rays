@@ -151,16 +151,34 @@ struct SortedItemsView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 92, maximum: 112), spacing: 12)], spacing: 14) {
                     ForEach(order.sorted(items)) { item in
-                        Button {
-                            if item.isFolder { openFolder(item.url) } else { NSWorkspace.shared.open(item.url) }
-                        } label: { GridTile(item: item) }
+                        Button { open(item.url) } label: { GridTile(item: item) }
                         .buttonStyle(.plain)
                         .help("Open \(item.name)")
+                        .contextMenu { ItemMenu(urls: [item.url], open: open) }
                         .accessibilityAction(named: "Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
                     }
                 }
                 .padding(20)
             }
+        }
+    }
+
+    private func open(_ url: URL) {
+        if items.first(where: { $0.url == url })?.isFolder == true { openFolder(url) } else { NSWorkspace.shared.open(url) }
+    }
+}
+
+/// Right-click actions for sorted items, the same ones the Downloads list offers.
+private struct ItemMenu: View {
+    let urls: Set<URL>
+    let open: (URL) -> Void
+
+    var body: some View {
+        Button("Open") { urls.forEach(open) }
+        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(Array(urls)) }
+        Button("Copy Path") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(urls.map { $0.path(percentEncoded: false) }.joined(separator: "\n"), forType: .string)
         }
     }
 }
@@ -253,12 +271,16 @@ struct FinderTable: View {
             }
             .width(min: 80, ideal: 140)
         }
-        .contextMenu(forSelectionType: SortedItem.ID.self) { _ in } primaryAction: { ids in
-            for url in ids {
-                if items.first(where: { $0.url == url })?.isFolder == true { openFolder(url) } else { NSWorkspace.shared.open(url) }
-            }
+        .contextMenu(forSelectionType: SortedItem.ID.self) { ids in
+            if !ids.isEmpty { ItemMenu(urls: ids, open: open) }
+        } primaryAction: { ids in
+            ids.forEach(open)
         }
         .scrollContentBackground(.hidden)
+    }
+
+    private func open(_ url: URL) {
+        if items.first(where: { $0.url == url })?.isFolder == true { openFolder(url) } else { NSWorkspace.shared.open(url) }
     }
 }
 

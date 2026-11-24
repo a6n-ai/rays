@@ -38,8 +38,9 @@ Click a folder row to open it. Under **Where files go**, pick a category to send
 
 ## Browse sorted files
 
-- **Files** tab (the folder icon): your sorted folders as a Finder-style list or as icons. Double-click a folder to open it, or a file to open it in its app.
-- **Recent** tab (the clock icon): the latest moves. Click a row to open the file; the magnifier shows it in Finder.
+- **Files** tab (the folder icon): your sorted folders as a Finder-style list or as icons. Double-click a folder to open it, or a file to open it in its app. Right-click for **Open**, **Show in Finder** and **Copy Path**.
+- **Recent** tab (the clock icon): the latest moves. Double-click a row to open the file; the round folder button shows it in Finder. On hover, **Move Back** returns the file to the folder it came from, under its original name, and the sorter leaves it there. **⋯** adds AirDrop, Share and Copy Path.
+- A file moved or deleted since it was sorted shows **Moved or deleted since**; its round button removes it from the list, and **Remove Missing** clears them all. This hides the row in Rays only.
 
 ## Update older sorter setups
 

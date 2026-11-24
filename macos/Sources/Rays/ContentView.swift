@@ -192,10 +192,12 @@ private struct DownloadsView: View {
         } else if visible.isEmpty {
             EmptyState(symbol: "tray", title: "No downloads match")
         } else {
-            List(selection: $selection) {
+            // Selection is drawn by the rows (RowHighlight), not List(selection:), whose highlight is always the accent blue.
+            List {
                 ForEach(visible, id: \.id) { job in
-                    JobRow(job: job)
-                        .tag(job.id)
+                    JobRow(job: job, isSelected: selection.contains(job.id))
+                        .contentShape(Rectangle())
+                        .onTapGesture { select(job.id) }
                         .listRowInsets(EdgeInsets(
                             top: LayoutMetrics.rowSpacing / 2,
                             leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
@@ -205,9 +207,14 @@ private struct DownloadsView: View {
                 }
             }
             .listStyle(.inset)
+            .tint(.gray)
             .scrollContentBackground(.hidden)
             .scrollEdgeEffectStyle(.soft, for: .all)
             .animation(reduceMotion ? nil : .smooth, value: visible.map(\.id))
+            .focusable()
+            .focusEffectDisabled()
+            .onKeyPress(.upArrow) { step(-1) }
+            .onKeyPress(.downArrow) { step(1) }
             .onKeyPress(.space) { togglePause() ? .handled : .ignored }
             .onKeyPress(.return) { revealSelected() ? .handled : .ignored }
             .onDeleteCommand(perform: removeSelected)
@@ -254,6 +261,23 @@ private struct DownloadsView: View {
 
     private var removalTitle: String {
         removal.count == 1 ? "Remove \(removal[0].name)?" : "Remove \(removal.count) downloads?"
+    }
+
+    /// Click selects one row; ⌘-click adds or removes it, like a native list.
+    private func select(_ id: UInt64) {
+        if NSEvent.modifierFlags.contains(.command) {
+            if selection.remove(id) == nil { selection.insert(id) }
+        } else {
+            selection = [id]
+        }
+    }
+
+    private func step(_ delta: Int) -> KeyPress.Result {
+        let ids = visible.map(\.id)
+        guard !ids.isEmpty else { return .ignored }
+        let current = ids.lastIndex(where: selection.contains) ?? (delta > 0 ? -1 : ids.count)
+        selection = [ids[min(max(current + delta, 0), ids.count - 1)]]
+        return .handled
     }
 
     /// Returns false when nothing is selected, so the key press falls through to the list.
