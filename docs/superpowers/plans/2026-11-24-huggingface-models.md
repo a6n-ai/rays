@@ -104,7 +104,7 @@
   - `mmproj_attached`: `mmproj-x-F16.gguf` (888 MB) and `mmproj-x-Q8_0.gguf` (500 MB) are not versions themselves. The smallest one is in every version's `files`, and its size is counted.
   - `recommended_q4_k_m`: when present, it is the only `recommended == true`. Without it, the first present version from the order `Q4_K_M, Q4_K_S, Q5_K_M, Q4_0, Q5_K_S, Q5_0, Q6_K, Q8_0, IQ4_XS` wins; if none match, the smallest version wins.
   - `recommended_gguf_paths`: `hf_recommended` on a GGUF repo equals the recommended version's `files`. `README.md` and `.gitattributes` are not in it.
-  - `recommended_safetensors`: files `config.json, generation_config.json, tokenizer.json, tokenizer_config.json, tokenizer.model, merges.txt, model-00001-of-00002.safetensors, model-00002-of-00002.safetensors, model.safetensors.index.json, pytorch_model.bin, onnx/model.onnx, original/consolidated.00.pth, README.md, LICENSE, .gitattributes`. The result is exactly the first 8 (config, tokenizer and merges files plus the safetensors and their index). `pytorch_model.bin`, `onnx/`, `original/`, the docs and `.gitattributes` are left out.
+  - `recommended_safetensors`: files `config.json, generation_config.json, tokenizer.json, tokenizer_config.json, tokenizer.model, merges.txt, model-00001-of-00002.safetensors, model-00002-of-00002.safetensors, model.safetensors.index.json, pytorch_model.bin, onnx/model.onnx, original/consolidated.00.pth, README.md, LICENSE, .gitattributes`. The result is exactly the first 9: the config, tokenizer and merges files, both safetensors shards, and `model.safetensors.index.json`. `pytorch_model.bin`, `onnx/`, `original/`, the docs and `.gitattributes` are left out.
   - `recommended_bin_when_no_safetensors`: without `.safetensors`, the result includes `pytorch_model.bin` and the configs.
 - [ ] **Step 2:** `cargo test -q -p dl-engine --lib hf::` fails.
 - [ ] **Step 3: Implement.** Find the quant label without a regex dependency: strip `.gguf` and any `-NNNNN-of-NNNNN`, split on `-` and `.`, then take the last token matching `^(I?Q\d(_[A-Z0-9]+)*|F16|BF16|F32|FP16)$`, case-insensitive. Normalize `FP16` to `F16`. Weights extensions: `safetensors, bin, pt, pth, ckpt, onnx, msgpack, h5`. Subfolders `onnx/`, `coreml/`, `openvino/` and `original/` are skipped unless they hold the only weights. Docs left out: `*.md`, `LICENSE*`, `.gitattributes`, images.
@@ -117,7 +117,7 @@
 - Modify: `engine/src/hf.rs` (HTTP calls)
 - Modify: `engine/src/scheduler.rs` (`hf_base: String`, default `https://huggingface.co`; token via `secrets`; header on requests)
 - Modify: `engine/src/download.rs` (the two `client.get(...)` sites at lines 213 and 1037 go through one `env.get(url)` helper that adds `Authorization` when the URL's host equals the HF host)
-- Modify: `engine/src/types.rs` (`EngineConfig.hf_base: Option<String>`, test-only override; `None` means the default)
+- Modify: `engine/src/types.rs` (`EngineConfig.hf_base: Option<String>` with `#[uniffi(default = None)]`, so the Swift call site keeps compiling until Task 6 regenerates the bindings; a test-only override, where `None` means the default)
 - Modify: `engine/src/api.rs`
 - Test: `engine/tests/download.rs` (or a new `engine/tests/hf.rs`)
 
