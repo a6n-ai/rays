@@ -12,6 +12,9 @@ final class EngineModel {
     private(set) var folderRevision = 0
     private(set) var generation = 0
     private(set) var buckets: [BucketConfig] = []
+    private(set) var hasHFToken = false
+    /// Where Rays itself saved each model file, so its row says "Saved in" rather than claiming the sorter moved it.
+    @ObservationIgnored private var savedDirs: [UInt64: URL] = [:]
     @ObservationIgnored private var engine: Engine?
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let files = FileTracker(storeURL: FileManager.default.homeDirectoryForCurrentUser
@@ -55,6 +58,7 @@ final class EngineModel {
             let engine = try Engine(config: config)
             engine.setReplaceExisting(on: defaults.bool(forKey: SettingsKey.replaceExisting))
             self.engine = engine
+            hasHFToken = engine.hasHfToken()
             jobs = engine.snapshot()
             jobs.forEach(track)
             buckets = engine.buckets()
@@ -200,12 +204,16 @@ final class EngineModel {
     }
 
     func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) -> [HfAdd] {
-        engine?.addHf(repo: repo, sha: sha, files: files, destDir: dir.path(percentEncoded: false)) ?? []
+        let added = engine?.addHf(repo: repo, sha: sha, files: files, destDir: dir.path(percentEncoded: false)) ?? []
+        let saved = dir.resolvingSymlinksInPath().standardizedFileURL
+        for item in added { if case .added(let id) = item.status { savedDirs[id] = saved } }
+        return added
     }
 
-    func setHFToken(_ token: String?) throws { try engine?.setHfToken(token: token) }
-
-    var hasHFToken: Bool { engine?.hasHfToken() ?? false }
+    func setHFToken(_ token: String?) throws {
+        try engine?.setHfToken(token: token)
+        hasHFToken = engine?.hasHfToken() ?? false
+    }
 
     /// nil resets to the user's Downloads folder. The engine is asked first, so a failure saves nothing.
     func setDownloadsDir(_ url: URL?) throws {
@@ -225,7 +233,7 @@ final class EngineModel {
     }
 
     /// Where a finished file sits relative to the downloads folder, for the row's status line.
-    func location(of file: URL) -> String {
+    func location(of file: URL, job: JobView? = nil) -> String {
         let root = Self.downloadsURL.resolvingSymlinksInPath().standardizedFileURL.pathComponents
         let parent = file.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
         let parts = parent.pathComponents
@@ -233,7 +241,8 @@ final class EngineModel {
             return parent.tildePath
         }
         let inside = parts.dropFirst(root.count)
-        return inside.isEmpty ? "In Downloads" : "Sorted into " + inside.joined(separator: " › ")
+        let verb = job.flatMap { savedDirs[$0.id] } == parent ? "Saved in " : "Sorted into "
+        return inside.isEmpty ? "In Downloads" : verb + inside.joined(separator: " › ")
     }
 
     private func track(_ job: JobView) {

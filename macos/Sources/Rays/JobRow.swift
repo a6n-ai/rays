@@ -206,7 +206,7 @@ struct JobRow: View {
             _ = model.folderRevision
             if let url = model.locate(job) {
                 // Where the file is now matters more than when it finished, so the time is dropped here.
-                parts = [Part(model.location(of: url), symbol: "folder"), Part(byteText(job.total ?? job.done))]
+                parts = [Part(model.location(of: url, job: job), symbol: "folder"), Part(byteText(job.total ?? job.done))]
             } else {
                 parts = model.isInTrash(job)
                     ? [Part("In the Trash", symbol: "trash")]

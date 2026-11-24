@@ -3,10 +3,20 @@ import Foundation
 /// Where model downloads go by default: the sorter's AI Models destination for Downloads, else a folder inside it.
 enum AIModelsFolder {
     static func base(downloadsDir: URL, destinations: [String: [String: String]]) -> URL {
-        if let path = destinations[downloadsDir.path(percentEncoded: false)]?["AI Models"], path.hasPrefix("/") {
+        if let path = destinations[key(for: downloadsDir)]?["AI Models"], path.hasPrefix("/") {
             return URL(filePath: path, directoryHint: .isDirectory)
         }
         return downloadsDir.appending(path: "AI Models", directoryHint: .isDirectory)
+    }
+
+    /// The sorter's folder key: realpath, no trailing slash.
+    static func key(for url: URL) -> String {
+        let path = url.path(percentEncoded: false)
+        if let resolved = realpath(path, nil) {
+            defer { free(resolved) }
+            return String(cString: resolved)
+        }
+        return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
     }
 
     /// Shown only when LM Studio has been installed (its ~/.lmstudio folder exists).

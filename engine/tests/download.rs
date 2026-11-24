@@ -1159,6 +1159,19 @@ async fn replace_on_moves_old_to_trash() {
     assert_eq!(trashed_in(dir.path()), [dir.path().join("a.bin")]);
 }
 #[tokio::test]
+async fn replace_never_trashes_a_directory() {
+    setup();
+    let srv = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("a")).unwrap();
+    let (live, rx) = job(srv.url("/file"), dir.path(), "a");
+    let opts = download::RunOpts { replace_existing: true, trash: fake_trash, ..Default::default() };
+    let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
+    assert_eq!(path, dir.path().join("a (1)"));
+    assert!(dir.path().join("a").is_dir());
+    assert!(trashed_in(dir.path()).is_empty());
+}
+#[tokio::test]
 async fn replace_spares_a_file_this_engine_produced() {
     setup();
     let srv = start().await;

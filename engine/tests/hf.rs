@@ -47,6 +47,9 @@ fn auth_of(headers: &HeaderMap) -> Option<String> {
 
 async fn search(State(st): State<Hf>, headers: HeaderMap, RawQuery(q): RawQuery) -> Result<axum::Json<serde_json::Value>, StatusCode> {
     st.auths.lock().unwrap().push(auth_of(&headers));
+    if auth_of(&headers).as_deref() == Some("Bearer bad") {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     let q = q.unwrap_or_default();
     if !q.contains("search=qwen") || !q.contains("sort=downloads") {
         return Err(StatusCode::BAD_REQUEST);
@@ -273,6 +276,17 @@ async fn api_calls_send_token_when_saved() {
     assert_eq!(*auths.lock().unwrap(), vec![Some("Bearer t".to_string()), Some("Bearer t".to_string())]);
     sched.set_hf_token(None).unwrap();
     assert!(!sched.has_hf_token());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejected_saved_token_is_explained() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://{hf}"));
+    sched.set_hf_token(Some("bad")).unwrap();
+    let err = sched.hf_search("qwen").await.unwrap_err().to_string();
+    assert!(err.contains("rejected the saved token"), "{err}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

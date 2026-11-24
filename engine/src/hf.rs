@@ -161,6 +161,9 @@ async fn get_json<T: DeserializeOwned>(client: &reqwest::Client, url: reqwest::U
     }
     let resp = req.send().await.map_err(|e| EngineError::Io { msg: format!("hugging face: {e}") })?;
     let status = resp.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED && token.is_some() {
+        return Err(EngineError::Io { msg: "Hugging Face rejected the saved token. Check it in Settings".into() });
+    }
     if !status.is_success() {
         return Err(EngineError::Io { msg: format!("hugging face answered HTTP {}", status.as_u16()) });
     }

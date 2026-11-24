@@ -1287,7 +1287,7 @@ async fn claim_name(dir: PathBuf, name: String, trash: Option<fn(&Path) -> io::R
         let path = dir.join(&name);
         if let Some(trash) = trash
             && !produced.contains(&path)
-            && path.exists()
+            && path.is_file()
             && trash(&path).is_ok()
         {
             produced.insert(path.clone());

@@ -105,7 +105,9 @@ struct ModelsView: View {
         }
         try? await Task.sleep(for: .milliseconds(300))
         guard token == request, !Task.isCancelled else { return }
-        if let id = hfRepoFromInput(input: text) {
+        // A bare org/repo is searched like any text (it may be half typed); only a pasted link opens directly.
+        if text.localizedCaseInsensitiveContains("huggingface.co") || text.localizedCaseInsensitiveContains("hf.co"),
+           let id = hfRepoFromInput(input: text) {
             await open(id, fromResults: false)
             return
         }
@@ -119,7 +121,7 @@ struct ModelsView: View {
         } catch {
             guard token == request, !Task.isCancelled else { return }
             results = []
-            self.error = error.localizedDescription
+            self.error = EngineModel.message(for: error)
         }
     }
 
@@ -136,7 +138,7 @@ struct ModelsView: View {
             guard token == request, !Task.isCancelled else { return }
             repo = nil
             openedFromResults = false
-            self.error = error.localizedDescription
+            self.error = EngineModel.message(for: error)
         }
     }
 }
