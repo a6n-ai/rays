@@ -25,14 +25,23 @@ Any MCP client:
 
 | Tool | Input | What it does |
 |---|---|---|
-| `add_downloads` | `urls`: list of http, https or `s3://bucket/key` links | Adds them to Rays; returns ids and any rejected links. |
+| `add_downloads` | `urls`: list of http, https or `s3://bucket/key` links; `queue` (optional name or id) | Adds them to Rays, to the Main queue unless `queue` is set; returns ids and any rejected links. |
 | `list_downloads` | none | Downloads with id, state, bytes done and total, and file name. |
+| `list_queues` | none | Queues with id, name, state (open, waiting for time, waiting for condition, stopped or off), next start and counts of queued and running downloads. |
+| `start_queue` | `queue`: name or id | Starts a queue. On a scheduled queue this is the same as `run_queue_now`. |
+| `stop_queue` | `queue`: name or id | Stops a queue: its queued downloads wait and its running ones pause. |
+| `run_queue_now` | `queue`: name or id | Runs a queue now, whatever its schedule and conditions say. |
+| `verify_model` | `dir`: absolute path of a model folder | Checks a model that Rays downloaded from Hugging Face against its record: one line per file and a summary. |
 | `list_buckets` | none | The [S3 buckets](/docs/s3/) added to Rays, with provider and endpoint. |
 | `browse_bucket` | `bucket`, `prefix`, `next_token` | One level of a bucket: folders, and objects with size and modified time. |
 | `sorter_status` | none | Watched folders, categories, settings and recent moves, as JSON. |
 | `sort_folder` | `folder`, `dry_run` (default true), `all` | Sorts a folder into category folders. |
 
 `sort_folder` only reports what it would move unless the assistant sets `dry_run` to `false`, so an assistant cannot move your files by accident. Clients that support tool hints also see it marked as destructive.
+
+Queue names match in any case. No tool edits a queue's schedule, settings or Run command, or deletes a queue: a Run command executes shell commands, so it can only be set in the app.
+
+`verify_model` reads the folder's `.rays-model.json` and returns an error if there is none. It checks sizes and, where Rays recorded one, checksums.
 
 No tool adds a bucket: you add buckets in Rays or with `dl bucket add`, so your keys never pass through an assistant.
 

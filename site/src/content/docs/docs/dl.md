@@ -22,6 +22,10 @@ With a DMG install, open **Settings > General** and click **Install** next to **
 dl URL...                     download links with Rays
 dl s3://BUCKET/KEY            download an object from a bucket added to Rays
 dl list                       list downloads (also: dl --list)
+dl add [--queue NAME|ID] URL...   download links into a queue
+dl queues [--json]            list queues
+dl queue start|stop|run NAME|ID
+dl verify FOLDER              check a downloaded model folder
 dl bucket providers|list|add|remove
 dl ls s3://BUCKET/[PREFIX/]   list one level of a bucket
 dl sort [FOLDER] [--all] [--dry-run] [--projects]
@@ -60,6 +64,39 @@ One line per download: id, state, bytes done / total, file name, separated by ta
 ```
 
 The state is one of `queued`, `running`, `paused`, `retrying`, `done` or `failed`. The total is `?` when the server does not say how big the file is.
+
+## Queues
+
+```sh
+dl add --queue Night https://example.com/a.zip https://example.com/b.zip
+dl queues
+dl queue stop Night
+dl queue start Night
+dl queue run Night
+```
+
+`dl add` without `--queue` uses the Main queue. A queue is a name, in any case, or an id. `dl queues` prints one line per queue: id, name, state, counts of queued and running downloads, and the next start in unix seconds for a scheduled queue. `--json` prints the same as JSON.
+
+The state is `open`, `waiting for time`, `waiting for condition`, `stopped` or `off`. `dl queue start` lifts a stop; on a scheduled queue it is the same as `dl queue run`, which opens the queue until its run finishes, whatever its schedule says.
+
+`dl` does not edit or delete queues: set schedules, finish actions and the Run command in the app. A Run command executes shell commands, so no client of the socket can set one.
+
+## Verify a model
+
+```sh
+dl verify ~/Models/some-model
+```
+
+Checks a folder that Rays downloaded from Hugging Face against the `.rays-model.json` it saved there. One line per file with its status, then a summary:
+
+```text
+ok            model-00001-of-00002.safetensors
+size-checked  config.json
+missing       tokenizer.json
+3 files, 2 ok, 1 with problems (1 missing), 1 checked by size only
+```
+
+The status is `ok`, `size-checked` (no checksum was recorded, so only the size was compared), `missing`, `wrong-size` or `wrong-checksum`. The command exits with `1` if any file has a problem, and with an error if the folder has no record. Hashing large files can take a while.
 
 ## S3 buckets
 
