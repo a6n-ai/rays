@@ -90,7 +90,7 @@ fn tools() -> Value {
                 "type": "object",
                 "properties": {
                     "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-                    "queue": { "type": "string", "description": "Queue name or id from list_queues. Default: Main." },
+                    "queue": { "type": "string", "description": "Queue name or id from list_queues. Without it the downloads start now, in no queue." },
                     "best_time": { "type": "boolean", "default": false, "description": "Add to the Best time queue instead; queue is ignored." }
                 },
                 "required": ["urls"]

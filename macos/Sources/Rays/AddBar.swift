@@ -11,12 +11,12 @@ struct AddBar: View {
     @State private var chosen: UInt64?
     @Namespace private var glass
     let isTargeted: Bool
-    /// The queue a paste goes to unless the menu picks another: the page's queue, or Main.
+    /// The queue a paste goes to unless the menu picks another: the page's queue, or 0 for a direct download.
     let defaultQueue: UInt64
 
     /// The chosen queue while it still exists; a deleted choice falls back to the default.
     private var target: UInt64 {
-        if let chosen, model.queues.contains(where: { $0.id == chosen }) { return chosen }
+        if let chosen, chosen == 0 || model.queues.contains(where: { $0.id == chosen }) { return chosen }
         return defaultQueue
     }
 
@@ -102,6 +102,7 @@ struct AddBar: View {
         // Always the round icon; a pasted link fills it with the accent colour instead of growing a label.
         Menu {
             Picker("Queue", selection: Binding(get: { target }, set: { chosen = $0 })) {
+                Label("Download Now", systemImage: "arrow.down.circle").tag(UInt64(0))
                 ForEach(model.sortedQueues) { option in
                     Label(option.config.name, systemImage: QueueAppearances.shared.appearance(for: option).symbol).tag(option.id)
                 }
@@ -124,7 +125,7 @@ struct AddBar: View {
                     .glassEffectID("download", in: glass)
                     .contentShape(Circle())
                     .opacity(dimmed ? 0.4 : 1)
-                if target != defaultQueue, let name = model.queues.first(where: { $0.id == target })?.config.name {
+                if target != defaultQueue, let name = target == 0 ? "Now" : model.queues.first(where: { $0.id == target })?.config.name {
                     Text(name)
                         .font(.callout)
                         .foregroundStyle(.secondary)

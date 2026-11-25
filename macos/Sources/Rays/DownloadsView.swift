@@ -32,7 +32,7 @@ struct DownloadsView: View {
             .safeAreaInset(edge: .top) { ExtensionBanner() }
             .safeAreaInset(edge: .bottom) {
                 if (queue == nil ? section : .recent) != .settings {
-                    AddBar(isTargeted: isDropTargeted, defaultQueue: queue ?? 1)
+                    AddBar(isTargeted: isDropTargeted, defaultQueue: queue ?? 0)
                         .disabled(model.startError != nil)
                 }
             }

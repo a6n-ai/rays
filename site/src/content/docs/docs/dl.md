@@ -75,7 +75,7 @@ dl queue start Night
 dl queue run Night
 ```
 
-`dl add` without `--queue` uses the Main queue. A queue is an id or a name: any case, `main` for the Main queue, or the start of a name when it matches only one queue. `dl queues` prints one line per queue: id, name, state, counts of queued and running downloads, and the next start in local time (`next Wed 26 Nov 02:00`) for a scheduled queue. `--json` prints the same as JSON, with the next start in unix seconds (`next_run`) and local time (`next_run_local`).
+`dl add` without `--queue` starts the downloads now, in no queue. A queue is an id or a name: any case, `main` for the Main queue, or the start of a name when it matches only one queue. `dl queues` prints one line per queue: id, name, state, counts of queued and running downloads, and the next start in local time (`next Wed 26 Nov 02:00`) for a scheduled queue. `--json` prints the same as JSON, with the next start in unix seconds (`next_run`) and local time (`next_run_local`).
 
 The state is `open`, `waiting for time`, `waiting for condition`, `stopped` or `off`. `dl queue start` lifts a stop; on a scheduled queue it is the same as `dl queue run`, which opens the queue until its run finishes, whatever its schedule says.
 

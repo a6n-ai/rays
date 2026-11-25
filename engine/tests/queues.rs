@@ -178,7 +178,7 @@ async fn per_queue_concurrency() {
     assert_eq!(most_at_once(&r.sched, &ids, q).await, 1);
 
     let ids: Vec<_> = ["d", "e", "f"].iter().map(|t| add(&r.sched, &base, t, 384, None)).collect();
-    assert_eq!(most_at_once(&r.sched, &ids, 1).await, 2, "Same as Rays uses the global 2");
+    assert_eq!(most_at_once(&r.sched, &ids, 0).await, 2, "direct downloads use the global 2");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -300,13 +300,13 @@ async fn delete_queue_moves_only_its_own_jobs() {
     let in_a = add(&r.sched, &base, "a", 64, Some(a));
     let in_b = add(&r.sched, &base, "b", 64, Some(b));
     r.sched.delete_queue(a).unwrap();
-    assert_eq!(r.sched.view(in_a).unwrap().queue_id, 1);
+    assert_eq!(r.sched.view(in_a).unwrap().queue_id, 0);
     assert_eq!(r.sched.view(in_b).unwrap().queue_id, b);
     r.sched.shutdown();
     drop(r);
     let again = rig(dir.path(), 2);
     assert_eq!(again.sched.view(in_b).unwrap().queue_id, b);
-    assert_eq!(again.sched.view(in_a).unwrap().queue_id, 1);
+    assert_eq!(again.sched.view(in_a).unwrap().queue_id, 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -456,7 +456,7 @@ fn ipc_add_with_queue() {
 
     let jobs = engine.snapshot();
     assert_eq!(jobs.iter().find(|j| j.id == id).unwrap().queue_id, 2);
-    assert_eq!(jobs.iter().find(|j| j.id == old).unwrap().queue_id, 1);
+    assert_eq!(jobs.iter().find(|j| j.id == old).unwrap().queue_id, 0);
     engine.shutdown();
 }
 

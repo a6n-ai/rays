@@ -7,9 +7,9 @@ description: "Group downloads into queues, run a queue on a schedule, and choose
 
 ## Queues
 
-**Main** always exists and can't be deleted. New downloads go to Main unless you pick another queue.
+**Main** always exists and can't be deleted. A new download goes into a queue only when you pick one in the Download menu or use **Move to Queue**. Otherwise it starts now, in no queue, and only the global speed limit and simultaneous count apply. **Move to Queue › No Queue** takes a download out of its queue. Deleting a queue takes its downloads out of every queue.
 
-The **Queues** page has three tabs: **Queues**, **Activity** and **Settings**. The **Queues** tab lists each queue as a row with its icon, its name, a status line, a switch that turns it on or off, and a **Run now** or **Stop** button. Main has a **Default** tag. Use the Filter and sort bar to narrow the list, and **+** to make a new queue.
+The **Queues** page has three tabs: **Queues**, **Activity** and **Settings**. The **Queues** tab lists each queue as a row with its icon, its name, a status line, a switch that turns it on or off, and a **Run now** or **Stop** button. Use the Filter and sort bar to narrow the list, and **+** to make a new queue.
 
 Click a queue to open it. Its page has a picker with three parts:
 

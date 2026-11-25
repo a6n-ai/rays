@@ -221,21 +221,22 @@ struct ModelDetailView: View {
 
     /// Resolved at each use, so a deleted choice falls back instead of sending a stale id.
     private var queueId: UInt64 {
-        if let chosenQueue, model.queues.contains(where: { $0.id == chosenQueue }) { return chosenQueue }
-        return model.queues.first { $0.config.name == "Hugging Face" }?.id ?? 1
+        if let chosenQueue, chosenQueue == 0 || model.queues.contains(where: { $0.id == chosenQueue }) { return chosenQueue }
+        return model.queues.first { $0.config.name == "Hugging Face" }?.id ?? 0
     }
 
     private var queuePicker: some View {
         Menu {
             Picker("Queue", selection: Binding(get: { queueId }, set: { chosenQueue = $0 })) {
+                Label("Download Now", systemImage: "arrow.down.circle").tag(UInt64(0))
                 ForEach(model.sortedQueues) { option in
                     Label(option.config.name, systemImage: QueueAppearances.shared.appearance(for: option).symbol).tag(option.id)
                 }
             }
             .pickerStyle(.inline)
         } label: {
-            Label(model.queues.first { $0.id == queueId }?.config.name ?? "Main",
-                  systemImage: model.queues.first { $0.id == queueId }.map { QueueAppearances.shared.appearance(for: $0).symbol } ?? "tray.full.fill")
+            Label(model.queues.first { $0.id == queueId }?.config.name ?? "Download Now",
+                  systemImage: model.queues.first { $0.id == queueId }.map { QueueAppearances.shared.appearance(for: $0).symbol } ?? "arrow.down.circle")
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
         }
@@ -245,7 +246,7 @@ struct ModelDetailView: View {
         .glassEffect(.regular.interactive(), in: .capsule)
         .help("Queue")
         .accessibilityLabel("Queue")
-        .accessibilityValue(model.queues.first { $0.id == queueId }?.config.name ?? "Main")
+        .accessibilityValue(model.queues.first { $0.id == queueId }?.config.name ?? "Download Now")
         .fixedSize()
     }
 

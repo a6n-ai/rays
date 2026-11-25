@@ -45,6 +45,8 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "CREATE INDEX speed_samples_at ON speed_samples(at)",
     "CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "ALTER TABLE queues ADD COLUMN follow_best_time INTEGER NOT NULL DEFAULT 0",
+    // Downloads added without a queue used to land in Main. Finished ones leave it; waiting ones keep its rules.
+    "UPDATE jobs SET queue_id = 0 WHERE queue_id = 1 AND state IN ('done', 'failed')",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
@@ -347,14 +349,14 @@ impl Store {
         })
     }
 
-    /// Deletes a queue and moves its jobs to the Main queue. The Main queue cannot be deleted.
+    /// Deletes a queue and takes its jobs out of every queue. The Main queue cannot be deleted.
     pub fn delete_queue(&self, id: u64) -> Result<(), EngineError> {
         if id == 1 {
             return Err(EngineError::Db { msg: "the Main queue cannot be deleted".into() });
         }
         let mut conn = self.lock()?;
         let tx = conn.transaction()?;
-        tx.execute("UPDATE jobs SET queue_id = 1 WHERE queue_id = ?1", [id as i64])?;
+        tx.execute("UPDATE jobs SET queue_id = 0 WHERE queue_id = ?1", [id as i64])?;
         tx.execute("DELETE FROM queues WHERE id = ?1", [id as i64])?;
         // Ids can be reused (no AUTOINCREMENT), so a new queue must not inherit this one's history.
         tx.execute("DELETE FROM queue_runs WHERE queue_id = ?1", [id as i64])?;
@@ -1042,7 +1044,31 @@ mod tests {
     }
 
     #[test]
-    fn delete_moves_jobs_to_main() {
+    fn finished_main_jobs_become_direct_downloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = Connection::open(dir.path().join("queue.db")).unwrap();
+        let last = MIGRATIONS.len() - 1;
+        for sql in &MIGRATIONS[..last] {
+            conn.execute_batch(sql).unwrap();
+        }
+        for state in ["done", "failed", "paused"] {
+            conn.execute(
+                "INSERT INTO jobs (url, name, part_path, done, resumable, state, position, created_at, updated_at) \
+                 VALUES ('https://example.com/f.bin', ?1, '/p', 0, 1, ?1, 0, 0, 0)",
+                [state],
+            )
+            .unwrap();
+        }
+        conn.pragma_update(None, "user_version", last as i64).unwrap();
+        drop(conn);
+
+        let store = Store::open(dir.path()).unwrap();
+        let queues: Vec<(String, u64)> = store.load_all().unwrap().into_iter().map(|j| (j.name, j.queue_id)).collect();
+        assert_eq!(queues, [("done".to_owned(), 0), ("failed".to_owned(), 0), ("paused".to_owned(), 1)]);
+    }
+
+    #[test]
+    fn delete_takes_jobs_out_of_the_queue() {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).unwrap();
         let id = store.save_queue(&sample_queue("Side")).unwrap();
@@ -1053,7 +1079,7 @@ mod tests {
 
         store.delete_queue(id).unwrap();
 
-        assert_eq!(store.load_all().unwrap()[0].queue_id, 1);
+        assert_eq!(store.load_all().unwrap()[0].queue_id, 0);
         assert!(store.delete_queue(1).is_err());
     }
 

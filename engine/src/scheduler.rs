@@ -5,7 +5,7 @@ use crate::hf;
 use crate::limit::RateLimiter;
 use crate::names;
 use crate::cloud;
-use crate::queue::{self, QueueConfig, Repeat};
+use crate::queue::{self, QueueConfig, Repeat, NO_QUEUE};
 use crate::speed::{self, BestTime, NetworkKind, Sampler, SpeedSettings};
 use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
@@ -275,8 +275,8 @@ impl Scheduler {
             let scheduled: HashSet<u64> = all.iter().filter(|(q, _)| q.schedule.is_some()).filter_map(|(q, _)| q.id).collect();
             let known: HashSet<u64> = all.iter().filter_map(|(q, _)| q.id).collect();
             for (mut job, saved) in store.load_with_saved_state()? {
-                if !known.contains(&job.queue_id) {
-                    job.queue_id = 1;
+                if job.queue_id != NO_QUEUE && !known.contains(&job.queue_id) {
+                    job.queue_id = NO_QUEUE;
                 }
                 if scheduled.contains(&job.queue_id) && matches!(saved, JobState::Queued | JobState::Running | JobState::Retrying { .. }) {
                     job.state = JobState::Queued;
@@ -441,8 +441,8 @@ impl Scheduler {
         fixed_names: Vec<Option<String>>,
         queue: Option<u64>,
     ) -> Vec<AddResult> {
-        let queue_id = queue.unwrap_or(1);
-        if !lock(&self.queues).contains_key(&queue_id) {
+        let queue_id = queue.unwrap_or(NO_QUEUE);
+        if queue_id != NO_QUEUE && !lock(&self.queues).contains_key(&queue_id) {
             return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("no such queue".to_owned()) }).collect();
         }
         if dir.as_ref().is_some_and(|d| !is_plain_abs(d)) {
@@ -463,8 +463,8 @@ impl Scheduler {
     /// Queues each file of a Hugging Face commit as `dest_dir/<its repo path>`, with its SHA-256 when one is
     /// published. A file already there with the same size is skipped; the rest follow the same-name setting.
     pub fn add_hf(self: &Arc<Self>, repo: &str, sha: &str, files: Vec<hf::HfFile>, dest_dir: &Path, queue: Option<u64>) -> Vec<hf::HfAdd> {
-        let queue_id = queue.unwrap_or(1);
-        let known = lock(&self.queues).contains_key(&queue_id);
+        let queue_id = queue.unwrap_or(NO_QUEUE);
+        let known = queue_id == NO_QUEUE || lock(&self.queues).contains_key(&queue_id);
         let mut recorded = Vec::new();
         let results = files
             .into_iter()
@@ -1201,7 +1201,7 @@ impl Scheduler {
         Ok(id)
     }
 
-    /// Its jobs move to the Main queue (id 1), which cannot be deleted.
+    /// Its jobs leave every queue. The Main queue (id 1) cannot be deleted.
     pub fn delete_queue(self: &Arc<Self>, id: u64) -> Result<(), EngineError> {
         if id == 1 {
             return self.store.delete_queue(id);
@@ -1213,7 +1213,7 @@ impl Scheduler {
                 let mut job = lock(&live.job);
                 let moved = job.queue_id == id;
                 if moved {
-                    job.queue_id = 1;
+                    job.queue_id = NO_QUEUE;
                 }
                 moved.then_some(job.id)
             };
@@ -1234,8 +1234,9 @@ impl Scheduler {
 
     /// A running job moved to another queue keeps its old queue's speed limiter until it restarts.
     /// A running job moved into a closed queue goes back to Queued at once.
+    /// `NO_QUEUE` takes the job out of every queue.
     pub fn move_to_queue(self: &Arc<Self>, id: JobId, queue: u64) {
-        if !lock(&self.queues).contains_key(&queue) {
+        if queue != NO_QUEUE && !lock(&self.queues).contains_key(&queue) {
             return;
         }
         let Some(live) = self.find(id) else { return };

@@ -359,6 +359,12 @@ struct JobRow: View {
             Label("Copy Link", systemImage: "link")
         }
         Menu {
+            Button {
+                model.moveToQueue(job: job.id, queue: 0)
+            } label: {
+                if job.queueId == 0 { Label("No Queue", systemImage: "checkmark") } else { Text("No Queue") }
+            }
+            Divider()
             ForEach(model.sortedQueues) { queue in
                 Button {
                     model.moveToQueue(job: job.id, queue: queue.id)

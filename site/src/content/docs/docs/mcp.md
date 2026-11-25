@@ -25,7 +25,7 @@ Any MCP client:
 
 | Tool | Input | What it does |
 |---|---|---|
-| `add_downloads` | `urls`: list of http, https or `s3://bucket/key` links; `queue` (optional name or id); `best_time` (boolean) | Adds them to Rays, to the Main queue unless `queue` is set. With `best_time` they go to the Best time queue instead, and `queue` is ignored. Returns ids and any rejected links. |
+| `add_downloads` | `urls`: list of http, https or `s3://bucket/key` links; `queue` (optional name or id); `best_time` (boolean) | Adds them to Rays. They start now, in no queue, unless `queue` is set. With `best_time` they go to the Best time queue instead, and `queue` is ignored. Returns ids and any rejected links. |
 | `list_downloads` | none | Downloads with id, state, bytes done and total, and file name. |
 | `list_queues` | none | Queues with id, name, state (open, waiting for time, waiting for condition, stopped or off), next start and counts of queued and running downloads. |
 | `start_queue` | `queue`: name or id | Starts a queue. On a scheduled queue this is the same as `run_queue_now`. |

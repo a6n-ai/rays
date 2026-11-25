@@ -218,7 +218,7 @@ pub struct Job {
     pub fixed_name: bool,
     /// Expected SHA-256 (hex), checked when the download finishes.
     pub sha256: Option<String>,
-    /// The queue this job belongs to; 1 is the Main queue.
+    /// The queue this job belongs to; `NO_QUEUE` (0) is a direct download, 1 is the Main queue.
     pub queue_id: u64,
 }
 

@@ -34,6 +34,9 @@ pub struct QueueSchedule {
     pub idle: bool,
 }
 
+/// The queue id of a direct download: no queue's schedule, conditions or limits apply to it.
+pub const NO_QUEUE: u64 = 0;
+
 #[derive(uniffi::Record, Clone, Debug, PartialEq, Eq)]
 pub struct QueueConfig {
     /// None until saved.

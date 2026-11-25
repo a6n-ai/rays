@@ -92,14 +92,6 @@ struct QueueRow: View {
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    if queue.isMain {
-                        Text("Default")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(.quaternary, in: Capsule())
-                    }
                     if isDirty {
                         Circle().fill(.secondary).frame(width: 6, height: 6).accessibilityLabel("Unsaved changes")
                     }
