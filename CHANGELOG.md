@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.22 (25 Nov 2026)
+
+- **Direct downloads.** A download goes into a queue only when you pick one in the Download button's menu or use **Move to Queue**. Otherwise it starts now, in no queue, so the Main queue no longer lists every download. **Download Now** in the menu and **Move to Queue › No Queue** take a download out of its queue. Finished downloads that were in Main move out on the first launch.
+- Deleting a queue now takes its downloads out of every queue, instead of moving them to Main.
+- **Speed test** on a network Rays can't identify yet now asks first, like a hotspot, and the note under the result says why it wasn't saved.
+- The speed **History** now shows all 60 days, 50 rows per page.
+- The Schedules page shows a plain hint when nothing is scheduled.
+
 ## 0.1.21 (25 Nov 2026)
 
 - **Speed test.** A new **Tools** section in the sidebar has **Speed test**, with your last result next to it. Its page shows live speed and progress while a test runs, a **History** of tests and download speeds, and **Settings**. A test takes about 10 seconds. On a hotspot or metered connection Rays asks first, and speed data stays on this Mac.
