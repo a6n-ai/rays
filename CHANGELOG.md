@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.1.21 (25 Nov 2026)
+
+- **Speed test.** A new **Tools** section in the sidebar has **Speed test**, with your last result next to it. Its page shows live speed and progress while a test runs, a **History** of tests and download speeds, and **Settings**. A test takes about 10 seconds. On a hotspot or metered connection Rays asks first, and speed data stays on this Mac.
+- **Best time.** Rays learns when your connection is fastest from your real downloads and speed tests, and shows the usual fastest hours once it has 7 days of data.
+- **At best time.** The Download button's menu can add downloads to a **Best time** queue that follows your fastest hours. The first time, Rays can test a few times each night for a week to learn faster. **Use best time** fills in any queue's schedule, and **Follow best time** keeps it up to date.
+- A large download that is running much slower than usual suggests moving it to the Best time queue.
+- Automatic speed tests every 3 hours are available in Settings, off by default.
+- `dl speed`, `dl speed test` and `dl add --best-time`, and MCP tools `speed_test` and `best_time`.
+- **Add schedule** on the Schedules page is now a round icon button.
+
 ## 0.1.20 (25 Nov 2026)
 
 - **Hugging Face models.** Search Hugging Face from the new **Models** page under Downloads, see trending models as cards with a colour and icon for each type, filter by Text, Vision, Image, Audio and Embeddings, and download a model or a single quantization.
