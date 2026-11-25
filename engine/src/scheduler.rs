@@ -417,6 +417,7 @@ impl Scheduler {
             position,
             created_at: now,
             updated_at: now,
+            queue_id: 1,
         };
         let id = self.store.insert(&mut job)?;
         job.part_path = names::part_path(&folder, &job.name, id);

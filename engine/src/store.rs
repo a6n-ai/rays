@@ -1,4 +1,5 @@
 //! SQLite persistence (`<data_dir>/queue.db`, WAL). Uses the system libsqlite3.
+use crate::queue::QueueConfig;
 use crate::s3::BucketConfig;
 use crate::types::{EngineError, HostView, Job, JobId, JobState, Segment, now_secs};
 use rusqlite::{Connection, OptionalExtension, Row, named_params, params};
@@ -29,10 +30,17 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "ALTER TABLE jobs ADD COLUMN dir TEXT",
     "ALTER TABLE jobs ADD COLUMN fixed_name INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE jobs ADD COLUMN sha256 TEXT",
+    // Schedule and finish action are JSON text.
+    "CREATE TABLE queues(id INTEGER PRIMARY KEY, name TEXT NOT NULL, max_running INTEGER NOT NULL,
+     speed_limit INTEGER NOT NULL, enabled INTEGER NOT NULL, schedule TEXT, retry_failed INTEGER NOT NULL,
+     wake INTEGER NOT NULL, when_finished TEXT NOT NULL, held INTEGER NOT NULL DEFAULT 0)",
+    "INSERT INTO queues (id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished, held) \
+     VALUES (1, 'Main queue', 3, 0, 1, 'null', 0, 0, '\"Nothing\"', 0)",
+    "ALTER TABLE jobs ADD COLUMN queue_id INTEGER NOT NULL DEFAULT 1",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
-                       resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256";
+                       resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id";
 
 pub struct Store {
     conn: Mutex<rusqlite::Connection>,
@@ -97,9 +105,9 @@ impl Store {
         let conn = self.lock()?;
         conn.execute(
             "INSERT INTO jobs (url, name, part_path, final_path, done, total, etag, last_modified, \
-             resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256) \
+             resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id) \
              VALUES (:url, :name, :part_path, :final_path, :done, :total, :etag, :last_modified, \
-             :resumable, :state, :error, :position, :created_at, :updated_at, :segments, :dir, :fixed_name, :sha256)",
+             :resumable, :state, :error, :position, :created_at, :updated_at, :segments, :dir, :fixed_name, :sha256, :queue_id)",
             named_params! {
                 ":url": job.url,
                 ":name": job.name,
@@ -119,6 +127,7 @@ impl Store {
                 ":dir": dir,
                 ":fixed_name": job.fixed_name,
                 ":sha256": job.sha256,
+                ":queue_id": job.queue_id as i64,
             },
         )?;
         job.id = conn.last_insert_rowid() as JobId;
@@ -137,7 +146,7 @@ impl Store {
             "UPDATE jobs SET url = :url, name = :name, part_path = :part_path, final_path = :final_path, \
              done = :done, total = :total, etag = :etag, last_modified = :last_modified, \
              resumable = :resumable, state = :state, error = :error, position = :position, \
-             segments = :segments, dir = :dir, fixed_name = :fixed_name, sha256 = :sha256, \
+             segments = :segments, dir = :dir, fixed_name = :fixed_name, sha256 = :sha256, queue_id = :queue_id, \
              updated_at = :updated_at WHERE id = :id",
             named_params! {
                 ":id": job.id as i64,
@@ -157,6 +166,7 @@ impl Store {
                 ":dir": dir,
                 ":fixed_name": job.fixed_name,
                 ":sha256": job.sha256,
+                ":queue_id": job.queue_id as i64,
                 ":updated_at": now_secs(),
             },
         )?;
@@ -265,6 +275,79 @@ impl Store {
         Ok(rows)
     }
 
+    /// Queues by id (Main first), each with its `held` flag.
+    pub fn queues(&self) -> Result<Vec<(QueueConfig, bool)>, EngineError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished, held \
+             FROM queues ORDER BY id",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                let config = QueueConfig {
+                    id: Some(r.get::<_, i64>(0)? as u64),
+                    name: r.get(1)?,
+                    max_running: r.get::<_, i64>(2)? as u32,
+                    speed_limit: r.get::<_, i64>(3)? as u64,
+                    enabled: r.get(4)?,
+                    schedule: json_column(&r.get::<_, String>(5)?, 5)?,
+                    retry_failed: r.get(6)?,
+                    wake: r.get(7)?,
+                    when_finished: json_column(&r.get::<_, String>(8)?, 8)?,
+                };
+                Ok((config, r.get(9)?))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Adds a queue when `config.id` is None, otherwise updates that queue. Returns its id. Keeps `held`.
+    pub fn save_queue(&self, config: &QueueConfig) -> Result<u64, EngineError> {
+        let schedule = serde_json::to_string(&config.schedule).expect("queue schedule serializes");
+        let when_finished = serde_json::to_string(&config.when_finished).expect("finish action serializes");
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO queues (id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
+             max_running = excluded.max_running, speed_limit = excluded.speed_limit, enabled = excluded.enabled, \
+             schedule = excluded.schedule, retry_failed = excluded.retry_failed, wake = excluded.wake, \
+             when_finished = excluded.when_finished",
+            params![
+                config.id.map(|id| id as i64),
+                config.name,
+                i64::from(config.max_running),
+                config.speed_limit as i64,
+                config.enabled,
+                schedule,
+                config.retry_failed,
+                config.wake,
+                when_finished,
+            ],
+        )?;
+        Ok(match config.id {
+            Some(id) => id,
+            None => conn.last_insert_rowid() as u64,
+        })
+    }
+
+    /// Deletes a queue and moves its jobs to the Main queue. The Main queue cannot be deleted.
+    pub fn delete_queue(&self, id: u64) -> Result<(), EngineError> {
+        if id == 1 {
+            return Err(EngineError::Db { msg: "the Main queue cannot be deleted".into() });
+        }
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        tx.execute("UPDATE jobs SET queue_id = 1 WHERE queue_id = ?1", [id as i64])?;
+        tx.execute("DELETE FROM queues WHERE id = ?1", [id as i64])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn set_held(&self, id: u64, held: bool) -> Result<(), EngineError> {
+        self.lock()?.execute("UPDATE queues SET held = ?1 WHERE id = ?2", params![held, id as i64])?;
+        Ok(())
+    }
+
     fn lock(&self) -> Result<MutexGuard<'_, Connection>, EngineError> {
         self.conn.lock().map_err(|_| EngineError::Db { msg: "connection mutex poisoned".into() })
     }
@@ -339,7 +422,12 @@ fn job_from_row(row: &Row) -> rusqlite::Result<Job> {
         dir: row.get::<_, Option<String>>("dir")?.map(PathBuf::from),
         fixed_name: row.get::<_, i64>("fixed_name")? != 0,
         sha256: row.get("sha256")?,
+        queue_id: row.get::<_, i64>("queue_id")? as u64,
     })
+}
+
+fn json_column<T: serde::de::DeserializeOwned>(text: &str, idx: usize) -> rusqlite::Result<T> {
+    serde_json::from_str(text).map_err(|e| rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e)))
 }
 
 #[cfg(test)]
@@ -367,6 +455,7 @@ mod tests {
     }
 
     use super::*;
+    use crate::queue::{FinishAction, QueueSchedule, Repeat};
 
     fn sample(part: &Path, state: JobState) -> Job {
         Job {
@@ -388,6 +477,21 @@ mod tests {
             dir: None,
             fixed_name: false,
             sha256: None,
+            queue_id: 1,
+        }
+    }
+
+    fn sample_queue(name: &str) -> QueueConfig {
+        QueueConfig {
+            id: None,
+            name: name.into(),
+            max_running: 2,
+            speed_limit: 0,
+            enabled: true,
+            schedule: None,
+            retry_failed: false,
+            wake: false,
+            when_finished: FinishAction::Nothing,
         }
     }
 
@@ -634,5 +738,81 @@ mod tests {
 
         store.forget_host("a.example").unwrap();
         assert!(store.hosts().unwrap().is_empty());
+    }
+
+    #[test]
+    fn main_queue_exists_after_migration() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let (main, held) = &store.queues().unwrap()[0];
+        assert_eq!(main.id, Some(1));
+        assert_eq!(main.name, "Main queue");
+        assert!(!held);
+    }
+
+    #[test]
+    fn queue_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = QueueConfig {
+            schedule: Some(QueueSchedule {
+                repeat: Repeat::Days { mask: 0b0011111 },
+                start_min: 120,
+                stop_min: Some(450),
+                wifi: true,
+                power: false,
+                idle: false,
+            }),
+            wake: true,
+            retry_failed: true,
+            when_finished: FinishAction::Command { command: "echo hi".into() },
+            ..sample_queue("Nightly")
+        };
+        let store = Store::open(dir.path()).unwrap();
+        let id = store.save_queue(&config).unwrap();
+        store.set_held(id, true).unwrap();
+        drop(store);
+
+        let store = Store::open(dir.path()).unwrap();
+        let queues = store.queues().unwrap();
+        let (got, held) = queues.iter().find(|(q, _)| q.id == Some(id)).unwrap();
+        assert_eq!(got, &QueueConfig { id: Some(id), ..config });
+        assert!(held);
+    }
+
+    #[test]
+    fn jobs_default_to_main() {
+        let dir = tempfile::tempdir().unwrap();
+        // The schema before the queues migrations, with a job row written the way old builds wrote it.
+        let conn = Connection::open(dir.path().join("queue.db")).unwrap();
+        for sql in &MIGRATIONS[..8] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO jobs (url, name, part_path, done, resumable, state, position, created_at, updated_at) \
+             VALUES ('https://example.com/f.bin', 'f.bin', '/p', 0, 1, 'paused', 0, 0, 0)",
+            [],
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 8).unwrap();
+        drop(conn);
+
+        let store = Store::open(dir.path()).unwrap();
+        assert_eq!(store.load_all().unwrap()[0].queue_id, 1);
+    }
+
+    #[test]
+    fn delete_moves_jobs_to_main() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let id = store.save_queue(&sample_queue("Side")).unwrap();
+        assert_eq!(id, 2);
+        let mut job = sample(&dir.path().join("q.part"), JobState::Paused);
+        job.queue_id = id;
+        store.insert(&mut job).unwrap();
+
+        store.delete_queue(id).unwrap();
+
+        assert_eq!(store.load_all().unwrap()[0].queue_id, 1);
+        assert!(store.delete_queue(1).is_err());
     }
 }
