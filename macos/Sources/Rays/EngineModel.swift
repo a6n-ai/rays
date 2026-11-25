@@ -813,9 +813,12 @@ enum SpeedFormat {
     }
 
     static func ago(_ at: Int64) -> String {
+        let now = Date()
+        let then = min(Date(timeIntervalSince1970: TimeInterval(at)), now)
+        if now.timeIntervalSince(then) < 60 { return "just now" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: Date(timeIntervalSince1970: TimeInterval(at)), relativeTo: Date())
+        return formatter.localizedString(for: then, relativeTo: now)
     }
 }
 

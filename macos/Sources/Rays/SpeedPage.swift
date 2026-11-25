@@ -209,9 +209,9 @@ private struct LiveChart: View {
                 LineMark(x: .value("Seconds", x), y: .value("Mb/s", y)).foregroundStyle(Color.teal)
             }
         }
+        .chartYAxis { AxisMarks(values: .automatic(desiredCount: 3)) }
         .chartXAxisLabel("seconds")
-        .chartYAxisLabel("Mb/s")
-        .frame(height: 100)
+        .frame(height: 120)
         .accessibilityLabel("Speed over the test")
     }
 }
