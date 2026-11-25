@@ -13,7 +13,10 @@ final class EngineModel {
     private(set) var generation = 0
     private(set) var buckets: [BucketConfig] = []
     private(set) var hasHFToken = false
+    private(set) var queues: [QueueView] = []
+    var onQueueFinished: ((UInt64) -> Void)?
     @ObservationIgnored private var engine: Engine?
+    @ObservationIgnored private var conditions: ConditionsMonitor?
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let files = FileTracker(storeURL: FileManager.default.homeDirectoryForCurrentUser
         .appending(path: "Library/Application Support/Rays/bookmarks.plist"))
@@ -60,15 +63,23 @@ final class EngineModel {
             jobs = engine.snapshot()
             jobs.forEach(track)
             buckets = engine.buckets()
+            queues = engine.queues()
+            conditions = ConditionsMonitor { wifi, onPower, idle in
+                engine.setConditions(wifi: wifi, onPower: onPower, idle: idle)
+            }
+            conditions?.start()
         } catch {
             startError = error.localizedDescription
         }
     }
 
     func restart() {
+        conditions?.stop()
+        conditions = nil
         engine?.shutdown()
         engine = nil
         jobs = []
+        queues = []
         startError = nil
         generation += 1
         start()
@@ -86,14 +97,15 @@ final class EngineModel {
         }
     }
 
-    func add(_ text: String) {
+    func add(_ text: String, queue: UInt64? = nil) {
         let urls = Links.inText(text)
         guard let engine else { return }
         guard !urls.isEmpty else {
             notice = "No link found. Links start with http://, https:// or s3://."
             return
         }
-        let rejected = engine.add(urls: urls).filter { $0.id == nil }
+        let results = engine.addTo(urls: urls, dir: nil, names: Array(repeating: nil, count: urls.count), queue: queue)
+        let rejected = results.filter { $0.id == nil }
         notice = rejected.isEmpty
             ? nil
             : rejected.map { "Not added: \($0.url) (\($0.error ?? "unknown error"))" }.joined(separator: "\n")
@@ -208,16 +220,37 @@ final class EngineModel {
     }
 
     /// The engine call can block on disk, so it runs off the main actor.
-    func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) async throws -> [HfAdd] {
+    func addModel(repo: String, sha: String, files: [HfFile], to dir: URL, queue: UInt64? = nil) async throws -> [HfAdd] {
         let engine = try runningEngine
         let destDir = dir.path(percentEncoded: false)
-        return await Task.detached { engine.addHf(repo: repo, sha: sha, files: files, destDir: destDir, queue: nil) }.value
+        return await Task.detached { engine.addHf(repo: repo, sha: sha, files: files, destDir: destDir, queue: queue) }.value
     }
 
     func setHFToken(_ token: String?) throws {
         try runningEngine.setHfToken(token: token)
         hasHFToken = engine?.hasHfToken() ?? false
     }
+
+    func saveQueue(_ config: QueueConfig) throws -> UInt64 {
+        let engine = try runningEngine
+        let id = try engine.saveQueue(config: config)
+        queues = engine.queues()
+        return id
+    }
+
+    func deleteQueue(_ id: UInt64) throws {
+        let engine = try runningEngine
+        try engine.deleteQueue(id: id)
+        queues = engine.queues()
+    }
+
+    func moveToQueue(job: UInt64, queue: UInt64) { engine?.moveToQueue(job: job, queue: queue) }
+
+    func startQueue(_ id: UInt64) { engine?.startQueue(id: id) }
+
+    func stopQueue(_ id: UInt64) { engine?.stopQueue(id: id) }
+
+    func runQueueNow(_ id: UInt64) { engine?.runQueueNow(id: id) }
 
     /// nil resets to the user's Downloads folder. The engine is asked first, so a failure saves nothing.
     func setDownloadsDir(_ url: URL?) throws {
@@ -338,7 +371,10 @@ final class EngineModel {
         jobs.filter { !$0.resumable && $0.isActive }
     }
 
-    func shutdown() { engine?.shutdown() }
+    func shutdown() {
+        conditions?.stop()
+        engine?.shutdown()
+    }
 
     private func apply(_ event: JobEvent) {
         switch event {
@@ -352,8 +388,14 @@ final class EngineModel {
         case .removed(let id):
             files.forget(id)
             jobs.removeAll { $0.id == id }
-        case .queueChanged, .queueFinished:
-            break
+        case .queueChanged(let queue):
+            if let index = queues.firstIndex(where: { $0.config.id == queue.config.id }) {
+                queues[index] = queue
+            } else {
+                queues.append(queue)
+            }
+        case .queueFinished(let id):
+            onQueueFinished?(id)
         }
     }
 }
