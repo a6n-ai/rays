@@ -42,9 +42,7 @@ struct ContentView: View {
                     case .sorter?: lastFolder = "sorter"
                     case .cloud?: lastFolder = "cloud"
                     case .models?: lastFolder = "models"
-                    case .schedules?:
-                    SchedulesPage(isDropTargeted: isDropTargeted, drafts: drafts)
-                case .queues?: lastFolder = "queues"
+                    case .queues?: lastFolder = "queues"
                     case .schedules?: lastFolder = "schedules"
                     default: lastFolder = ""
                     }
@@ -95,6 +93,8 @@ struct ContentView: View {
                     CloudView()
                 case .models?:
                     ModelsView()
+                case .schedules?:
+                    SchedulesPage(isDropTargeted: isDropTargeted, drafts: drafts)
                 case .queues?:
                     QueuesPage(isDropTargeted: isDropTargeted, drafts: drafts)
                 default:
