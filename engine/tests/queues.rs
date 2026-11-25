@@ -5,7 +5,7 @@ use dl_engine::queue::{FinishAction, QueueConfig, QueueSchedule, Repeat};
 use dl_engine::s3::MemorySecrets;
 use dl_engine::scheduler::Scheduler;
 use dl_engine::store::Store;
-use dl_engine::types::{JobId, JobState, JobView};
+use dl_engine::types::{JobId, JobState, JobView, QueueRun, RunOutcome};
 use dl_engine::{Engine, EngineConfig};
 use jiff::civil::{DateTime, date};
 use std::io::{BufRead, BufReader, Write};
@@ -456,4 +456,101 @@ fn ipc_add_with_queue() {
     assert_eq!(jobs.iter().find(|j| j.id == id).unwrap().queue_id, 2);
     assert_eq!(jobs.iter().find(|j| j.id == old).unwrap().queue_id, 1);
     engine.shutdown();
+}
+
+fn runs(sched: &Scheduler) -> Vec<QueueRun> {
+    sched.queue_runs(50)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_recorded_on_finish() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let q = r.sched.save_queue(&queue("Pair", 0, 0)).unwrap();
+    let ids: Vec<_> = ["a", "b"].iter().map(|t| add(&r.sched, &base, t, 64, Some(q))).collect();
+    for id in ids {
+        wait_for(&r.sched, id, is_done).await;
+    }
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let all = runs(&r.sched);
+    assert_eq!(all.len(), 1);
+    let run = &all[0];
+    assert_eq!((run.queue_id, run.outcome.clone(), run.files_done), (q, RunOutcome::Finished, 2));
+    assert!(run.bytes_done >= 2 * 64 * 1024, "{}", run.bytes_done);
+    assert!(run.ended_at.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn window_close_records_windowclosed() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let clock = Arc::new(Mutex::new(date(2026, 11, 25).at(10, 30, 0, 0)));
+    let shared = clock.clone();
+    r.sched.set_clock(Arc::new(move || -> DateTime { *shared.lock().unwrap() }));
+    let mut cfg = queue("Night", 0, 0);
+    cfg.schedule = Some(QueueSchedule { repeat: Repeat::Daily, start_min: 600, stop_min: Some(660), wifi: false, power: false, idle: false });
+    let q = r.sched.save_queue(&cfg).unwrap();
+    let id = add(&r.sched, &base, "n", 2048, Some(q));
+    wait_for(&r.sched, id, |v| busy(v) && v.done > 0).await;
+    assert_eq!(runs(&r.sched)[0].outcome, RunOutcome::Running);
+
+    *clock.lock().unwrap() = date(2026, 11, 25).at(11, 30, 0, 0);
+    r.sched.tick();
+    wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let all = runs(&r.sched);
+    assert_eq!((all.len(), all[0].outcome.clone()), (1, RunOutcome::WindowClosed));
+    assert!(all[0].ended_at.is_some());
+
+    *clock.lock().unwrap() = date(2026, 11, 26).at(10, 15, 0, 0);
+    r.sched.tick();
+    wait_for(&r.sched, id, is_done).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let all = runs(&r.sched);
+    assert_eq!((all.len(), all[0].outcome.clone(), all[0].files_done), (2, RunOutcome::Finished, 1));
+    assert_eq!(all[1].outcome, RunOutcome::WindowClosed);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stop_queue_records_stopped_by_user() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let q = r.sched.save_queue(&queue("Side", 0, 0)).unwrap();
+    let id = add(&r.sched, &base, "big", 2048, Some(q));
+    wait_for(&r.sched, id, |v| busy(v) && v.done > 0).await;
+    r.sched.stop_queue(q);
+    wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
+    let all = runs(&r.sched);
+    assert_eq!((all.len(), all[0].outcome.clone()), (1, RunOutcome::StoppedByUser));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn open_run_closed_as_app_quit_on_restart() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let first = rig(dir.path(), 2);
+    let q = first.sched.save_queue(&queue("Side", 0, 0)).unwrap();
+    let id = add(&first.sched, &base, "big", 2048, Some(q));
+    wait_for(&first.sched, id, |v| busy(v) && v.done > 0).await;
+    first.sched.shutdown();
+    drop(first);
+
+    let second = rig(dir.path(), 2);
+    let all = runs(&second.sched);
+    assert_eq!((all.len(), all[0].outcome.clone()), (1, RunOutcome::AppQuit));
+    assert!(all[0].ended_at.is_some());
+}
+
+#[test]
+fn runs_pruned_to_200() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    let ids: Vec<u64> = (0..205).map(|i| store.open_run(1, i).unwrap()).collect();
+    let kept = store.runs(1000).unwrap();
+    assert_eq!(kept.len(), 200);
+    assert_eq!(kept[0].id, ids[204], "newest first");
+    assert_eq!(kept[199].id, ids[5]);
 }

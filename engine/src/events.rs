@@ -18,6 +18,8 @@ pub struct Changes {
     pub queues: Vec<u64>,
     /// Queues whose run ended, once per run.
     pub finished: Vec<u64>,
+    /// Queue runs opened, closed or counted.
+    pub runs: Vec<u64>,
 }
 
 #[derive(Default)]
@@ -26,6 +28,7 @@ struct State {
     removed: BTreeSet<JobId>,
     queues: BTreeSet<u64>,
     finished: Vec<u64>,
+    runs: BTreeSet<u64>,
     urgent: bool,
     last_delivery: Option<Instant>,
 }
@@ -93,12 +96,20 @@ impl EventHub {
         }
         self.notify.notify_one();
     }
+    pub fn run_changed(&self, id: u64) {
+        {
+            let mut s = self.lock();
+            s.runs.insert(id);
+            s.urgent = true;
+        }
+        self.notify.notify_one();
+    }
     /// Waits until something is pending, then drains it. Ids are sorted and de-duplicated.
     pub async fn wait(&self) -> Changes {
         loop {
             let hold_until = {
                 let mut s = self.lock();
-                let pending = !s.changed.is_empty() || !s.removed.is_empty() || !s.queues.is_empty() || !s.finished.is_empty();
+                let pending = !s.changed.is_empty() || !s.removed.is_empty() || !s.queues.is_empty() || !s.finished.is_empty() || !s.runs.is_empty();
                 if !pending {
                     None
                 } else {
@@ -128,6 +139,7 @@ impl EventHub {
             removed: std::mem::take(&mut s.removed).into_iter().collect(),
             queues: std::mem::take(&mut s.queues).into_iter().collect(),
             finished: std::mem::take(&mut s.finished),
+            runs: std::mem::take(&mut s.runs).into_iter().collect(),
         }
     }
 }

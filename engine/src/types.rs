@@ -106,6 +106,32 @@ pub enum JobEvent {
     QueueChanged { queue: QueueView },
     /// A run of the queue ended: nothing is left queued, running or paused in it.
     QueueFinished { id: u64 },
+    /// A queue run opened, closed, or (while running) has new counts; at most every 5 s while running.
+    RunChanged { run: QueueRun },
+}
+
+#[derive(uniffi::Enum, Clone, Debug, PartialEq, Eq)]
+pub enum RunOutcome {
+    Running,
+    /// Nothing was left in the queue.
+    Finished,
+    /// The window closed with work left.
+    WindowClosed,
+    StoppedByUser,
+    /// Found open at the next engine start.
+    AppQuit,
+}
+
+/// One run of a queue: from its first job starting until it finished, closed, was stopped or the app quit.
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct QueueRun {
+    pub id: u64,
+    pub queue_id: u64,
+    pub started_at: i64,
+    pub ended_at: Option<i64>,
+    pub files_done: u32,
+    pub bytes_done: u64,
+    pub outcome: RunOutcome,
 }
 
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]

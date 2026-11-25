@@ -1,7 +1,7 @@
 //! SQLite persistence (`<data_dir>/queue.db`, WAL). Uses the system libsqlite3.
 use crate::queue::QueueConfig;
 use crate::s3::BucketConfig;
-use crate::types::{EngineError, HostView, Job, JobId, JobState, Segment, now_secs};
+use crate::types::{EngineError, HostView, Job, JobId, JobState, QueueRun, RunOutcome, Segment, now_secs};
 use rusqlite::{Connection, OptionalExtension, Row, named_params, params};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -37,6 +37,8 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "INSERT INTO queues (id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished, held) \
      VALUES (1, 'Main queue', 0, 0, 1, 'null', 0, 0, '\"Nothing\"', 0)",
     "ALTER TABLE jobs ADD COLUMN queue_id INTEGER NOT NULL DEFAULT 1",
+    "CREATE TABLE queue_runs(id INTEGER PRIMARY KEY, queue_id INTEGER NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
+     files_done INTEGER NOT NULL DEFAULT 0, bytes_done INTEGER NOT NULL DEFAULT 0, outcome TEXT NOT NULL)",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
@@ -354,9 +356,81 @@ impl Store {
         Ok(())
     }
 
+    /// Starts a Running run and keeps only the newest `MAX_RUNS`.
+    pub fn open_run(&self, queue_id: u64, started_at: i64) -> Result<u64, EngineError> {
+        let conn = self.lock()?;
+        conn.execute("INSERT INTO queue_runs (queue_id, started_at, outcome) VALUES (?1, ?2, 'running')", params![queue_id as i64, started_at])?;
+        let id = conn.last_insert_rowid();
+        conn.execute("DELETE FROM queue_runs WHERE id <= ?1", [id - MAX_RUNS])?;
+        Ok(id as u64)
+    }
+
+    /// Saves a run's counts; `ended` closes it with that time and outcome.
+    pub fn update_run(&self, id: u64, files_done: u32, bytes_done: u64, ended: Option<(i64, RunOutcome)>) -> Result<(), EngineError> {
+        let conn = self.lock()?;
+        match ended {
+            None => conn.execute("UPDATE queue_runs SET files_done = ?1, bytes_done = ?2 WHERE id = ?3", params![files_done, bytes_done as i64, id as i64])?,
+            Some((at, outcome)) => conn.execute(
+                "UPDATE queue_runs SET files_done = ?1, bytes_done = ?2, ended_at = ?3, outcome = ?4 WHERE id = ?5",
+                params![files_done, bytes_done as i64, at, outcome_text(&outcome), id as i64],
+            )?,
+        };
+        Ok(())
+    }
+
+    /// Runs left open by a previous engine process end as AppQuit.
+    pub fn close_open_runs(&self, at: i64) -> Result<(), EngineError> {
+        self.lock()?.execute("UPDATE queue_runs SET ended_at = ?1, outcome = 'app_quit' WHERE outcome = 'running'", [at])?;
+        Ok(())
+    }
+
+    pub fn run(&self, id: u64) -> Result<Option<QueueRun>, EngineError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(&format!("SELECT {RUN_COLUMNS} FROM queue_runs WHERE id = ?1"))?;
+        Ok(stmt.query_map([id as i64], run_from_row)?.next().transpose()?)
+    }
+
+    /// Newest first.
+    pub fn runs(&self, limit: u32) -> Result<Vec<QueueRun>, EngineError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(&format!("SELECT {RUN_COLUMNS} FROM queue_runs ORDER BY id DESC LIMIT ?1"))?;
+        Ok(stmt.query_map([limit], run_from_row)?.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     fn lock(&self) -> Result<MutexGuard<'_, Connection>, EngineError> {
         self.conn.lock().map_err(|_| EngineError::Db { msg: "connection mutex poisoned".into() })
     }
+}
+
+const MAX_RUNS: i64 = 200;
+const RUN_COLUMNS: &str = "id, queue_id, started_at, ended_at, files_done, bytes_done, outcome";
+
+fn outcome_text(o: &RunOutcome) -> &'static str {
+    match o {
+        RunOutcome::Running => "running",
+        RunOutcome::Finished => "finished",
+        RunOutcome::WindowClosed => "window_closed",
+        RunOutcome::StoppedByUser => "stopped_by_user",
+        RunOutcome::AppQuit => "app_quit",
+    }
+}
+
+fn run_from_row(r: &rusqlite::Row) -> rusqlite::Result<QueueRun> {
+    Ok(QueueRun {
+        id: r.get::<_, i64>(0)? as u64,
+        queue_id: r.get::<_, i64>(1)? as u64,
+        started_at: r.get(2)?,
+        ended_at: r.get(3)?,
+        files_done: r.get(4)?,
+        bytes_done: r.get::<_, i64>(5)? as u64,
+        outcome: match r.get::<_, String>(6)?.as_str() {
+            "finished" => RunOutcome::Finished,
+            "window_closed" => RunOutcome::WindowClosed,
+            "stopped_by_user" => RunOutcome::StoppedByUser,
+            "app_quit" => RunOutcome::AppQuit,
+            _ => RunOutcome::Running,
+        },
+    })
 }
 
 /// Returns the `state` column and the `error` column for `state`.

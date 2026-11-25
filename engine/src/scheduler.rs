@@ -8,7 +8,7 @@ use crate::cloud;
 use crate::queue::{self, QueueConfig, Repeat};
 use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
-use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, QueueState, QueueView, now_secs};
+use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, QueueRun, QueueState, QueueView, RunOutcome, now_secs};
 use jiff::civil::DateTime;
 use jiff::ToSpan;
 use std::collections::{HashMap, HashSet};
@@ -33,6 +33,17 @@ pub type Clock = Arc<dyn Fn() -> DateTime + Send + Sync>;
 /// Wi-Fi, on power, idle: what the app last reported. All false until it reports.
 type Conditions = (bool, bool, bool);
 
+/// The open run of a queue; the store row is kept in step.
+struct RunRt {
+    id: u64,
+    files: u32,
+    bytes: u64,
+    last_emit: Instant,
+}
+
+/// Running counts reach the app at most this often.
+const RUN_EMIT: Duration = Duration::from_secs(5);
+
 /// A queue's config and what the engine tracks about its current run, in memory.
 struct QueueRt {
     config: QueueConfig,
@@ -44,6 +55,7 @@ struct QueueRt {
     run_now: bool,
     /// A job started since the last finish; a run that started nothing never finishes.
     started_any: bool,
+    run: Option<RunRt>,
     /// The pure window was open at the last evaluation.
     was_open: bool,
     /// A window without a stop stays open until its run finishes, even past midnight.
@@ -71,6 +83,7 @@ impl QueueRt {
             held,
             run_now: false,
             started_any: false,
+            run: None,
             was_open,
             latched,
             spent: false,
@@ -191,6 +204,7 @@ impl Scheduler {
         hf_secrets: Arc<dyn Secrets>,
         hf_base: String,
     ) -> Result<Arc<Scheduler>, EngineError> {
+        store.close_open_runs(now_secs())?;
         let mut loaded = Vec::new();
         {
             // Jobs of a scheduled queue that were waiting or running stay Queued, so its window decides; the rest reload Paused.
@@ -823,6 +837,12 @@ impl Scheduler {
         };
         if let Some(rt) = lock(&self.queues).get_mut(&queue_id) {
             rt.started_any = true;
+            if rt.run.is_none()
+                && let Ok(run) = self.store.open_run(queue_id, now_secs())
+            {
+                rt.run = Some(RunRt { id: run, files: 0, bytes: 0, last_emit: Instant::now() });
+                self.hub.run_changed(run);
+            }
         }
         let (tx, rx) = watch::channel(false);
         *lock(&live.cancel) = tx;
@@ -852,6 +872,13 @@ impl Scheduler {
                     }
                 }
                 let _ = self.store.save(&job);
+                if matches!(job.state, JobState::Done { .. })
+                    && let Some(run) = lock(&self.queues).get_mut(&job.queue_id).and_then(|rt| rt.run.as_mut())
+                {
+                    run.files += 1;
+                    run.bytes += job.total.unwrap_or(job.done);
+                    let _ = self.store.update_run(run.id, run.files, run.bytes, None);
+                }
             }
             self.hub.state_changed(id);
         }
@@ -1041,6 +1068,7 @@ impl Scheduler {
             rt.run_now = false;
             rt.latched = false;
             let _ = self.store.set_held(id, true);
+            self.close_run(rt, RunOutcome::StoppedByUser);
         }
         self.refresh();
     }
@@ -1161,6 +1189,7 @@ impl Scheduler {
         self.pump();
         let counts = self.counts();
         let finished = self.end_runs(&counts);
+        self.close_or_report_runs(cond, now);
         let mut changed = Vec::new();
         {
             let mut queues = lock(&self.queues);
@@ -1257,9 +1286,43 @@ impl Scheduler {
             if matches!(rt.config.schedule.as_ref().map(|s| &s.repeat), Some(Repeat::Once { .. })) {
                 self.disable(rt);
             }
+            self.close_run(rt, RunOutcome::Finished);
             finished.push(*id);
         }
         finished
+    }
+
+    /// Ends the queue's open run; the next job to start opens a new one.
+    fn close_run(&self, rt: &mut QueueRt, outcome: RunOutcome) {
+        rt.started_any = false;
+        if let Some(run) = rt.run.take() {
+            let _ = self.store.update_run(run.id, run.files, run.bytes, Some((now_secs(), outcome)));
+            self.hub.run_changed(run.id);
+        }
+    }
+
+    /// A run whose queue closed with work left ends; a run still open reports its counts every `RUN_EMIT`.
+    fn close_or_report_runs(&self, cond: Conditions, now: DateTime) {
+        let mut queues = lock(&self.queues);
+        for rt in queues.values_mut() {
+            if rt.run.is_none() {
+                continue;
+            }
+            if rt.gate(cond, now) != QueueState::Open {
+                self.close_run(rt, RunOutcome::WindowClosed);
+            } else if let Some(run) = rt.run.as_mut().filter(|r| r.last_emit.elapsed() >= RUN_EMIT) {
+                run.last_emit = Instant::now();
+                self.hub.run_changed(run.id);
+            }
+        }
+    }
+
+    pub fn queue_runs(&self, limit: u32) -> Vec<QueueRun> {
+        self.store.runs(limit).unwrap_or_default()
+    }
+
+    pub fn run(&self, id: u64) -> Option<QueueRun> {
+        self.store.run(id).ok().flatten()
     }
 }
 

@@ -6,7 +6,7 @@ use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
 use crate::store::Store;
 use crate::queue::QueueConfig;
-use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView, QueueView};
+use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView, QueueRun, QueueView};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -76,6 +76,11 @@ impl Engine {
 
     pub fn move_to_queue(&self, job: JobId, queue: u64) {
         self.sched.move_to_queue(job, queue);
+    }
+
+    /// Queue runs, newest first.
+    pub fn queue_runs(&self, limit: u32) -> Vec<QueueRun> {
+        self.sched.queue_runs(limit)
     }
 
     pub fn stop_queue(&self, id: u64) {
@@ -164,6 +169,7 @@ impl Engine {
         events.extend(changes.removed.into_iter().map(|id| JobEvent::Removed { id }));
         events.extend(changes.queues.into_iter().filter_map(|id| self.sched.queue_view(id)).map(|queue| JobEvent::QueueChanged { queue }));
         events.extend(changes.finished.into_iter().map(|id| JobEvent::QueueFinished { id }));
+        events.extend(changes.runs.into_iter().filter_map(|id| self.sched.run(id)).map(|run| JobEvent::RunChanged { run }));
         events
     }
 

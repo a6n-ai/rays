@@ -419,6 +419,8 @@ final class EngineModel {
             syncWake(queue)
         case .queueFinished(let id):
             onQueueFinished?(id)
+        case .runChanged:
+            break
         }
     }
 }
