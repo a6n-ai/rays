@@ -165,3 +165,29 @@ img {
 .slide:focus-visible::after {
 	transform: scaleX(1);
 }
+
+/* Touch: every link and control keeps a 44px hit area; the underline sits at the bottom of the taller box. */
+@media (max-width: 899px), (pointer: coarse) {
+	.slide {
+		min-height: 44px;
+	}
+	.slide::after {
+		bottom: 10px;
+	}
+}
+
+/* Section headings on the home page: the heading carries the section, no label above it. */
+.sec-title {
+	margin: 0;
+	max-width: 22ch;
+	color: var(--ink);
+	font: 500 clamp(1.625rem, 2.8vw, 2.25rem) / 1.12 var(--font-display);
+	letter-spacing: -0.03em;
+	text-wrap: balance;
+	scroll-margin-top: 16px;
+}
+.sec-title.big {
+	max-width: none;
+	font-size: clamp(1.75rem, 3.4vw, 3rem);
+	line-height: 1.1;
+}

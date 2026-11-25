@@ -6,7 +6,7 @@ const SUBJECT = 'Subscribe to Rays updates';
 ---
 
 <section class="news" aria-labelledby="news-title">
-	<h2 id="news-title">Updates</h2>
+	<h2 id="news-title" class="sec-title">Release emails</h2>
 	<p>Get an email when a new version of Rays is out.</p>
 	<form class="form" data-newsletter toolname="subscribe_to_rays_updates" tooldescription="Ask to receive an email when a new version of Rays is out. Opens the visitor's mail app with a message to hi@a6n.ai." action={`mailto:${TO}?subject=${encodeURIComponent(SUBJECT)}`} method="post" enctype="text/plain">
 		<label class="sr-only" for="news-email">Email address</label>
@@ -35,12 +35,7 @@ const SUBJECT = 'Subscribe to Rays updates';
 	.news {
 		display: grid;
 		gap: 12px;
-		padding-block: 40px;
-	}
-	h2 {
-		margin: 0;
-		color: var(--muted);
-		font: 400 var(--t-label) / 1.4 var(--font-text);
+		padding-block: 48px 36px;
 	}
 	p {
 		margin: 0;
@@ -90,6 +85,11 @@ const SUBJECT = 'Subscribe to Rays updates';
 	}
 	button:active {
 		transform: scale(0.97);
+	}
+	@media (max-width: 899px), (pointer: coarse) {
+		button {
+			min-height: 44px;
+		}
 	}
 	.hint {
 		color: var(--muted);

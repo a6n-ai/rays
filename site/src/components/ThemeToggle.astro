@@ -49,19 +49,25 @@
 		width: 32px;
 		height: 32px;
 		padding: 0;
-		border: 1px solid var(--line);
+		border: 1px solid var(--line, var(--sl-color-gray-5));
 		border-radius: 999px;
 		background: transparent;
-		color: var(--muted);
+		color: var(--muted, var(--sl-color-gray-3));
 		cursor: pointer;
-		transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out), transform 160ms var(--ease-out);
+		transition: color 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 	.theme:hover {
-		color: var(--ink);
-		background: var(--faint);
+		color: var(--ink, var(--sl-color-white));
+		background: var(--faint, var(--sl-color-gray-6));
 	}
 	.theme:active {
 		transform: scale(0.94);
+	}
+	@media (max-width: 899px), (pointer: coarse) {
+		.theme {
+			width: 44px;
+			height: 44px;
+		}
 	}
 	.i {
 		display: none;

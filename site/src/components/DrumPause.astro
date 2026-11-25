@@ -36,12 +36,17 @@
 		color: var(--muted);
 		fill: currentColor;
 		cursor: pointer;
-		align-self: center;
 		transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out);
 	}
 	.pause:hover {
 		color: var(--ink);
 		background: var(--faint);
+	}
+	@media (max-width: 899px), (pointer: coarse) {
+		.pause {
+			width: 44px;
+			height: 44px;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.pause {

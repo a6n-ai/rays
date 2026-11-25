@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import ThemeToggle from './ThemeToggle.astro';
 import icon from '../assets/icon.png';
+import { NAV } from './nav-links';
 
 interface Props {
 	current?: 'features';
@@ -14,12 +15,9 @@ const { current } = Astro.props;
 	<span>Rays</span>
 	<span class="by">by <a class="slide" href="https://a6n.ai">a6n</a></span>
 	<nav class="top" aria-label="Site">
-		<a class="slide" href="/docs/">Docs</a>
-		<a class="slide" href="/features/" aria-current={current === 'features' ? 'page' : undefined}>Features</a>
-		<a class="slide wide" href="/docs/app/browser/">Extension</a>
-		<a class="slide" href="/releases/">Release notes</a>
-		<ThemeToggle />
+		{NAV.map((l) => <a class="slide" href={l.href} aria-current={current === 'features' && l.href === '/features/' ? 'page' : undefined}>{l.label}</a>)}
 	</nav>
+	<ThemeToggle />
 </header>
 
 <style>
@@ -37,6 +35,9 @@ const { current } = Astro.props;
 		gap: 18px;
 		margin-left: auto;
 		font: 400 var(--t-small) var(--font-text);
+	}
+	.mark > :global(.theme) {
+		margin-left: 8px;
 	}
 	.top a,
 	.by {
@@ -76,12 +77,25 @@ const { current } = Astro.props;
 			padding-top: 8px;
 		}
 	}
+	/* Phones: the brand and the theme switch share the first row, the four links get the second, spread edge to edge. */
 	@media (max-width: 600px) {
-		.top .wide {
-			display: none;
+		.mark {
+			flex-wrap: wrap;
+			row-gap: 0;
+		}
+		.mark > :global(.theme) {
+			margin-left: auto;
+			order: 2;
 		}
 		.top {
-			gap: 12px;
+			order: 3;
+			flex: 0 0 100%;
+			justify-content: space-between;
+			gap: 0;
+			margin-left: 0;
+		}
+		.top a {
+			padding-inline: 4px;
 		}
 	}
 </style>
