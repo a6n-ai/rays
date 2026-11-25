@@ -59,82 +59,80 @@ struct SpeedPage: View {
 
 private struct SpeedOverview: View {
     @Environment(EngineModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var progress: SpeedProgress? { model.speedProgress }
 
-    /// Live rate while testing, else the last result.
-    private var mbps: Double {
-        if let progress { return Double(progress.bps) * 8 / 1_000_000 }
-        return model.lastTest.map { Double($0.bps) * 8 / 1_000_000 } ?? 0
-    }
-
-    private var scaleMax: Double {
-        let seen = ([mbps] + model.hourly.compactMap { $0 }.map { Double($0) * 8 / 1_000_000 }
-            + model.liveSamples.map { Double($0.bps) * 8 / 1_000_000 }).max() ?? 0
-        return max(100, 1.25 * seen)
-    }
-
-    private var phaseText: String {
-        guard let progress else { return model.lastTest == nil ? "No test yet" : "Last test" }
-        if progress.phase == .latency { return "Checking latency" }
-        return "Downloading \(progress.elapsedMs / 1000) s"
-    }
-
-    private var accessibility: String {
-        let base = "Speed test, \(Int(mbps.rounded())) megabits per second"
-        guard let progress else { return base }
-        let phase = progress.phase == .latency ? "checking latency" : "downloading"
-        return "\(base), \(phase), \(progress.elapsedMs / 1000) of \(progress.totalMs / 1000) seconds"
+    private var subtitle: String {
+        if let progress {
+            if progress.phase == .latency { return "Checking latency" }
+            var parts = ["Downloading", "\(progress.elapsedMs / 1000) of \(progress.totalMs / 1000) s"]
+            if progress.bps > 0 { parts.append(SpeedFormat.mbps(progress.bps)) }
+            return parts.joined(separator: " · ")
+        }
+        guard let test = model.lastTest else { return "Not tested yet" }
+        let network = network(of: test)?.title
+        return ([SpeedFormat.mbps(test.bps), "\(test.latencyMs) ms latency"] + [network].compactMap { $0 } + [SpeedFormat.ago(test.at)])
+            .joined(separator: " · ")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
-            VStack(spacing: 8) {
-                SpeedGauge(value: mbps, maxValue: scaleMax, phase: phaseText, animates: progress == nil && !reduceMotion)
-                    .frame(width: 240, height: 190)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(accessibility)
-                if let progress {
-                    ProgressView(value: Double(progress.elapsedMs), total: Double(max(progress.totalMs, 1)))
-                        .progressViewStyle(.linear)
-                        .tint(.teal)
-                        .frame(maxWidth: 320)
-                    if model.automaticTestRunning {
-                        Text("Automatic test").font(.caption).foregroundStyle(.secondary)
+            header
+            if let progress {
+                ProgressView(value: Double(progress.elapsedMs), total: Double(max(progress.totalMs, 1)))
+                    .progressViewStyle(.linear)
+                    .tint(.teal)
+                    .padding(.horizontal, LayoutMetrics.margin)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
+                    if let test = model.lastTest, !test.saved, progress == nil {
+                        Text("Downloads were running, so this result wasn't saved")
+                            .font(.callout)
+                            .foregroundStyle(.orange)
                     }
-                } else {
-                    details
+                    if let error = model.speedError { Text(error).font(.callout).foregroundStyle(.red) }
+                    if !model.liveSamples.isEmpty { LiveChart(samples: model.liveSamples) }
+                    Text("Best time").font(.headline).padding(.top, 4)
+                    recommendation
                 }
-                if let error = model.speedError {
-                    Text(error).font(.callout).foregroundStyle(.red)
+                .frame(maxWidth: 640, alignment: .leading)
+                .padding(.horizontal, LayoutMetrics.margin)
+                .padding(.bottom, LayoutMetrics.margin)
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: LayoutMetrics.gap) {
+            ModelTile(symbol: "gauge.with.dots.needle.67percent", color: .teal, size: 44)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Speed test").font(.title2.weight(.semibold))
+                Text(subtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                if model.automaticTestRunning {
+                    Text("Automatic test").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .frame(maxWidth: .infinity)
-            if !model.liveSamples.isEmpty { LiveChart(samples: model.liveSamples) }
-            Text("Best time").font(.headline).padding(.top, LayoutMetrics.gap)
-            recommendation
+            Spacer()
+            Button { model.testing ? model.cancelSpeedTest() : model.requestSpeedTest() } label: {
+                Label(model.testing ? "Stop" : "Run test", systemImage: model.testing ? "stop.circle" : "play.fill")
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            .disabled(model.automaticTestRunning)
         }
-        .formColumn()
+        .padding(.horizontal, LayoutMetrics.margin)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
     }
 
     /// The network the last test ran on, if its sample is still in the history.
     private func network(of test: SpeedTestResult) -> NetworkKind? {
         model.speedHistory.first { $0.source == .test && $0.at == test.at }?.network
-    }
-
-    @ViewBuilder private var details: some View {
-        if let test = model.lastTest {
-            Text(([ "\(test.latencyMs) ms latency" ] + [network(of: test)?.title].compactMap { $0 } + [SpeedFormat.ago(test.at)]).joined(separator: " · "))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-            if !test.saved {
-                Text("Downloads were running, so this result wasn't saved")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-        }
     }
 
     @ViewBuilder private var recommendation: some View {
@@ -154,45 +152,6 @@ private struct SpeedOverview: View {
         case nil:
             EmptyView()
         }
-    }
-}
-
-/// A 240 degree speedometer: a track and a teal-to-blue fill up to the current Mb/s.
-private struct SpeedGauge: View {
-    let value: Double
-    let maxValue: Double
-    let phase: String
-    let animates: Bool
-
-    private var fraction: Double { min(1, max(0, value / maxValue)) }
-
-    var body: some View {
-        ZStack {
-            GaugeArc().stroke(.quaternary, style: StrokeStyle(lineWidth: 16, lineCap: .round))
-            GaugeArc()
-                .trim(from: 0, to: fraction)
-                .stroke(AngularGradient(colors: [.teal, .blue], center: .center, startAngle: .degrees(150), endAngle: .degrees(390)),
-                        style: StrokeStyle(lineWidth: 16, lineCap: .round))
-                .animation(animates ? .smooth(duration: 0.4) : nil, value: fraction)
-            VStack(spacing: 0) {
-                Text(value >= 100 ? String(Int(value.rounded())) : String(format: "%.1f", value))
-                    .font(.system(size: 44, weight: .semibold))
-                    .monospacedDigit()
-                Text("Mb/s").font(.callout).foregroundStyle(.secondary)
-                Text(phase).font(.caption).foregroundStyle(.secondary).padding(.top, 6)
-            }
-        }
-        .padding(12)
-    }
-}
-
-private struct GaugeArc: Shape {
-    func path(in rect: CGRect) -> Path {
-        let radius = min(rect.width, rect.height) / 2
-        var path = Path()
-        path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: radius, startAngle: .degrees(150),
-                    endAngle: .degrees(390), clockwise: false)
-        return path
     }
 }
 
