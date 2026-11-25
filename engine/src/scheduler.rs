@@ -100,6 +100,7 @@ impl Scheduler {
                     job: Mutex::new(job),
                     connections: AtomicU32::new(0),
                     cancel: Mutex::new(watch::channel(false).0),
+                    started: download::next_seq(),
                 })
             })
             .collect();
@@ -431,6 +432,7 @@ impl Scheduler {
             job: Mutex::new(job),
             connections: AtomicU32::new(0),
             cancel: Mutex::new(watch::channel(false).0),
+            started: download::next_seq(),
         });
         {
             let mut jobs = lock(&self.jobs);

@@ -154,6 +154,9 @@ pub struct Live {
     pub connections: AtomicU32,
     /// Send `true` to stop the running download (pause/remove/shutdown); a fresh channel per run.
     pub cancel: Mutex<tokio::sync::watch::Sender<bool>>,
+    /// Order of this job's creation (`download::next_seq`), kept in memory only. A replace trashes a file only
+    /// if it was produced before this, so a paused job that resumes later still keeps the file it raced.
+    pub started: u64,
 }
 
 /// How one run of `download::run` ended.

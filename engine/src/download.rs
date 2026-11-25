@@ -123,8 +123,13 @@ pub(crate) fn trash_file(path: &Path) -> io::Result<()> {
 /// Every final path this process has produced, with when it was produced. A replacing finish trashes one of
 /// these only if its job started after that, so a job still racing the producer keeps both files.
 static PRODUCED: Mutex<BTreeMap<PathBuf, u64>> = Mutex::new(BTreeMap::new());
-/// Orders job starts and productions: a larger number is later.
+/// Orders job creations and productions: a larger number is later.
 static SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// The next number in the order that `Live::started` and `PRODUCED` share.
+pub fn next_seq() -> u64 {
+    SEQ.fetch_add(1, Ordering::Relaxed)
+}
 const PRODUCED_CAP: usize = 1000;
 
 /// Runs until the file is complete, `cancel` turns true (-> `Outcome::Paused`), or it fails for good.
@@ -150,6 +155,7 @@ pub async fn run(
         return Outcome::Failed(format!("create {}: {e}", dir.display()));
     }
     let env = Env {
+        started: live.started,
         live,
         client,
         dir,
@@ -164,7 +170,6 @@ pub async fn run(
         hf: opts.hf,
         retry_hint: Arc::new(AtomicU64::new(0)),
         dirty: Arc::new(AtomicBool::new(false)),
-        started: SEQ.fetch_add(1, Ordering::Relaxed),
     };
     // Failed tries in a row; equals the retry number while waiting (1..=5).
     let mut attempt: u8 = 0;
@@ -256,7 +261,7 @@ struct Env {
     retry_hint: Arc<AtomicU64>,
     /// Set by a retry, a 503 or a connection failure; a run that set it keeps the remembered limit.
     dirty: Arc<AtomicBool>,
-    /// This run's place in `SEQ`, checked against `PRODUCED` before a replace.
+    /// The job's creation number (`Live::started`), checked against `PRODUCED` before a replace.
     started: u64,
 }
 

@@ -204,7 +204,7 @@ fn job_with_id(url: String, dir: &Path, name: &str, id: u64) -> (Arc<Live>, watc
         fixed_name: false,
         sha256: None,
     };
-    let live = Live { job: Mutex::new(job), done: AtomicU64::new(0), connections: std::sync::atomic::AtomicU32::new(0), cancel: Mutex::new(tx) };
+    let live = Live { job: Mutex::new(job), done: AtomicU64::new(0), connections: std::sync::atomic::AtomicU32::new(0), started: dl_engine::download::next_seq(), cancel: Mutex::new(tx) };
     (Arc::new(live), rx)
 }
 
@@ -1281,4 +1281,25 @@ async fn verifying_shows_while_the_hash_runs_and_ignores_pause() {
     let out = run.await.unwrap();
     assert!(seen, "the job never showed Verifying");
     assert!(matches!(&out, Outcome::Failed(m) if m == "Checksum didn't match"), "{out:?}");
+}
+
+#[tokio::test]
+async fn paused_job_does_not_trash_what_it_raced() {
+    setup();
+    let srv = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let (a, rx) = job_with_id(srv.url("/file"), dir.path(), "a.bin", 1);
+    a.cancel.lock().unwrap().send_replace(true);
+    assert_eq!(run_replacing(a.clone(), dir.path(), rx, download::RunOpts::default()).await, Outcome::Paused);
+
+    let (b, rx) = job_with_id(srv.url("/file"), dir.path(), "a.bin", 2);
+    expect_done(run_replacing(b, dir.path(), rx, download::RunOpts::default()).await);
+
+    a.cancel.lock().unwrap().send_replace(false);
+    let rx = a.cancel.lock().unwrap().subscribe();
+    let opts = download::RunOpts { replace_existing: true, trash: fake_trash, ..Default::default() };
+    let path = expect_done(run_replacing(a, dir.path(), rx, opts).await);
+    assert_eq!(path, dir.path().join("a (1).bin"));
+    assert_eq!(sha(&std::fs::read(dir.path().join("a.bin")).unwrap()), sha(&data()));
+    assert!(trashed_in(dir.path()).is_empty());
 }
