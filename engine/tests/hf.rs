@@ -25,7 +25,7 @@ use tokio::net::TcpStream;
 const SIZE: usize = 2 * 1024 * 1024;
 const DROP_AT: usize = 512 * 1024;
 const GATED_MSG: &str = "This model is gated: add your Hugging Face token in Settings";
-const LICENSE_MSG: &str = "Accept this model's license on huggingface.co";
+const REJECTED_MSG: &str = "Hugging Face rejected the saved token. Check it in Settings";
 
 type Auths = Arc<Mutex<Vec<Option<String>>>>;
 
@@ -326,7 +326,20 @@ async fn gated_401_message() {
 
     let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/lic/m/resolve/abc/w.gguf", hf.port()));
     let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
-    assert!(matches!(&v.state, JobState::Failed { reason } if reason == LICENSE_MSG), "{:?}", v.state);
+    let want = format!("Accept this model's license at http://127.0.0.1:{}/lic/m", hf.port());
+    assert!(matches!(&v.state, JobState::Failed { reason } if *reason == want), "{:?}", v.state);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gated_401_with_saved_token_says_rejected() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    sched.set_hf_token(Some("t")).unwrap();
+    let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/gated/m/resolve/abc/w.gguf", hf.port()));
+    let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
+    assert!(matches!(&v.state, JobState::Failed { reason } if reason == REJECTED_MSG), "{:?}", v.state);
 }
 
 #[tokio::test(flavor = "multi_thread")]

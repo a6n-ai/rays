@@ -81,13 +81,28 @@ pub fn host_port(url: &str) -> Option<String> {
     Some(format!("{}:{}", u.host_str()?, u.port_or_known_default()?))
 }
 
-/// The failure text for a status. `url` is the URL that answered, after redirects, so a CDN's 401 keeps its status.
-fn http_failure(hf: &HfAccess, url: &str, status: u16) -> String {
+/// The failure text for a status. `answered` is the URL that answered, after redirects, so a CDN's 401 keeps its status;
+/// `job_url` is the URL the job asked for, which names the model.
+fn http_failure(hf: &HfAccess, job_url: &str, answered: &str, status: u16) -> String {
+    let sent_token = hf.token.is_some() && hf.covers(job_url);
     match status {
-        401 if hf.covers(url) => "This model is gated: add your Hugging Face token in Settings".into(),
-        403 if hf.covers(url) => "Accept this model's license on huggingface.co".into(),
+        401 if hf.covers(answered) && sent_token => "Hugging Face rejected the saved token. Check it in Settings".into(),
+        401 if hf.covers(answered) => "This model is gated: add your Hugging Face token in Settings".into(),
+        403 if hf.covers(answered) => match model_page(job_url) {
+            Some(page) => format!("Accept this model's license at {page}"),
+            None => "Accept this model's license on huggingface.co".into(),
+        },
         _ => format!("HTTP {status}"),
     }
+}
+
+/// `<origin>/<org>/<repo>` for a `.../<org>/<repo>/resolve/...` URL.
+fn model_page(job_url: &str) -> Option<String> {
+    let u = reqwest::Url::parse(job_url).ok()?;
+    let (model, _) = u.path().split_once("/resolve/")?;
+    let mut segs = model.trim_start_matches('/').split('/');
+    let (org, repo) = (segs.next()?, segs.next()?);
+    (!org.is_empty() && !repo.is_empty() && segs.next().is_none()).then(|| format!("{}/{org}/{repo}", u.origin().ascii_serialization()))
 }
 
 /// On macOS the default backend drives Finder through AppleScript, which raises an Automation prompt; NSFileManager does not.
@@ -317,7 +332,7 @@ async fn run_attempt(
             env.note_retry_after(&resp);
             return Err(Stop::Retry(format!("HTTP {status}")));
         }
-        _ => return Err(Stop::Failed(http_failure(&env.hf, resp.url().as_str(), status))),
+        _ => return Err(Stop::Failed(http_failure(&env.hf, &url, resp.url().as_str(), status))),
     }
 
     let ranged = status == 206;
@@ -1146,7 +1161,7 @@ async fn segment_attempt(
                     shared.env.note_retry_after(&resp);
                     return Err(Stop::Retry(format!("HTTP {status}")));
                 }
-                status => return Err(Stop::Failed(http_failure(&shared.env.hf, resp.url().as_str(), status))),
+                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, resp.url().as_str(), status))),
             }
             resp
         }
@@ -1378,6 +1393,15 @@ fn retry_wait(attempt: u8) -> Duration {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn license_text_falls_back_without_a_repo() {
+        let hf = HfAccess { host: "huggingface.co:443".into(), token: None };
+        let url = "https://huggingface.co/resolve/abc/w.gguf";
+        assert_eq!(http_failure(&hf, url, url, 403), "Accept this model's license on huggingface.co");
+        let url = "https://huggingface.co/org/repo/x/resolve/abc/w.gguf";
+        assert_eq!(http_failure(&hf, url, url, 403), "Accept this model's license on huggingface.co");
+    }
+
     /// Drives `Grow` on a synthetic link: `speed(n)` bytes/s with `n` connections. Returns the count held most
     /// over the last 20 ticks (a periodic probe or step-down changes it briefly).
     fn settle(start: usize, cap: usize, ticks: u32, speed: impl Fn(usize) -> f64) -> usize {
