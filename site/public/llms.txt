@@ -13,7 +13,7 @@
 - [Getting started](https://rays.a6n.ai/docs/getting-started/): install, first download, turn on sorting.
 - [Features](https://rays.a6n.ai/docs/features/): everything Rays does, its limits in numbers, and what it does not do (torrents, video grabbing, scheduling).
 - [How the engine works](https://rays.a6n.ai/docs/engine/): adaptive connections, crash-safe resume, and the A/B benchmarks behind each choice, with the script to rerun them.
-- [Install](https://rays.a6n.ai/docs/install/), [Downloads](https://rays.a6n.ai/docs/app/downloads/), [Sorter](https://rays.a6n.ai/docs/app/sorter/), [Browser extension](https://rays.a6n.ai/docs/app/browser/) ([Chrome Web Store](https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail), [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/rays@a6n.ai/)), [Settings](https://rays.a6n.ai/docs/app/settings/), [S3 buckets](https://rays.a6n.ai/docs/s3/), [MCP](https://rays.a6n.ai/docs/mcp/), [Troubleshooting](https://rays.a6n.ai/docs/troubleshooting/).
+- [Install](https://rays.a6n.ai/docs/install/), [Downloads](https://rays.a6n.ai/docs/app/downloads/), [Sorter](https://rays.a6n.ai/docs/app/sorter/), [Models](https://rays.a6n.ai/docs/app/models/), [Queues and schedules](https://rays.a6n.ai/docs/app/queues/), [Browser extension](https://rays.a6n.ai/docs/app/browser/) ([Chrome Web Store](https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail), [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/rays@a6n.ai/)), [Settings](https://rays.a6n.ai/docs/app/settings/), [S3 buckets](https://rays.a6n.ai/docs/s3/), [MCP](https://rays.a6n.ai/docs/mcp/), [Troubleshooting](https://rays.a6n.ai/docs/troubleshooting/).
 - [The dl command](https://rays.a6n.ai/docs/dl/): `dl URL...`, `dl s3://BUCKET/KEY`, `dl bucket`, `dl ls`, `dl list`, `dl sort`, `dl watch`, `dl status`, `dl config`, `dl mcp`, exit codes and environment variables.
 - [Release notes](https://rays.a6n.ai/releases/): what changed in each version.
 - [Source code](https://github.com/a6n-ai/rays): Rust engine, SwiftUI app, `dl` CLI, sorter, browser extension.
@@ -26,6 +26,8 @@
 ## Facts
 
 - Menu bar icon with a badge for downloads running, and a panel to pause, resume, add links, see the latest four downloads and open Downloads, Sorter and Cloud; the Dock icon shows progress and a count. Closing the window keeps Rays running (Settings > General > Show in menu bar).
+- Queues: Main queue always exists and takes new downloads; more queues each have their own speed limit, simultaneous count, schedule (Once, Every day, On days; start and optional stop, local time), conditions (Wi-Fi not a hotspot, charging, Mac idle 5 minutes) and a when-finished action (sound, quit, sleep, lock, shut down, run command; 30 second countdown for quit, sleep and shut down). Wake the Mac to start is optional and needs a one-time administrator password.
+- Model verify: checks downloaded Hugging Face files against the size and SHA-256 Rays recorded, offline, and re-downloads only the bad files.
 - Downloads list: Filter and Sort menus, pages of 50, Remove Missing, double-click to open. Copied download links are offered in a notification.
 - Browser extension popup: connection status, paste a link, Send all browser downloads to Rays. Settings > Browsers lists every browser; Brave, other Chromium and Firefox browsers, and Search are supported.
 - Requires macOS 26 or later. No account; sorting runs on the Mac and nothing is uploaded.

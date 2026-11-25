@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.20 (25 Nov 2026)
+
+- **Hugging Face models.** Search Hugging Face from the new **Models** page under Downloads, see trending models as cards with a colour and icon for each type, filter by Text, Vision, Image, Audio and Embeddings, and download a model or a single quantization.
+- **Verify** a downloaded model on the **Downloaded** tab. Rays checks each file's size and SHA-256 checksum offline, lists files that are missing or changed, and **Re-download** fetches only those.
+- **Queues.** A new **Queues** section in the sidebar. **Main** always exists and takes new downloads. Add more queues, each with its own icon and colour, speed limit, number of files at a time, and what your Mac does when the queue finishes: play a sound, quit Rays, sleep, lock the screen, shut down or run a command.
+- **Schedules.** Run a queue once, every day or on chosen days, with a start time and an optional stop time. Add conditions: only on Wi-Fi, only while charging, or only when the Mac is idle. **Activity** shows queues running now and the last 200 runs.
+- **Wake the Mac** to start a scheduled queue. It's off by default and asks for your administrator password once. **Remove** takes the permission away.
+
 ## 0.1.19 (24 Nov 2026)
 
 - Sorter's Recent tab opens files again. Clicking a file the sorter had renamed did nothing; now double-click opens it.
