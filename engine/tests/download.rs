@@ -179,12 +179,16 @@ async fn stall_server() -> SocketAddr {
 }
 
 fn job(url: String, dir: &Path, name: &str) -> (Arc<Live>, watch::Receiver<bool>) {
+    job_with_id(url, dir, name, 1)
+}
+
+fn job_with_id(url: String, dir: &Path, name: &str, id: u64) -> (Arc<Live>, watch::Receiver<bool>) {
     let (tx, rx) = watch::channel(false);
     let job = Job {
-        id: 1,
+        id,
         url,
         name: name.to_string(),
-        part_path: names::part_path(dir, name, 1),
+        part_path: names::part_path(dir, name, id),
         final_path: None,
         done: 0,
         total: None,
@@ -1191,17 +1195,38 @@ async fn replace_spares_a_file_this_engine_produced() {
     setup();
     let srv = start().await;
     let dir = tempfile::tempdir().unwrap();
-    // The first finish produces a.bin; the second job, same name, must not trash it.
+    // The second job starts first, and a slow link keeps it running until the first has produced a.bin.
+    // It starts before that file exists, so it must not trash it.
+    let (second, rx2) = job_with_id(srv.url("/file"), dir.path(), "a.bin", 2);
+    let opts = download::RunOpts { replace_existing: true, trash: fake_trash, ..Default::default() };
+    let late_dir = dir.path().to_path_buf();
+    let slow = Arc::new(RateLimiter::new(1 << 20));
+    let late = tokio::spawn(async move {
+        download::run(second, reqwest::Client::new(), &late_dir, Arc::new(EventHub::new()), rx2, 1, 1, slow, None, None, opts).await
+    });
+    let (first, rx) = job(srv.url("/file"), dir.path(), "a.bin");
+    expect_done(run_replacing(first, dir.path(), rx, download::RunOpts::default()).await);
+    std::fs::write(dir.path().join("a.bin"), b"first").unwrap();
+    let path = expect_done(late.await.unwrap());
+    assert_eq!(path, dir.path().join("a (1).bin"));
+    assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"first");
+    assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
+    assert!(trashed_in(dir.path()).is_empty());
+}
+#[tokio::test]
+async fn replace_takes_a_file_from_a_job_started_after_it() {
+    setup();
+    let srv = start().await;
+    let dir = tempfile::tempdir().unwrap();
     let (first, rx) = job(srv.url("/file"), dir.path(), "a.bin");
     expect_done(run_replacing(first, dir.path(), rx, download::RunOpts::default()).await);
     std::fs::write(dir.path().join("a.bin"), b"first").unwrap();
     let (live, rx) = job(srv.url("/file"), dir.path(), "a.bin");
     let opts = download::RunOpts { replace_existing: true, trash: fake_trash, ..Default::default() };
     let path = expect_done(run_replacing(live, dir.path(), rx, opts).await);
-    assert_eq!(path, dir.path().join("a (1).bin"));
-    assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"first");
+    assert_eq!(path, dir.path().join("a.bin"));
     assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
-    assert!(trashed_in(dir.path()).is_empty());
+    assert_eq!(trashed_in(dir.path()), [dir.path().join("a.bin")]);
 }
 #[tokio::test]
 async fn replace_on_keeps_old_when_trash_fails() {

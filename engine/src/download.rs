@@ -9,7 +9,7 @@ use crate::types::{Job, JobId, JobState, Live, Outcome, Segment};
 use reqwest::header::{
     ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_RANGE, ETAG, HeaderName, IF_RANGE, LAST_MODIFIED, RANGE,
 };
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::future::Future;
 use std::io::{self, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -120,9 +120,12 @@ pub(crate) fn trash_file(path: &Path) -> io::Result<()> {
     }
 }
 
-/// Every final path this process has produced. A replacing finish never trashes one of these, so a file
-/// another download just finished is not lost to a same-name job that finishes right after it.
-static PRODUCED: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+/// Every final path this process has produced, with when it was produced. A replacing finish trashes one of
+/// these only if its job started after that, so a job still racing the producer keeps both files.
+static PRODUCED: Mutex<BTreeMap<PathBuf, u64>> = Mutex::new(BTreeMap::new());
+/// Orders job starts and productions: a larger number is later.
+static SEQ: AtomicU64 = AtomicU64::new(0);
+const PRODUCED_CAP: usize = 1000;
 
 /// Runs until the file is complete, `cancel` turns true (-> `Outcome::Paused`), or it fails for good.
 /// Mutates `live.job` (state, total, etag, last_modified, resumable, segments) and `live.done`/`live.connections`,
@@ -161,6 +164,7 @@ pub async fn run(
         hf: opts.hf,
         retry_hint: Arc::new(AtomicU64::new(0)),
         dirty: Arc::new(AtomicBool::new(false)),
+        started: SEQ.fetch_add(1, Ordering::Relaxed),
     };
     // Failed tries in a row; equals the retry number while waiting (1..=5).
     let mut attempt: u8 = 0;
@@ -250,8 +254,10 @@ struct Env {
     hf: HfAccess,
     /// Server-requested wait (Retry-After), in ms, consumed by the next retry sleep.
     retry_hint: Arc<AtomicU64>,
-    /// Set by a retry, a 429/503 or a connection failure; a run that set it keeps the remembered limit.
+    /// Set by a retry, a 503 or a connection failure; a run that set it keeps the remembered limit.
     dirty: Arc<AtomicBool>,
+    /// This run's place in `SEQ`, checked against `PRODUCED` before a replace.
+    started: u64,
 }
 
 /// Counts one transferring connection; dropping it decrements on every exit path.
@@ -1258,7 +1264,7 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
     let mut replace = env.replace_existing.then_some(env.trash);
     // hard_link refuses to overwrite, so two jobs finishing together cannot clobber each other's file.
     let final_path = loop {
-        let candidate = claim_name(env.dir.clone(), name.clone(), replace.take()).await?;
+        let candidate = claim_name(env.dir.clone(), name.clone(), replace.take(), env.started).await?;
         match tokio::fs::hard_link(&part, &candidate).await {
             Ok(()) => break candidate,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -1294,26 +1300,35 @@ fn sha256_hex(path: &Path) -> io::Result<String> {
 }
 
 /// Picks the name for a finished file and records it in `PRODUCED`, all under one lock. With `trash`, a
-/// same-name file that this process did not produce is moved to the Trash and its name taken; if that is not
-/// possible, the file stays and a free name is picked.
-async fn claim_name(dir: PathBuf, name: String, trash: Option<fn(&Path) -> io::Result<()>>) -> io::Result<PathBuf> {
+/// same-name file is moved to the Trash and its name taken, unless this process produced it after `started`;
+/// if the trash fails, the file stays and a free name is picked.
+async fn claim_name(dir: PathBuf, name: String, trash: Option<fn(&Path) -> io::Result<()>>, started: u64) -> io::Result<PathBuf> {
     tokio::task::spawn_blocking(move || {
         let mut produced = PRODUCED.lock().unwrap_or_else(PoisonError::into_inner);
         let path = dir.join(&name);
         if let Some(trash) = trash
-            && !produced.contains(&path)
+            && produced.get(&path).is_none_or(|&made| started > made)
             && path.is_file()
             && trash(&path).is_ok()
         {
-            produced.insert(path.clone());
+            record(&mut produced, path.clone());
             return path;
         }
         let candidate = names::unique_final(&dir, &name);
-        produced.insert(candidate.clone());
+        record(&mut produced, candidate.clone());
         candidate
     })
     .await
     .map_err(io::Error::other)
+}
+
+fn record(produced: &mut BTreeMap<PathBuf, u64>, path: PathBuf) {
+    produced.insert(path, SEQ.fetch_add(1, Ordering::Relaxed));
+    if produced.len() > PRODUCED_CAP
+        && let Some(oldest) = produced.iter().min_by_key(|(_, made)| **made).map(|(p, _)| p.clone())
+    {
+        produced.remove(&oldest);
+    }
 }
 
 /// Resolves when `rx` turns true or its sender is dropped.
