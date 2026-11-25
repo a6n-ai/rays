@@ -28,6 +28,9 @@ final class EngineModel {
     var nightPromptShown = false
     /// Slow-hint dismissals live only for this session.
     private(set) var dismissedHints = Set<UInt64>()
+    private(set) var bestQueueId: UInt64?
+    @ObservationIgnored private var hintShown = Set<UInt64>()
+    @ObservationIgnored private var hintGone = Set<UInt64>()
     @ObservationIgnored private var runningSince: [UInt64: Date] = [:]
     @ObservationIgnored private var afterNightPrompt: (() -> Void)?
     var onQueueFinished: ((UInt64) -> Void)?
@@ -96,6 +99,7 @@ final class EngineModel {
             queues = engine.queues()
             runs = engine.queueRuns(limit: UInt32(Self.runLimit))
             queues.forEach(syncWake)
+            defaults.removeObject(forKey: "bestTimeQueueID")
             refreshSpeed(engine)
             conditions = ConditionsMonitor { [weak self] wifi, onPower, idle, network in
                 self?.network = network
@@ -451,6 +455,7 @@ final class EngineModel {
                 queues.append(queue)
             }
             syncWake(queue)
+            bestQueueId = engine?.bestTimeQueueId()
         case .queueFinished(let id):
             onQueueFinished?(id)
         case .runChanged(let run):
@@ -614,6 +619,7 @@ extension EngineModel {
         bestTime = engine.bestTime()
         hourly = engine.hourlyTypical()
         speedSettings = engine.speedSettings()
+        bestQueueId = engine.bestTimeQueueId()
         if let saved = engine.lastSpeedTest(), saved.at >= (lastTest?.at ?? 0) { lastTest = saved }
     }
 
@@ -682,20 +688,18 @@ extension EngineModel {
         afterNightPrompt = nil
     }
 
-    private static let bestTimeQueueKey = "bestTimeQueueID"
-
     /// The Best time queue, made by the engine on first use; it gets the moon look unless the user picked one.
     func bestTimeQueueID() throws -> UInt64 {
         let engine = try runningEngine
         let id = try engine.bestTimeQueue()
-        defaults.set(Int(id), forKey: Self.bestTimeQueueKey)
         queues = engine.queues()
+        bestQueueId = id
         QueueAppearances.shared.setIfMissing(QueueAppearance(symbol: "moon.stars", color: "indigo"), for: id)
         return id
     }
 
     func isBestTimeQueue(_ queue: QueueView) -> Bool {
-        queue.config.followBestTime || defaults.integer(forKey: Self.bestTimeQueueKey) == Int(queue.id)
+        queue.config.followBestTime || bestQueueId == queue.id
     }
 
     func addAtBestTime(_ text: String) {
@@ -715,14 +719,18 @@ extension EngineModel {
 
     /// "Usually 3x faster at 01:00" when a big, slow download would do much better in the best window.
     func slowHint(for job: JobView) -> String? {
-        guard job.state == .running, !dismissedHints.contains(job.id), (job.total ?? 0) >= 1_000_000_000,
-              job.bytesPerSec > 0, let since = runningSince[job.id], Date().timeIntervalSince(since) >= 60,
-              case .window(let start, let end, let typical, _, let confidence)? = bestTime, confidence != .low,
-              typical >= 2 * job.bytesPerSec else { return nil }
+        guard job.state == .running, !dismissedHints.contains(job.id), !hintGone.contains(job.id) else { return nil }
         let parts = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let now = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-        let inside = start <= end ? (Int(start)..<Int(end)).contains(now) : (now >= Int(start) || now < Int(end))
-        guard !inside else { return nil }
+        guard (job.total ?? 0) >= 1_000_000_000,
+              job.bytesPerSec > 0, let since = runningSince[job.id], Date().timeIntervalSince(since) >= 60,
+              case .window(let start, let end, let typical, _, let confidence)? = bestTime, confidence != .low,
+              typical >= 2 * job.bytesPerSec, !minuteInWindow(now, start: Int(start), end: Int(end)) else {
+            // Once shown, a hint that stops holding does not come back.
+            if hintShown.contains(job.id) { hintGone.insert(job.id) }
+            return nil
+        }
+        hintShown.insert(job.id)
         return "Usually \(typical / job.bytesPerSec)× faster at \(SchedulerTime.hhmm(start))"
     }
 }
@@ -750,3 +758,10 @@ enum SpeedFormat {
         return formatter.localizedString(for: Date(timeIntervalSince1970: TimeInterval(at)), relativeTo: Date())
     }
 }
+
+/// Whether a minute of the day falls in [start, end), where a window like 23:00 to 03:00 wraps past midnight.
+func minuteInWindow(_ minute: Int, start: Int, end: Int) -> Bool {
+    start <= end ? (start..<end).contains(minute) : (minute >= start || minute < end)
+}
+
+func hourInWindow(_ h: Int, start: Int, end: Int) -> Bool { minuteInWindow(h * 60, start: start, end: end) }

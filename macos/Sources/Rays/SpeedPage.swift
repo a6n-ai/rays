@@ -71,7 +71,7 @@ struct SpeedPage: View {
         switch model.bestTime {
         case .window(let start, let end, _, let days, _)?:
             Text("Usually fastest \(SchedulerTime.hhmm(start))–\(SchedulerTime.hhmm(end)) · \(days) days")
-            HourlyChart(hourly: model.hourly, window: Int(start)..<Int(end))
+            HourlyChart(hourly: model.hourly, start: Int(start), end: Int(end))
         case .notEnoughData(let days, let needed)?:
             EmptyState(symbol: "chart.bar", title: "Not enough data yet",
                        message: "\(days) of \(needed) days. Rays learns from your downloads and speed tests.")
@@ -84,11 +84,11 @@ struct SpeedPage: View {
 
 private struct HourlyChart: View {
     let hourly: [UInt64?]
-    let window: Range<Int>
+    let start: Int
+    let end: Int
 
     private func inWindow(_ hour: Int) -> Bool {
-        let minute = hour * 60
-        return window.lowerBound <= window.upperBound ? window.contains(minute) : (minute >= window.lowerBound || minute < window.upperBound)
+        hourInWindow(hour, start: start, end: end)
     }
 
     var body: some View {
