@@ -555,6 +555,19 @@ fn runs_pruned_to_200() {
     assert_eq!(kept[199].id, ids[5]);
 }
 
+#[test]
+fn delete_queue_drops_its_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    let id = store.save_queue(&queue("Temp", 0, 0)).unwrap();
+    store.open_run(id, 1).unwrap();
+    let main_run = store.open_run(1, 2).unwrap();
+    store.delete_queue(id).unwrap();
+    let left = store.runs(10).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].id, main_run);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn condition_drop_keeps_one_run() {
     let base = server().await;

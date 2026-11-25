@@ -347,6 +347,8 @@ impl Store {
         let tx = conn.transaction()?;
         tx.execute("UPDATE jobs SET queue_id = 1 WHERE queue_id = ?1", [id as i64])?;
         tx.execute("DELETE FROM queues WHERE id = ?1", [id as i64])?;
+        // Ids can be reused (no AUTOINCREMENT), so a new queue must not inherit this one's history.
+        tx.execute("DELETE FROM queue_runs WHERE queue_id = ?1", [id as i64])?;
         tx.commit()?;
         Ok(())
     }

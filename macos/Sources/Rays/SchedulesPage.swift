@@ -11,7 +11,7 @@ struct SchedulesPage: View {
     @State private var sort = ListSort.nextRun
     @State private var page = 0
     @State private var naming = false
-    @State private var newName = "Night downloads"
+    @State private var newName = SchedulesPage.defaultName
     @State private var kind = FileKind.all
 
     private var shown: [QueueView] { model.queues.listed(status: status, sort: sort, pinMain: false) }
@@ -32,7 +32,7 @@ struct SchedulesPage: View {
                 TextField("Name", text: $newName)
                 Button("Create", action: createScheduled)
                     .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) { newName = Self.defaultName }
             } message: {
                 Text("It runs every day at \(SchedulerTime.hhmm(SchedulerTime.defaultStart)).")
             }
@@ -96,7 +96,7 @@ struct SchedulesPage: View {
     }
 
     private func scheduled(_ queue: QueueView) -> some View {
-        QueueRow(queue: queue, isDirty: drafts.isDirty(queue.id), parts: Array(queue.statusParts(withNext: false).prefix(2).filter { $0.symbol != "arrow.down.circle" }),
+        QueueRow(queue: queue, isDirty: drafts.isDirty(queue.id), parts: queue.statusParts(withNext: false, withDownloads: false),
                  trailing: AnyView(nextRun(queue)))
             .contentShape(Rectangle())
             .onTapGesture { open(queue.id) }
@@ -128,13 +128,19 @@ struct SchedulesPage: View {
 
     /// Opens the queue on Schedule with a daily draft; nothing is saved until Save.
     private func addSchedule(to queue: QueueView) {
-        var config = queue.config
-        config.schedule = dailySchedule
-        drafts.items[queue.id] = QueueDrafts.Draft(base: queue.config, config: config)
+        // An unsaved draft is kept; it only gains the daily schedule when it has none.
+        var draft = drafts.items[queue.id] ?? QueueDrafts.Draft(base: queue.config, config: queue.config)
+        if draft.config.schedule == nil {
+            draft.config.schedule = dailySchedule
+            drafts.items[queue.id] = draft
+        }
         open(queue.id)
     }
 
+    fileprivate static let defaultName = "Night downloads"
+
     private func createScheduled() {
+        defer { newName = Self.defaultName }
         if let id = model.newQueue(name: newName.trimmingCharacters(in: .whitespaces), schedule: dailySchedule) { open(id) }
     }
 

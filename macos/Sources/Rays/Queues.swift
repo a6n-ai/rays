@@ -44,7 +44,7 @@ extension QueueView {
     }
 
     /// The pieces of the status line, each with a small symbol. `withNext` adds the next start.
-    func statusParts(withNext: Bool = true) -> [QueueStatusPart] {
+    func statusParts(withNext: Bool = true, withDownloads: Bool = true) -> [QueueStatusPart] {
         var parts: [QueueStatusPart] = []
         if let schedule = config.schedule {
             parts.append(QueueStatusPart(symbol: "calendar", text: schedule.summary))
@@ -57,6 +57,7 @@ extension QueueView {
         } else {
             parts.append(QueueStatusPart(symbol: "calendar", text: "Not scheduled"))
         }
+        guard withDownloads else { return parts }
         if running > 0 { parts.append(QueueStatusPart(symbol: "arrow.down.circle.fill", text: "\(running) downloading", tint: .blue)) }
         if queued > 0 { parts.append(QueueStatusPart(symbol: "arrow.down.circle", text: "\(queued) waiting")) }
         return parts

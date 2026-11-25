@@ -23,7 +23,10 @@ struct QueueAppearance: Codable, Equatable {
     private init() {
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(Self.keyPrefix) {
             guard let id = UInt64(key.dropFirst(Self.keyPrefix.count)), let data = defaults.data(forKey: key),
-                  let value = try? JSONDecoder().decode(QueueAppearance.self, from: data) else { continue }
+                  let value = try? JSONDecoder().decode(QueueAppearance.self, from: data) else {
+                defaults.removeObject(forKey: key)
+                continue
+            }
             stored[id] = value
         }
     }
