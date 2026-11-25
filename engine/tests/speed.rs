@@ -311,7 +311,6 @@ mod best_time {
         for (network, expected) in [(NetworkKind::Wifi, 3), (NetworkKind::Expensive, 0)] {
             let rt = tokio::runtime::Runtime::new().unwrap();
             let (dir, e, _, _) = rig(&rt, network);
-            e.set_speed_test_duration(300);
             let clock = clocked(&e, date(2026, 11, 25).at(23, 0, 0, 0));
             e.start_night_week();
             let s = e.speed_settings();
@@ -331,7 +330,6 @@ mod best_time {
     fn missed_minute_is_skipped() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
-        e.set_speed_test_duration(300);
         let clock = clocked(&e, date(2026, 11, 26).at(0, 41, 0, 0));
         e.set_auto_test_plan(vec![unix(date(2026, 11, 26).at(0, 41, 0, 0))]);
         *clock.lock().unwrap() = date(2026, 11, 26).at(0, 44, 30, 0);
@@ -343,7 +341,6 @@ mod best_time {
     fn late_tick_still_runs_planned_minute() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
-        e.set_speed_test_duration(300);
         let clock = clocked(&e, date(2026, 11, 26).at(0, 40, 0, 0));
         e.set_auto_test_plan(vec![unix(date(2026, 11, 26).at(0, 41, 0, 0))]);
         rt.block_on(e.auto_test_tick());
@@ -385,7 +382,6 @@ mod best_time {
     fn planned_night_tests_fall_in_slots() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
-        e.set_speed_test_duration(300);
         let clock = clocked(&e, date(2026, 11, 25).at(23, 0, 0, 0));
         e.start_night_week();
         let mut ran = 0;
