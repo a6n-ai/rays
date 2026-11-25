@@ -7,6 +7,8 @@ struct AddBar: View {
     @Environment(\.isEnabled) private var isEnabled
     @FocusState private var fieldFocused: Bool
     @State private var input = ""
+    /// The queue the next paste goes to; Main until the menu picks another.
+    @State private var queue: UInt64 = 1
     @Namespace private var glass
     let isTargeted: Bool
 
@@ -90,7 +92,17 @@ struct AddBar: View {
         let ready = !links.isEmpty
         let dimmed = !isEnabled || !ready
         // Always the round icon; a pasted link fills it with the accent colour instead of growing a label.
-        Button(action: submit) {
+        Menu {
+            ForEach(model.sortedQueues) { option in
+                Button { queue = option.id } label: {
+                    if option.id == queue {
+                        Label(option.config.name, systemImage: "checkmark")
+                    } else {
+                        Text(option.config.name)
+                    }
+                }
+            }
+        } label: {
             Label("Download", systemImage: "arrow.down")
                 .labelStyle(.iconOnly)
                 .font(.system(size: 15, weight: .semibold))
@@ -100,8 +112,13 @@ struct AddBar: View {
                 .glassEffectID("download", in: glass)
                 .contentShape(Circle())
                 .opacity(dimmed ? 0.4 : 1)
+        } primaryAction: {
+            submit()
         }
+        .menuStyle(.button)
         .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
         .disabled(!ready)
         .help(links.isEmpty ? "Paste a link that starts with http:// or https://" : "Download \(linkCount)")
     }
@@ -123,7 +140,7 @@ struct AddBar: View {
 
     private func submit() {
         guard !isBlank else { return }
-        model.add(input)
+        model.add(input, queue: queue)
         input = ""
     }
 }

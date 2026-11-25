@@ -194,7 +194,8 @@ struct JobRow: View {
         var parts: [Part]
         switch job.state {
         case .queued:
-            parts = [Part("Waiting")]
+            // The engine gives a reason only for queued jobs, e.g. "Queue stopped".
+            parts = job.waiting.map { [Part($0, symbol: "clock")] } ?? [Part("Waiting")]
         case .running:
             parts = [Part(job.sizeText)]
             if job.bytesPerSec > 0 { parts.append(Part(byteText(job.bytesPerSec) + "/s")) }
@@ -340,6 +341,21 @@ struct JobRow: View {
             NSPasteboard.general.setString(job.url, forType: .string)
         } label: {
             Label("Copy Link", systemImage: "link")
+        }
+        Menu {
+            ForEach(model.sortedQueues) { queue in
+                Button {
+                    model.moveToQueue(job: job.id, queue: queue.id)
+                } label: {
+                    if queue.id == job.queueId {
+                        Label(queue.config.name, systemImage: "checkmark")
+                    } else {
+                        Text(queue.config.name)
+                    }
+                }
+            }
+        } label: {
+            Label("Move to Queue", systemImage: "list.bullet")
         }
         Divider()
         Button(role: .destructive) {

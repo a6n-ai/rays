@@ -17,6 +17,8 @@ struct ModelDetailView: View {
     @State private var fileNotes: [String: String] = [:]
     @State private var downloading = false
     @State private var errorText: String?
+    /// nil until the user picks; then Main, or the queue named "Hugging Face" if there is one.
+    @State private var chosenQueue: UInt64?
 
     private struct NoteInputs: Equatable {
         let selected: Set<String>
@@ -203,6 +205,7 @@ struct ModelDetailView: View {
                 HStack {
                     saveTo
                     Spacer()
+                    queuePicker
                     Button(total == 0 ? "Download" : "Download \(byteText(total))", action: download)
                         .buttonStyle(.glassProminent)
                         .controlSize(.large)
@@ -216,13 +219,42 @@ struct ModelDetailView: View {
         .padding(.vertical, 12)
     }
 
+    private var queueId: UInt64 {
+        chosenQueue ?? model.queues.first { $0.config.name == "Hugging Face" }?.id ?? 1
+    }
+
+    private var queuePicker: some View {
+        Menu {
+            ForEach(model.sortedQueues) { option in
+                Button { chosenQueue = option.id } label: {
+                    if option.id == queueId {
+                        Label(option.config.name, systemImage: "checkmark")
+                    } else {
+                        Text(option.config.name)
+                    }
+                }
+            }
+        } label: {
+            Label(model.queues.first { $0.id == queueId }?.config.name ?? "Main", systemImage: "list.bullet")
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .help("Queue")
+        .accessibilityLabel("Queue")
+        .fixedSize()
+    }
+
     private func download() {
         let picked = (selected, dir)
         downloading = true
         Task {
             defer { downloading = false }
             do {
-                let result = try await model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir)
+                let result = try await model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir, queue: queueId)
                 // A choice changed during the call has already cleared `added`; this result is for the old choice.
                 guard selected == picked.0, dir == picked.1 else { return }
                 added = result
