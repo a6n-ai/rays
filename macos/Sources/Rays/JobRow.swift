@@ -147,11 +147,13 @@ struct JobRow: View {
 
     private var progress: some View {
         Group {
-            if let total = job.total, total > 0, job.parts.count > 1 {
+            if job.state == .verifying {
+                ProgressView()
+            } else if let total = job.total, total > 0, job.parts.count > 1 {
                 SegmentedProgressBar(parts: job.parts, total: total, tint: progressTint)
             } else if let total = job.total, total > 0 {
                 ProgressView(value: Double(min(job.done, total)), total: Double(total))
-            } else if job.state == .running || job.state == .verifying {
+            } else if job.state == .running {
                 ProgressView()
             } else {
                 ProgressView(value: 0, total: 1)
@@ -179,7 +181,7 @@ struct JobRow: View {
                     }
                     .foregroundStyle(part.tint)
                 } else {
-                    Text(part.text).foregroundStyle(part.tint)
+                    Text(Links.clickable(part.text)).foregroundStyle(part.tint)
                 }
             }
         }

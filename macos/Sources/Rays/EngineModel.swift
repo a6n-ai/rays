@@ -13,8 +13,6 @@ final class EngineModel {
     private(set) var generation = 0
     private(set) var buckets: [BucketConfig] = []
     private(set) var hasHFToken = false
-    /// Where Rays itself saved each model file, so its row says "Saved in" rather than claiming the sorter moved it.
-    @ObservationIgnored private var savedDirs: [UInt64: URL] = [:]
     @ObservationIgnored private var engine: Engine?
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let files = FileTracker(storeURL: FileManager.default.homeDirectoryForCurrentUser
@@ -193,25 +191,31 @@ final class EngineModel {
         engine?.setReplaceExisting(on: on)
     }
 
+    /// Thrown by the Hugging Face calls when the engine did not start, so the UI can say so.
+    private var runningEngine: Engine {
+        get throws {
+            guard let engine else { throw EngineError.Io(msg: "The Rays engine is not running.") }
+            return engine
+        }
+    }
+
     func hfSearch(_ query: String) async throws -> [HfModel] {
-        guard let engine else { return [] }
-        return try await engine.hfSearch(query: query)
+        try await runningEngine.hfSearch(query: query)
     }
 
     func hfModel(_ repo: String) async throws -> HfRepo {
-        guard let engine else { throw EngineError.Io(msg: "The Rays engine is not running.") }
-        return try await engine.hfModel(repo: repo)
+        try await runningEngine.hfModel(repo: repo)
     }
 
-    func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) -> [HfAdd] {
-        let added = engine?.addHf(repo: repo, sha: sha, files: files, destDir: dir.path(percentEncoded: false)) ?? []
-        let saved = dir.resolvingSymlinksInPath().standardizedFileURL
-        for item in added { if case .added(let id) = item.status { savedDirs[id] = saved } }
-        return added
+    /// The engine call can block on disk, so it runs off the main actor.
+    func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) async -> [HfAdd] {
+        guard let engine else { return [] }
+        let destDir = dir.path(percentEncoded: false)
+        return await Task.detached { engine.addHf(repo: repo, sha: sha, files: files, destDir: destDir) }.value
     }
 
     func setHFToken(_ token: String?) throws {
-        try engine?.setHfToken(token: token)
+        try runningEngine.setHfToken(token: token)
         hasHFToken = engine?.hasHfToken() ?? false
     }
 
@@ -233,15 +237,20 @@ final class EngineModel {
     }
 
     /// Where a finished file sits relative to the downloads folder, for the row's status line.
+    /// A file still in the folder its job was saved to says "Saved in", so it reads the same after a restart.
     func location(of file: URL, job: JobView? = nil) -> String {
         let root = Self.downloadsURL.resolvingSymlinksInPath().standardizedFileURL.pathComponents
         let parent = file.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
         let parts = parent.pathComponents
+        let savedHere = job?.dir.map { dir in
+            let saved = URL(filePath: dir).resolvingSymlinksInPath().standardizedFileURL.pathComponents
+            return parts.starts(with: saved)
+        } ?? false
         guard parts.count >= root.count, Array(parts.prefix(root.count)) == root else {
-            return parent.tildePath
+            return savedHere ? "Saved in " + parent.tildePath : parent.tildePath
         }
         let inside = parts.dropFirst(root.count)
-        let verb = job.flatMap { savedDirs[$0.id] } == parent ? "Saved in " : "Sorted into "
+        let verb = savedHere ? "Saved in " : "Sorted into "
         return inside.isEmpty ? "In Downloads" : verb + inside.joined(separator: " › ")
     }
 
@@ -378,6 +387,17 @@ struct SpeedPreset: Identifiable {
 
 /// Pulls web links out of dropped text and files. A .webloc file stores its link in a plist.
 enum Links {
+    /// The text with each web address in it clickable, for messages that quote one.
+    static func clickable(_ text: String) -> AttributedString {
+        var out = AttributedString(text)
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        for match in detector?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? [] {
+            guard let url = match.url, let range = Range(match.range, in: out) else { continue }
+            out[range].link = url
+        }
+        return out
+    }
+
     static func fromFile(_ url: URL) -> String? {
         guard url.isFileURL else { return url.absoluteString }
         guard url.pathExtension == "webloc" else { return nil }

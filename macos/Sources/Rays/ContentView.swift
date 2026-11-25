@@ -288,7 +288,7 @@ private struct DownloadsView: View {
     /// Returns false when nothing is selected, so the key press falls through to the list.
     private func togglePause() -> Bool {
         // Pausing a non-resumable download discards its progress, so only the row's Stop button does that.
-        let targets = selectedJobs.filter { $0.resumable || $0.state == .paused }
+        let targets = selectedJobs.filter { $0.state != .verifying && ($0.resumable || $0.state == .paused) }
         guard !targets.isEmpty else { return false }
         for job in targets {
             if job.state == .paused {
