@@ -35,7 +35,7 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
      speed_limit INTEGER NOT NULL, enabled INTEGER NOT NULL, schedule TEXT, retry_failed INTEGER NOT NULL,
      wake INTEGER NOT NULL, when_finished TEXT NOT NULL, held INTEGER NOT NULL DEFAULT 0)",
     "INSERT INTO queues (id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished, held) \
-     VALUES (1, 'Main queue', 3, 0, 1, 'null', 0, 0, '\"Nothing\"', 0)",
+     VALUES (1, 'Main queue', 0, 0, 1, 'null', 0, 0, '\"Nothing\"', 0)",
     "ALTER TABLE jobs ADD COLUMN queue_id INTEGER NOT NULL DEFAULT 1",
 ];
 
@@ -747,6 +747,7 @@ mod tests {
         let (main, held) = &store.queues().unwrap()[0];
         assert_eq!(main.id, Some(1));
         assert_eq!(main.name, "Main queue");
+        assert_eq!(main.max_running, 0);
         assert!(!held);
     }
 
@@ -777,6 +778,35 @@ mod tests {
         let (got, held) = queues.iter().find(|(q, _)| q.id == Some(id)).unwrap();
         assert_eq!(got, &QueueConfig { id: Some(id), ..config });
         assert!(held);
+    }
+
+    #[test]
+    fn queue_json_names_are_pinned() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let config = QueueConfig {
+            schedule: Some(QueueSchedule {
+                repeat: Repeat::Days { mask: 31 },
+                start_min: 0,
+                stop_min: None,
+                wifi: false,
+                power: false,
+                idle: false,
+            }),
+            when_finished: FinishAction::Nothing,
+            ..sample_queue("Pinned")
+        };
+        let id = store.save_queue(&config).unwrap();
+
+        let (schedule, when_finished): (String, String) = store
+            .lock()
+            .unwrap()
+            .query_row("SELECT schedule, when_finished FROM queues WHERE id = ?1", [id as i64], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(schedule, r#"{"repeat":{"Days":{"mask":31}},"start_min":0,"stop_min":null,"wifi":false,"power":false,"idle":false}"#);
+        assert_eq!(when_finished, r#""Nothing""#);
     }
 
     #[test]
