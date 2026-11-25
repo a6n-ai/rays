@@ -246,6 +246,17 @@ final class EngineModel {
         return await Task.detached { engine.addHf(repo: repo, sha: sha, files: files, destDir: destDir, queue: queue) }.value
     }
 
+    /// Reads a file from disk, so it runs off the main actor.
+    func readModelManifest(_ dir: URL) async throws -> HfManifest? {
+        let engine = try runningEngine
+        let path = dir.path(percentEncoded: false)
+        return await Task.detached { engine.readModelManifest(dir: path) }.value
+    }
+
+    func verifyFiles(_ dir: URL, files: [HfFile]) async throws -> [VerifyResult] {
+        try await runningEngine.verifyFiles(dir: dir.path(percentEncoded: false), files: files)
+    }
+
     func setHFToken(_ token: String?) throws {
         try runningEngine.setHfToken(token: token)
         hasHFToken = engine?.hasHfToken() ?? false

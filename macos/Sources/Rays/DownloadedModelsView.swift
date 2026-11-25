@@ -34,14 +34,47 @@ struct DownloadedModel: Identifiable, Equatable {
     }
 }
 
+/// Verify state for one model folder. Held by the view only, never written to disk.
+enum VerifyState: Equatable {
+    case running
+    case noRecord
+    case failed(String)
+    case checked(Checked)
+
+    struct Checked: Equatable {
+        let repo: String
+        let sha: String
+        let files: [HfFile]
+        let results: [VerifyResult]
+        /// Checked against the latest Hugging Face revision, not the recorded download.
+        let latest: Bool
+
+        var problems: [VerifyResult] { results.filter { $0.status.problem != nil } }
+    }
+}
+
+private extension VerifyStatus {
+    var problem: String? {
+        switch self {
+        case .ok, .sizeChecked: nil
+        case .missing: "Missing"
+        case .wrongSize: "Wrong size"
+        case .wrongChecksum: "Checksum didn't match"
+        }
+    }
+}
+
 /// The model folders inside the AI Models folder, with size and file count.
 struct DownloadedModelsView: View {
     let folder: URL
+    @Environment(EngineModel.self) private var model
+    @AppStorage(SettingsKey.replaceExisting) private var replaceExisting = false
     @State private var models: [DownloadedModel] = []
     @State private var loaded = false
     @State private var selection: URL?
     @State private var watcher = DirectoryWatcher()
     @State private var revision = 0
+    @State private var checks: [URL: VerifyState] = [:]
 
     var body: some View {
         Group {
@@ -54,7 +87,14 @@ struct DownloadedModelsView: View {
             } else {
                 List {
                     ForEach(models) { item in
-                        DownloadedModelRow(item: item, isSelected: selection == item.id) { remove(item) }
+                        DownloadedModelRow(
+                            item: item,
+                            isSelected: selection == item.id,
+                            state: checks[item.id],
+                            trash: { remove(item) },
+                            verify: { verifyFiles(item) },
+                            lookUp: { lookUp(item) },
+                            redownload: { redownload(item, $0) })
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { reveal(item) }
                             .onTapGesture { selection = item.id }
@@ -97,66 +137,184 @@ struct DownloadedModelsView: View {
             Task { @MainActor in revision += 1 }
         }
     }
+
+    private func verifyFiles(_ item: DownloadedModel) {
+        run(item) {
+            guard let manifest = try await model.readModelManifest(item.url) else { return .noRecord }
+            let results = try await model.verifyFiles(item.url, files: manifest.files)
+            return .checked(.init(repo: manifest.repo, sha: manifest.sha, files: manifest.files, results: results, latest: false))
+        }
+    }
+
+    private func lookUp(_ item: DownloadedModel) {
+        run(item) {
+            let repo = try await model.hfModel("\(item.org)/\(item.name)")
+            let results = try await model.verifyFiles(item.url, files: repo.files)
+            return .checked(.init(repo: repo.id, sha: repo.sha, files: repo.files, results: results, latest: true))
+        }
+    }
+
+    private func redownload(_ item: DownloadedModel, _ checked: VerifyState.Checked) {
+        let bad = Set(checked.problems.map(\.path))
+        let files = checked.files.filter { bad.contains($0.path) }
+        run(item) {
+            // With replace off the engine keeps both copies, so the bad ones go first to keep the names exact.
+            if !replaceExisting {
+                for file in files {
+                    let url = item.url.appending(path: file.path)
+                    if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    }
+                }
+            }
+            _ = try await model.addModel(repo: checked.repo, sha: checked.sha, files: files, to: item.url)
+            revision += 1
+            let results = try await model.verifyFiles(item.url, files: checked.files)
+            return .checked(.init(repo: checked.repo, sha: checked.sha, files: checked.files, results: results, latest: checked.latest))
+        }
+    }
+
+    /// One check per folder at a time, so a second Verify cannot start while one runs.
+    private func run(_ item: DownloadedModel, _ work: @escaping () async throws -> VerifyState) {
+        guard checks[item.id] != .running else { return }
+        checks[item.id] = .running
+        Task {
+            do { checks[item.id] = try await work() }
+            catch { checks[item.id] = .failed(EngineModel.message(for: error)) }
+        }
+    }
 }
 
 private struct DownloadedModelRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: DownloadedModel
     let isSelected: Bool
+    let state: VerifyState?
     let trash: () -> Void
+    let verify: () -> Void
+    let lookUp: () -> Void
+    let redownload: (VerifyState.Checked) -> Void
     @State private var isHovered = false
 
     private var status: String {
         "\(item.org) · \(item.files == 1 ? "1 file" : "\(item.files) files") · \(byteText(item.bytes))"
     }
 
+    private var isRunning: Bool { state == .running }
+
     var body: some View {
-        HStack(spacing: LayoutMetrics.gap) {
-            ModelTile(symbol: "shippingbox.fill", color: .gray)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.name)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(status)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 0) {
-                Button(action: trash) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13, weight: .bold))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: LayoutMetrics.gap) {
+                ModelTile(symbol: "shippingbox.fill", color: .gray)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.name)
+                        .font(.body.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(status)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                        .contentShape(Circle())
+                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-                .help("Move to Trash")
-                .accessibilityLabel("Move \(item.name) to Trash")
-                Menu {
-                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
-                    Button("Move to Trash", action: trash)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                        .contentShape(Circle())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 0) {
+                    if isRunning {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                    } else {
+                        Button(action: verify) {
+                            Image(systemName: "checkmark.shield")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Verify files")
+                        .accessibilityLabel("Verify \(item.name)")
+                    }
+                    Button(action: trash) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Move to Trash")
+                    .accessibilityLabel("Move \(item.name) to Trash")
+                    Menu {
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+                        Button("Verify files", action: verify).disabled(isRunning)
+                        Button("Move to Trash", action: trash)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                            .contentShape(Circle())
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
+                    .help("More")
+                    .accessibilityLabel("More actions for \(item.name)")
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .help("More")
-                .accessibilityLabel("More actions for \(item.name)")
+                .opacity(isHovered || isRunning ? 1 : 0)
             }
-            .opacity(isHovered ? 1 : 0)
+            .frame(height: LayoutMetrics.rowHeight)
+            details
+                .padding(.leading, LayoutMetrics.iconSize + LayoutMetrics.gap)
+                .padding(.bottom, LayoutMetrics.rowSpacing / 2)
         }
-        .frame(height: LayoutMetrics.rowHeight)
         .padding(.horizontal, LayoutMetrics.hoverInset)
         .listRowBackground(RowHighlight(selected: isSelected, hovered: isHovered))
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHovered)
+    }
+
+    @ViewBuilder private var details: some View {
+        switch state {
+        case .noRecord:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Can't verify: no record of this download")
+                    .foregroundStyle(.secondary)
+                Button("Look up on Hugging Face", action: lookUp)
+            }
+            .font(.callout)
+        case .failed(let message):
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.red)
+        case .checked(let checked):
+            let sizeOnly = checked.results.filter { $0.status == .sizeChecked }.count
+            VStack(alignment: .leading, spacing: 6) {
+                if checked.problems.isEmpty {
+                    Label("All \(checked.results.count) files match", systemImage: "checkmark")
+                        .foregroundStyle(.green)
+                }
+                if sizeOnly > 0 {
+                    Text("\(sizeOnly) files checked by size only")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(checked.problems, id: \.path) { result in
+                    Text("\(result.path) — \(result.status.problem ?? "")")
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if !checked.problems.isEmpty {
+                    Button("Re-download \(checked.problems.count) files") { redownload(checked) }
+                }
+                if checked.latest {
+                    Text("Checked against the latest revision")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout)
+        case .running, nil:
+            EmptyView()
+        }
     }
 }
