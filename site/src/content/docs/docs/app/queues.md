@@ -20,13 +20,14 @@ Click a queue to open it. Its page has a picker with three parts:
   - **Simultaneous:** **Same as Rays**, or a number of files at a time.
   - **Speed limit** for the whole queue.
   - **Retry failed downloads**.
+  - **Wake the Mac to start**. See [Wake](#wake).
   - **When finished**. See [When finished](#when-finished).
 
 Unsaved changes show a bar with **Revert** and **Save**. The on/off switch saves straight away.
 
 ## Activity
 
-**Running now** lists the queues running at the moment. **History** keeps the last 200 runs. Each run ends with an outcome: **Finished**, **Window closed**, **Stopped by you** or **Rays quit**.
+**Running now** lists the queues running at the moment. **History** keeps the last 200 runs. Each run ends with an outcome: **Finished**, **Window ended**, **Stopped** or **Rays quit**.
 
 ## Schedules
 
@@ -57,7 +58,7 @@ Choose what your Mac does when the queue is done:
 - **Sleep**
 - **Lock screen**
 - **Shut down**
-- **Run command**. Runs as your user account, through zsh. It stops after 1 hour.
+- **Run command**. Runs as your user account, through zsh. After 1 hour Rays stops the shell. Programs it started may keep running.
 
 **Sleep**, **Shut down** and **Quit Rays** show a 30 second countdown first. You can cancel during the countdown.
 
@@ -66,5 +67,7 @@ Choose what your Mac does when the queue is done:
 Wake is off by default. With wake permission, Rays can wake your Mac to start a scheduled queue.
 
 To set it up, open **Queues > Settings** and click **Set Up…** next to **Wake permission**. Your Mac asks for your administrator password once. That permission lets Rays set wake times and nothing else. To take it away, click **Remove**.
+
+Then turn on **Wake the Mac to start** in a queue's **Options**.
 
 Without wake permission, keep your Mac awake and Rays running at the start time.

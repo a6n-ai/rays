@@ -41,15 +41,15 @@ Files that already exist with the same name follow the **If a file with the same
 
 ## Verify a download
 
-On the **Downloaded** tab, hover a model or open its **⋯** menu and choose **Verify**. Rays checks each file against the record it saved when the file downloaded: its size and SHA-256 checksum. The check runs on your Mac and doesn't go online.
+On the **Downloaded** tab, hover a model or open its **⋯** menu and choose **Verify files**. Rays checks each file against the record it saved when the file downloaded: its size and SHA-256 checksum. The check runs on your Mac and doesn't go online.
 
 The result is one of:
 
-- **All N files match.**
+- **All N files match**, or **N files match** when other files have problems or were checked by size only.
 - **N files checked by size only.** Hugging Face gave no checksum for those files.
 - Per file: **Missing**, **Wrong size** or **Checksum didn't match**.
 
-Click **Re-download N files** to queue only the files that failed. If **If a file with the same name exists** isn't set to **Replace**, Rays first moves the bad files to the Trash.
+Click **Re-download N files** to queue only the files that failed. If **If a file with the same name exists** isn't set to **Replace**, Rays first moves the files with a wrong size or checksum to the Trash. Missing files are just queued.
 
 With no record of the download, click **Look up on Hugging Face**. Rays checks the files against the latest revision, so a model that has changed on Hugging Face since you downloaded it can fail.
 
@@ -58,5 +58,6 @@ With no record of the download, click **Look up on Hugging Face**. Rays checks t
 Some models need a Hugging Face access token. Add it under **Settings > Downloads > Hugging Face > Access token**. It is stored in the macOS Keychain and sent only to huggingface.co.
 
 - **Gated, no token:** "This model is gated: add your Hugging Face token in Settings".
+- **Not found, no token:** "Couldn't find this model on Hugging Face. If it's private or gated, add your Hugging Face token in Settings." Hugging Face answers the same way for a repo that doesn't exist and a private one.
 - **License not accepted:** "Accept this model's license at https://huggingface.co/<org>/<repo>". The link opens the model page.
 - **Wrong token:** "Hugging Face rejected the saved token. Check it in Settings".
