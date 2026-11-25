@@ -211,7 +211,7 @@ final class EngineModel {
     func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) async throws -> [HfAdd] {
         let engine = try runningEngine
         let destDir = dir.path(percentEncoded: false)
-        return await Task.detached { engine.addHf(repo: repo, sha: sha, files: files, destDir: destDir) }.value
+        return await Task.detached { engine.addHf(repo: repo, sha: sha, files: files, destDir: destDir, queue: nil) }.value
     }
 
     func setHFToken(_ token: String?) throws {
@@ -352,6 +352,8 @@ final class EngineModel {
         case .removed(let id):
             files.forget(id)
             jobs.removeAll { $0.id == id }
+        case .queueChanged, .queueFinished:
+            break
         }
     }
 }
