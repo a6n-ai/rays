@@ -74,7 +74,7 @@ struct ModelDetailView: View {
             ModelHeaderCard(repo: repo, isGGUF: isGGUF, total: total, freeBytes: freeBytes)
                 .plainRow()
             if !versions.isEmpty {
-                ModelVersionPills(versions: versions, selected: $selected)
+                ModelVersionPills(versions: versions, tint: ModelKind(pipelineTag: repo.pipelineTag).color, selected: $selected)
                     .plainRow()
             }
             filesHeader

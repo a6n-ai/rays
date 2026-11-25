@@ -13,13 +13,13 @@ struct ModelHeaderCard: View {
     let total: UInt64
     let freeBytes: UInt64?
 
+    private var kind: ModelKind { ModelKind(pipelineTag: repo.pipelineTag) }
     private var fits: Bool { freeBytes.map { total <= $0 } ?? true }
 
     private var subtitle: String {
         let parts = hfNameParts(repo.id)
         var items: [String] = []
         if !parts.org.isEmpty { items.append(parts.org) }
-        if isGGUF { items.append("GGUF") }
         items.append("↓ \(repo.downloads.formatted(.number.notation(.compactName)))")
         items.append("♥ \(repo.likes.formatted(.number.notation(.compactName)))")
         return items.joined(separator: " · ")
@@ -27,11 +27,7 @@ struct ModelHeaderCard: View {
 
     var body: some View {
         HStack(spacing: LayoutMetrics.gap) {
-            Image(systemName: "cube.fill")
-                .font(.system(size: 34))
-                .foregroundStyle(.secondary)
-                .frame(width: 48, height: 48)
-                .accessibilityHidden(true)
+            ModelTile(kind: kind, size: 56)
             VStack(alignment: .leading, spacing: 4) {
                 Text(hfNameParts(repo.id).name)
                     .font(.title3.weight(.semibold))
@@ -40,13 +36,9 @@ struct ModelHeaderCard: View {
                     .textSelection(.enabled)
                 HStack(spacing: 8) {
                     Text(subtitle).lineLimit(1)
-                    if repo.gated {
-                        Text("Gated")
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.quaternary, in: .capsule)
-                    }
+                    ModelCapsule(text: kind.label, tint: kind.color)
+                    if isGGUF { ModelCapsule(text: "GGUF") }
+                    if repo.gated { ModelCapsule(text: "Gated") }
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -70,13 +62,14 @@ struct ModelHeaderCard: View {
             }
         }
         .padding(LayoutMetrics.gap + 4)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .glassEffect(.regular.tint(kind.color.opacity(0.12)), in: .rect(cornerRadius: 16))
         .accessibilityElement(children: .combine)
     }
 }
 
 struct ModelVersionPills: View {
     let versions: [HfVersion]
+    let tint: Color
     @Binding var selected: Set<String>
     @Namespace private var pills
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -96,7 +89,7 @@ struct ModelVersionPills: View {
                                 .padding(.vertical, 6)
                         }
                         .buttonStyle(.plain)
-                        .glassEffect(on ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .capsule)
+                        .glassEffect(on ? .regular.tint(tint).interactive() : .regular.interactive(), in: .capsule)
                         .glassEffectID(version.label, in: pills)
                         .accessibilityAddTraits(on ? .isSelected : [])
                     }

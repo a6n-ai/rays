@@ -10,6 +10,8 @@ struct ModelsView: View {
     @State private var repo: HfRepo?
     @State private var error: String?
     @State private var loading = false
+    @State private var filter = ModelFilter.all
+    @State private var ggufOnly = false
     /// Bumped by every search and open; a reply is used only if no newer request started meanwhile.
     @State private var request = 0
 
@@ -28,6 +30,7 @@ struct ModelsView: View {
                 case .search:
                     VStack(spacing: 0) {
                         searchField
+                        ModelFilterBar(filter: $filter, ggufOnly: $ggufOnly)
                         content
                     }
                 case .downloaded:
@@ -37,11 +40,12 @@ struct ModelsView: View {
                 }
             }
             .navigationTitle("Models")
+            .toolbar { if repo == nil { toolbar } }
             .navigationDestination(item: $repo) { repo in
                 ModelDetailView(repo: repo, destinations: sorter.destinations).id(repo.id)
+                    .toolbar { toolbar }
             }
         }
-        .toolbar { toolbar }
         .task { await sorter.refresh() }
         .task(id: query) { await search() }
     }
@@ -106,6 +110,10 @@ struct ModelsView: View {
         .padding(LayoutMetrics.margin)
     }
 
+    private var shown: [HfModel] {
+        results.filter { filter.matches(ModelKind(pipelineTag: $0.pipelineTag)) && (!ggufOnly || $0.gguf) }
+    }
+
     @ViewBuilder private var content: some View {
         if let error {
             ContentUnavailableView {
@@ -123,8 +131,11 @@ struct ModelsView: View {
             } else {
                 EmptyState(symbol: "cube", title: "No trending models")
             }
+        } else if shown.isEmpty {
+            let what = ggufOnly && filter == .all ? "GGUF" : filter.label
+            EmptyState(symbol: filter.representative.symbol, title: "No \(what) models in \(text.isEmpty ? "trending" : "results")")
         } else {
-            ModelResultsList(hits: results, header: text.isEmpty ? "Trending on Hugging Face" : nil) { id in
+            ModelResultsList(hits: shown, featured: text.isEmpty) { id in
                 Task { await open(id) }
             }
         }

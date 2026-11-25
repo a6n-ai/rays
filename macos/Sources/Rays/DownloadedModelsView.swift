@@ -112,11 +112,7 @@ private struct DownloadedModelRow: View {
 
     var body: some View {
         HStack(spacing: LayoutMetrics.gap) {
-            Image(systemName: "shippingbox.fill")
-                .font(.system(size: LayoutMetrics.iconSize * 0.7))
-                .foregroundStyle(.secondary)
-                .frame(width: LayoutMetrics.iconSize, height: LayoutMetrics.iconSize)
-                .accessibilityHidden(true)
+            ModelTile(symbol: "shippingbox.fill", color: .gray)
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(.body.weight(.semibold))

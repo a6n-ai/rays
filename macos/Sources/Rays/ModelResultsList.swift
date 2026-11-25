@@ -3,29 +3,48 @@ import SwiftUI
 /// Search results or trending models as Downloads-style rows; a click or Return opens one.
 struct ModelResultsList: View {
     let hits: [HfModel]
-    var header: String?
+    /// Shows the first few as cards under a Top models header, for the trending list.
+    var featured = false
     let open: (String) -> Void
     @State private var selection: String?
 
+    private static let cardLimit = 6
+    private var cards: ArraySlice<HfModel> { featured ? hits.prefix(Self.cardLimit) : [] }
+    private var rows: ArraySlice<HfModel> { hits.dropFirst(cards.count) }
+
     var body: some View {
         List {
-            Section {
-                ForEach(hits, id: \.id) { hit in
-                    ModelResultRow(hit: hit, isSelected: selection == hit.id)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selection = hit.id
-                            open(hit.id)
+            if !cards.isEmpty {
+                Section("Top models") {
+                    GlassEffectContainer(spacing: 14) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 14)], spacing: 14) {
+                            ForEach(cards, id: \.id) { hit in
+                                ModelCard(hit: hit, isSelected: selection == hit.id)
+                                    .onTapGesture { choose(hit.id) }
+                            }
                         }
-                        .listRowInsets(EdgeInsets(
-                            top: LayoutMetrics.rowSpacing / 2,
-                            leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
-                            bottom: LayoutMetrics.rowSpacing / 2,
-                            trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
-                        .listRowSeparator(.hidden)
+                    }
+                    .listRowInsets(EdgeInsets(top: 6, leading: LayoutMetrics.margin, bottom: 6, trailing: LayoutMetrics.margin))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
-            } header: {
-                if let header { Text(header) }
+            }
+            if !rows.isEmpty {
+                Section {
+                    ForEach(rows, id: \.id) { hit in
+                        ModelResultRow(hit: hit, isSelected: selection == hit.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture { choose(hit.id) }
+                            .listRowInsets(EdgeInsets(
+                                top: LayoutMetrics.rowSpacing / 2,
+                                leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
+                                bottom: LayoutMetrics.rowSpacing / 2,
+                                trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
+                            .listRowSeparator(.hidden)
+                    }
+                } header: {
+                    if !cards.isEmpty { Text("More trending") }
+                }
             }
         }
         .listStyle(.inset)
@@ -41,6 +60,11 @@ struct ModelResultsList: View {
             open(selection)
             return .handled
         }
+    }
+
+    private func choose(_ id: String) {
+        selection = id
+        open(id)
     }
 
     private func step(_ delta: Int) -> KeyPress.Result {
@@ -73,11 +97,7 @@ private struct ModelResultRow: View {
 
     var body: some View {
         HStack(spacing: LayoutMetrics.gap) {
-            Image(systemName: "cube.fill")
-                .font(.system(size: LayoutMetrics.iconSize * 0.7))
-                .foregroundStyle(.secondary)
-                .frame(width: LayoutMetrics.iconSize, height: LayoutMetrics.iconSize)
-                .accessibilityHidden(true)
+            ModelTile(kind: ModelKind(pipelineTag: hit.pipelineTag))
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.body.weight(.semibold))
