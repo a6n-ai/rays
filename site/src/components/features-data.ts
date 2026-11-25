@@ -71,7 +71,7 @@ export const GROUPS: Group[] = [
 		icon: 'queues',
 		href: '/docs/app/queues/',
 		summary: 'Group downloads, run them when you want, and choose what the Mac does next.',
-		short: ['Queues with their own limits', 'Schedules', 'Wi-Fi, charging or idle', 'When finished', 'Wake the Mac'],
+		short: ['Queues with their own limits', 'Schedules', 'Wi-Fi, charging or idle', 'When finished', 'Wake the Mac', 'Speed test', 'Best time'],
 		items: [
 			{ icon: 'queues', title: 'Queues', text: 'Main is the default queue. Add more, each with its own icon, colour, speed limit and number of files at a time.' },
 			{ icon: 'calendar', title: 'Schedules', text: 'Run once, every day or on chosen days, with a start time and an optional stop time.' },
@@ -79,6 +79,8 @@ export const GROUPS: Group[] = [
 			{ icon: 'clock', title: 'Activity history', text: 'A history of what your queues have done.' },
 			{ icon: 'power', title: 'When finished', text: 'Play a sound, quit, sleep, lock, shut down, or run a command.' },
 			{ icon: 'moon', title: 'Wake the Mac', text: 'Optionally wake a sleeping Mac for a scheduled queue. It asks for your admin password once.' },
+			{ icon: 'speed', title: 'Speed test', text: 'Measure your download speed in about 10 seconds, with the last result in the sidebar.', href: '/docs/app/speed/' },
+			{ icon: 'chart', title: 'Best time', text: 'Learns the fastest hours of the night from your downloads, and sends a queue there.', href: '/docs/app/speed/' },
 		],
 	},
 	{

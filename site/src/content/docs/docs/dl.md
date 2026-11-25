@@ -81,6 +81,17 @@ The state is `open`, `waiting for time`, `waiting for condition`, `stopped` or `
 
 `dl` does not edit or delete queues: set schedules, finish actions and the Run command in the app. A Run command executes shell commands, so no client of the socket can set one.
 
+## Speed and best time
+
+```sh
+dl speed
+dl speed test
+dl speed test --force
+dl add --best-time https://example.com/a.zip
+```
+
+`dl speed` prints the last speed test and the fastest window to download, or how many days of data are still needed. `dl speed test` runs a test now, which takes about 10 seconds. It is refused on a metered link unless you add `--force`. `dl add --best-time` adds downloads to the Best time queue instead of a named queue. See [Speed test and best time](/docs/app/speed/).
+
 ## Verify a model
 
 ```sh

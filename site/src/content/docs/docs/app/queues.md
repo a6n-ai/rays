@@ -45,8 +45,22 @@ Click **+ New schedule** for a menu with two parts:
 - **Stop at:** optional. Files still downloading pause, and continue the next time the queue runs. Without a stop time, the queue runs until it is done.
 - Times use your Mac's local time. A window can cross midnight.
 - **Only when:** Wi-Fi (not a phone hotspot), Charging, or Mac is idle (5 minutes).
+- **Use best time** fills in **Start at** and **Stop at** with the fastest window from [Speed test and best time](/docs/app/speed/).
 
 If a condition stops being true, the queue waits. It picks up again when the condition returns.
+
+## Best time queue
+
+The **Best time** queue runs downloads in the window when your connection is usually fastest, 01:00–05:00 at first. Rays creates it the first time you add downloads with **At best time (01:00–05:00)** from the **Download** button's menu.
+
+The first time, Rays asks: "Let Rays test your speed a few times each night for a week? About 1 GB in total."
+
+- **Allow** runs one speed test in each of 00–02, 02–04 and 04–06 for 7 nights, so Rays learns the window quickly.
+- **Not Now** uses 01:00–06:00 until Rays has data.
+
+The queue follows the best window once a day. **Follow best time** in its **Schedule** tab keeps it on. If you edit its schedule, **Follow best time** turns off. Turn it back on in the **Schedule** tab.
+
+Any queue's **Schedule** tab has **Use best time**, which fills in the start and stop times once.
 
 ## When finished
 

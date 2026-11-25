@@ -60,6 +60,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Downloads', link: '/docs/app/downloads/', attrs: { 'data-icon': 'download' } },
 						{ label: 'Queues', link: '/docs/app/queues/', attrs: { 'data-icon': 'queues' } },
+						{ label: 'Speed test', link: '/docs/app/speed/', attrs: { 'data-icon': 'speed' } },
 						{ label: 'How the engine works', link: '/docs/engine/', attrs: { 'data-icon': 'engine' } },
 						{ label: 'S3 buckets', link: '/docs/s3/', attrs: { 'data-icon': 'cloud' } },
 						{ label: 'Sorter', link: '/docs/app/sorter/', attrs: { 'data-icon': 'sorter' } },
