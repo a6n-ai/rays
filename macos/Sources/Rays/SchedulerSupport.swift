@@ -73,6 +73,11 @@ extension QueueConfig {
     var problem: String? {
         if name.trimmingCharacters(in: .whitespaces).isEmpty { return "Give the queue a name." }
         if case .days(let mask)? = schedule?.repeat, mask == 0 { return "Pick at least one day." }
+        if enabled, let schedule, case .once(let text) = schedule.repeat, let day = SchedulerTime.date(text) {
+            let length = schedule.stopMin.map { $0 > schedule.startMin ? Int($0) : Int($0) + 1440 } ?? 1440
+            let ends = Calendar.current.date(byAdding: .minute, value: length, to: day) ?? day
+            if ends <= Date() { return "That time has already passed." }
+        }
         if case .command(let command) = whenFinished, command.trimmingCharacters(in: .whitespaces).isEmpty { return "Enter a command to run." }
         return nil
     }

@@ -96,7 +96,7 @@ struct QueuePage: View {
                 Button("Revert") { saveError = nil; drafts.items[queueId] = nil }
                     .buttonStyle(.plain)
                     .frame(minHeight: 28)
-                Button("Save schedule", action: save)
+                Button("Save", action: save)
                     .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(problem != nil)
@@ -118,7 +118,7 @@ struct QueuePage: View {
             saveError = nil
             drafts.items[queueId] = nil
         } catch {
-            saveError = "Couldn't save the schedule: \(EngineModel.message(for: error))"
+            saveError = "Couldn't save the queue: \(EngineModel.message(for: error))"
         }
     }
 

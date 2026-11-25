@@ -19,12 +19,24 @@ final class QueueActions {
         let id = UUID().uuidString
         let action: FinishAction
         var remaining: Int
+        var running = 0
 
         var message: String {
-            switch action {
+            let base = switch action {
             case .sleep: "Your Mac will sleep in \(remaining) seconds"
             case .shutDown: "Your Mac will shut down in \(remaining) seconds"
             default: "Rays will quit in \(remaining) seconds"
+            }
+            guard running > 0 else { return base }
+            return base + " · " + (running == 1 ? "1 download still running" : "\(running) downloads still running")
+        }
+
+        /// A later countdown only replaces a weaker one, so a queued shut down is never swapped for a quit.
+        var strength: Int {
+            switch action {
+            case .shutDown: 3
+            case .sleep: 2
+            default: 1
             }
         }
     }
@@ -34,13 +46,14 @@ final class QueueActions {
     @ObservationIgnored var onNotice: ((String) -> Void)?
     @ObservationIgnored private var task: Task<Void, Never>?
 
-    func perform(_ action: FinishAction) {
+    /// `running` is the number of downloads still going in other queues, shown on a countdown.
+    func perform(_ action: FinishAction, running: Int = 0) {
         switch action {
         case .nothing: break
         case .sound: NSSound(named: "Glass")?.play()
         case .lock: Self.lockScreen()
         case .command(let command): Self.run(command)
-        case .sleep, .quit, .shutDown: startCountdown(action)
+        case .sleep, .quit, .shutDown: startCountdown(action, running: running)
         }
     }
 
@@ -57,9 +70,10 @@ final class QueueActions {
         center.removeDeliveredNotifications(withIdentifiers: [id])
     }
 
-    private func startCountdown(_ action: FinishAction) {
+    private func startCountdown(_ action: FinishAction, running: Int) {
+        let started = Countdown(action: action, remaining: Self.countdownSeconds, running: running)
+        if let current = countdown, current.strength > started.strength { return }
         cancel()
-        let started = Countdown(action: action, remaining: Self.countdownSeconds)
         countdown = started
         // The notification is posted on its own, so an unanswered permission prompt never stalls the ticks.
         Task { await Self.postNotification(for: started) }

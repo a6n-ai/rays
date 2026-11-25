@@ -32,32 +32,48 @@ enum WakePermission {
     /// The records are cleared only when that succeeds.
     @MainActor
     static func remove() async -> Bool {
-        let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix(keyPrefix) }
-        let cancels = keys.flatMap { key in
-            (UserDefaults.standard.array(forKey: key) as? [Double] ?? []).map { format(Date(timeIntervalSince1970: $0)) }
+        // The snapshot waits for syncs already queued, and no new wake is scheduled until the rule file is gone.
+        let (keys, cancels) = await withCheckedContinuation { (done: CheckedContinuation<([String], String), Never>) in
+            serial.async {
+                lock.lock(); defer { lock.unlock() }
+                removing = true
+                let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix(keyPrefix) }
+                let cancels = keys.flatMap { key in
+                    (UserDefaults.standard.array(forKey: key) as? [Double] ?? []).map { format(Date(timeIntervalSince1970: $0)) }
+                }
+                .filter { $0.range(of: #"^\d\d/\d\d/\d\d \d\d:\d\d:\d\d$"#, options: .regularExpression) != nil }
+                .map { "/usr/bin/pmset schedule cancel wake '\($0)'; " }
+                .joined()
+                done.resume(returning: (keys, cancels))
+            }
         }
-        .filter { $0.range(of: #"^\d\d/\d\d/\d\d \d\d:\d\d:\d\d$"#, options: .regularExpression) != nil }
-        .map { "/usr/bin/pmset schedule cancel wake '\($0)'; " }
-        .joined()
+        defer { endRemoval() }
         guard await runAsAdmin(cancels + "/bin/rm -f '\(file)'"), !FileManager.default.fileExists(atPath: file) else { return false }
         for key in keys { UserDefaults.standard.removeObject(forKey: key) }
         return true
     }
 
     private static var wanting = Set<UInt64>()
+    private static let wantLock = NSLock()
+    private static var removing = false
+
+    private static func endRemoval() {
+        lock.lock(); defer { lock.unlock() }
+        removing = false
+    }
     private static let serial = DispatchQueue(label: "app.rays.wake")
 
     /// Some queue has Wake on but the rule file is gone, so the toggle should offer "Set Up Again".
     static var isMissingForWakeQueues: Bool {
-        lock.lock(); defer { lock.unlock() }
+        wantLock.lock(); defer { wantLock.unlock() }
         return !wanting.isEmpty && !FileManager.default.fileExists(atPath: file)
     }
 
     /// Brings the Mac's wake time in step with a queue. Calls run one at a time, in the order they were made.
     static func sync(queue: UInt64, wake: Bool, nextRun: Date?) {
-        lock.lock()
+        wantLock.lock()
         if wake { wanting.insert(queue) } else { wanting.remove(queue) }
-        lock.unlock()
+        wantLock.unlock()
         serial.async {
             if wake, let nextRun { _ = schedule(queue: queue, at: nextRun) } else { cancel(queue: queue) }
         }
@@ -66,7 +82,7 @@ enum WakePermission {
     /// Wakes the Mac a minute before `at`. A wake already recorded for that time is left alone.
     static func schedule(queue: UInt64, at: Date) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        guard FileManager.default.fileExists(atPath: file) else { return false }
+        guard !removing, FileManager.default.fileExists(atPath: file) else { return false }
         let target = at.addingTimeInterval(-60)
         guard target > .now else { return false }
         if recorded(queue) == [target.timeIntervalSince1970] { return true }

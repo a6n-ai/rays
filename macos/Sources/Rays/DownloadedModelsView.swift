@@ -65,6 +65,13 @@ private extension VerifyStatus {
         case .wrongChecksum: "Checksum didn't match"
         }
     }
+
+    var isWrongContent: Bool {
+        switch self {
+        case .wrongSize, .wrongChecksum: true
+        default: false
+        }
+    }
 }
 
 /// The model folders inside the AI Models folder, with size and file count.
@@ -180,13 +187,24 @@ struct DownloadedModelsView: View {
         run(item) {
             var kept = base
             // With replace off the engine keeps both copies, so the bad ones go first to keep the names exact.
+            // Only a wrong size or checksum is trashed: the engine confirmed those are regular files inside the folder,
+            // while a missing file has nothing to trash and a symlinked path must never be followed.
             if !replaceExisting {
                 let fm = FileManager.default
-                for file in files {
+                let root = item.url.resolvingSymlinksInPath().path(percentEncoded: false) + "/"
+                var trashed = false
+                defer { if trashed { revision += 1 } }
+                for result in checked.results where result.status.isWrongContent {
+                    guard let file = files.first(where: { $0.path == result.path }) else { continue }
                     let url = item.url.appending(path: file.path)
-                    guard fm.fileExists(atPath: url.path(percentEncoded: false)) else { continue }
+                    let parent = url.deletingLastPathComponent().resolvingSymlinksInPath().path(percentEncoded: false) + "/"
+                    guard parent.hasPrefix(root) else {
+                        kept.issues.append("\(file.path) — unsafe path")
+                        continue
+                    }
                     do {
                         try fm.trashItem(at: url, resultingItemURL: nil)
+                        trashed = true
                     } catch {
                         kept.issues.append("Couldn't move \(file.path) to the Trash: \(EngineModel.message(for: error))")
                         return .checked(kept)
@@ -208,7 +226,8 @@ struct DownloadedModelsView: View {
 
     /// Manifest paths come from the network or a file on disk, so only a relative path that stays inside the folder is used.
     private func isInside(_ path: String, of folder: URL) -> Bool {
-        guard !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else { return false }
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard !path.hasPrefix("/"), !parts.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) else { return false }
         return folder.appending(path: path).standardizedFileURL.path.hasPrefix(folder.standardizedFileURL.path + "/")
     }
 
@@ -330,12 +349,12 @@ private struct DownloadedModelRow: View {
             let total = checked.results.count
             let sizeOnly = checked.results.filter { $0.status == .sizeChecked }.count
             let problems = checked.problems.count
+            let matching = checked.results.filter { $0.status == .ok }.count
             VStack(alignment: .leading, spacing: 6) {
                 if problems == 0 && sizeOnly == 0 {
                     Label(total == 1 ? "All 1 file matches" : "All \(total) files match", systemImage: "checkmark")
                         .foregroundStyle(.green)
-                } else if problems == 0 {
-                    let matching = total - sizeOnly
+                } else if matching > 0 {
                     Label(matching == 1 ? "1 file matches" : "\(matching) files match", systemImage: "checkmark")
                         .foregroundStyle(.green)
                 }

@@ -45,7 +45,7 @@ final class EngineModel {
         QueueActions.shared.onNotice = { [weak self] in self?.notice = $0 }
         onQueueFinished = { [weak self] id in
             guard let action = self?.queues.first(where: { $0.config.id == id })?.config.whenFinished else { return }
-            QueueActions.shared.perform(action)
+            QueueActions.shared.perform(action, running: self?.activeJobs.count ?? 0)
         }
     }
 
