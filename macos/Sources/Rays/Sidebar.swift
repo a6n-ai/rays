@@ -42,7 +42,6 @@ struct SidebarView: View {
     @Binding var selection: Destination?
     @State private var folders: [SidebarFolder] = []
     @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = false
-    @AppStorage("sidebarDownloadsExpanded") private var downloadsExpanded = true
     @State private var denied = false
     @State private var activations = 0
     @Environment(\.openSettings) private var openSettings
@@ -51,13 +50,12 @@ struct SidebarView: View {
         VStack(spacing: 0) {
         List(selection: $selection) {
             Section {
-                DisclosureGroup(isExpanded: $downloadsExpanded) {
-                    Label("Models", systemImage: "cube")
-                        .tag(Destination.models)
-                } label: {
-                    Label("Downloads", systemImage: "arrow.down.circle")
-                        .tag(Destination.downloads)
-                }
+                Label("Downloads", systemImage: "arrow.down.circle")
+                    .tag(Destination.downloads)
+                // Always shown, not a DisclosureGroup: a sidebar List ignores its saved expansion and can hide a selected child.
+                Label("Models", systemImage: "cube")
+                    .padding(.leading, 18)
+                    .tag(Destination.models)
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
                 Label("Cloud", systemImage: "cloud")
