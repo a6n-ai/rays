@@ -12,6 +12,8 @@ const LATENCY_KEY: &str = "last_test_latency_ms";
 const CONNECTIONS: usize = 4;
 const START_BYTES: u64 = 1 << 20;
 const MAX_BYTES: u64 = 64 << 20;
+/// speed.cloudflare.com answers 403 for sizes from about 10.5 MB to 19.5 MB, so the ladder jumps over 16 MB.
+const SKIPPED: u64 = 16 << 20;
 
 #[derive(uniffi::Record, Clone, Debug, PartialEq, Eq)]
 pub struct SpeedTestResult {
@@ -96,6 +98,9 @@ async fn throughput(client: &reqwest::Client, base: &str, total: Duration) -> Re
                     }
                     done?;
                     size = (size * 2).min(MAX_BYTES);
+                    if size == SKIPPED {
+                        size *= 2;
+                    }
                 }
                 Ok::<(), EngineError>(())
             })

@@ -143,6 +143,11 @@ impl Engine {
         self.sched.best_time_queue()
     }
 
+    /// The Best time queue if it exists; unlike `best_time_queue` it never creates one.
+    pub fn best_time_queue_id(&self) -> Option<u64> {
+        self.sched.existing_best_time_queue()
+    }
+
     pub fn speed_settings(&self) -> SpeedSettings {
         self.sched.speed_settings()
     }

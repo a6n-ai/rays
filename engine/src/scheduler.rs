@@ -1561,6 +1561,12 @@ impl Scheduler {
         let _ = self.store.clear_samples();
     }
 
+    /// The Best time queue if it already exists; never creates one.
+    pub fn existing_best_time_queue(&self) -> Option<u64> {
+        let stored = self.store.setting(KEY_BEST_QUEUE).ok()??.parse::<u64>().ok()?;
+        lock(&self.queues).contains_key(&stored).then_some(stored)
+    }
+
     /// The queue that follows the best time, made on first use. Found by its stored id, never its name.
     pub fn best_time_queue(self: &Arc<Self>) -> Result<u64, EngineError> {
         let _one = lock(&self.best_queue);

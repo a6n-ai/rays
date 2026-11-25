@@ -14,6 +14,7 @@ const NORMAL: u8 = 0;
 const BLOCKED: u8 = 1;
 const STALL: u8 = 2;
 const TINY: u8 = 3;
+const BAND: u8 = 4;
 
 async fn server(blocked: Arc<AtomicU8>) -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -39,6 +40,12 @@ async fn read_head(sock: &mut TcpStream) -> Option<String> {
 async fn serve(mut sock: TcpStream, blocked: Arc<AtomicU8>) {
     let Some(head) = read_head(&mut sock).await else { return };
     let path = head.split_whitespace().nth(1).unwrap_or("/").to_owned();
+    let asked_len: usize = path.split("bytes=").nth(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+    // speed.cloudflare.com answers 403 (1 byte, text/plain) for sizes between about 10.5 MB and 19.5 MB.
+    if path.starts_with("/__down") && blocked.load(Ordering::Relaxed) == BAND && (11_000_000..=19_000_000).contains(&asked_len) {
+        let _ = sock.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: 1\r\nConnection: close\r\n\r\nx").await;
+        return;
+    }
     if path.starts_with("/__down") && blocked.load(Ordering::Relaxed) == BLOCKED {
         let html = "<html>blocked</html>";
         let reply = format!(
@@ -215,6 +222,18 @@ mod best_time {
 
     fn events(rt: &tokio::runtime::Runtime, e: &Engine, ms: u64) -> Vec<JobEvent> {
         rt.block_on(async { tokio::time::timeout(Duration::from_millis(ms), e.next_events()).await.unwrap_or_default() })
+    }
+
+    #[test]
+    fn best_time_queue_id_never_creates() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (_dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        assert_eq!(e.best_time_queue_id(), None);
+        assert!(e.queues().iter().all(|q| !q.config.follow_best_time));
+        let id = e.best_time_queue().unwrap();
+        assert_eq!(e.best_time_queue_id(), Some(id));
+        e.delete_queue(id).unwrap();
+        assert_eq!(e.best_time_queue_id(), None);
     }
 
     #[test]
@@ -416,4 +435,24 @@ mod best_time {
         assert!(stored(dir.path()).is_empty());
         assert!(e.hourly_typical().iter().all(Option::is_none));
     }
+}
+
+/// Run by hand against the real server: `cargo test --test speed real_cloudflare -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn real_cloudflare() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let e = engine(dir.path());
+    e.set_conditions(true, true, true, NetworkKind::Wifi);
+    eprintln!("real result {:?}", rt.block_on(e.run_speed_test(false)));
+}
+
+#[test]
+fn speed_test_avoids_sizes_the_server_blocks() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (_dir, e, mode, _) = rig(&rt, NetworkKind::Wifi);
+    mode.store(BAND, Ordering::Relaxed);
+    let r = rt.block_on(e.run_speed_test(false));
+    assert!(r.as_ref().is_ok_and(|r| r.saved), "{r:?}");
 }
