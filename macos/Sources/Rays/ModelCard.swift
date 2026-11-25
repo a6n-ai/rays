@@ -11,36 +11,42 @@ struct ModelCard: View {
     private var parts: (org: String, name: String) { hfNameParts(hit.id) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ModelTile(kind: kind, size: 44)
-            Text(parts.name)
-                .font(.body.weight(.semibold))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            if !parts.org.isEmpty {
-                Text(parts.org).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                ModelTile(kind: kind, size: 32)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(parts.name)
+                        .font(.callout.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if !parts.org.isEmpty {
+                        Text(parts.org).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
             }
             HStack(spacing: 6) {
                 ModelCapsule(text: kind.label, tint: kind.color)
                 if hit.gguf { ModelCapsule(text: "GGUF") }
+                Spacer(minLength: 4)
+                Text("↓ \(hit.downloads.formatted(.number.notation(.compactName))) · ♥ \(hit.likes.formatted(.number.notation(.compactName)))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
             }
-            Spacer(minLength: 0)
-            Text("↓ \(hit.downloads.formatted(.number.notation(.compactName))) · ♥ \(hit.likes.formatted(.number.notation(.compactName)))")
-                .font(.callout)
-                .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
-        .padding(14)
-        .glassEffect(.regular.tint(kind.color.opacity(0.18)).interactive(), in: .rect(cornerRadius: 18))
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(10)
+        .glassEffect(.regular.tint(kind.color.opacity(0.18)).interactive(), in: .rect(cornerRadius: 14))
         .overlay {
             if isSelected {
-                RoundedRectangle(cornerRadius: 18).strokeBorder(kind.color, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 14).strokeBorder(kind.color, lineWidth: 2)
             }
         }
         .scaleEffect(isHovered ? 1.02 : 1)
         .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: isHovered)
         .onHover { isHovered = $0 }
-        .contentShape(.rect(cornerRadius: 18))
+        .contentShape(.rect(cornerRadius: 14))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(parts.name), \(parts.org), \(kind.label)")
         .accessibilityAddTraits(.isButton)

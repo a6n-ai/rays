@@ -17,7 +17,7 @@ struct ModelResultsList: View {
             if !cards.isEmpty {
                 Section("Top models") {
                     GlassEffectContainer(spacing: 14) {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 14)], spacing: 14) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
                             ForEach(cards, id: \.id) { hit in
                                 ModelCard(hit: hit, isSelected: selection == hit.id)
                                     .onTapGesture { choose(hit.id) }
