@@ -38,7 +38,7 @@ struct QueueListTab: View {
             }
             Button("Cancel", role: .cancel) { deleting = nil }
         } message: {
-            Text("Its downloads move to Main.")
+            Text("Its downloads leave the queue and stay in Downloads.")
         }
     }
 

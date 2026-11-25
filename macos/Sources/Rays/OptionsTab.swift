@@ -58,7 +58,7 @@ struct OptionsTab: View {
         .confirmationDialog("Delete queue \(draft.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete queue", role: .destructive, action: onDelete)
         } message: {
-            Text("Its downloads move to Main.")
+            Text("Its downloads leave the queue and stay in Downloads.")
         }
     }
 
