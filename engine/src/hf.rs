@@ -70,21 +70,21 @@ fn gated(v: &serde_json::Value) -> bool {
     matches!(v.as_str(), Some("auto" | "manual"))
 }
 
+/// An empty query lists what is trending, so the Models page never opens on a blank list.
+fn search_url(base: &str, query: &str) -> Result<reqwest::Url, EngineError> {
+    let query = query.trim();
+    let sort = if query.is_empty() { "trendingScore" } else { "downloads" };
+    let mut params = vec![("sort", sort), ("direction", "-1"), ("limit", "30"),
+        ("expand[]", "gated"), ("expand[]", "downloads"), ("expand[]", "likes"), ("expand[]", "tags")];
+    if !query.is_empty() {
+        params.insert(0, ("search", query));
+    }
+    reqwest::Url::parse_with_params(&format!("{base}/api/models"), params)
+        .map_err(|e| EngineError::InvalidUrl { msg: e.to_string() })
+}
+
 pub async fn search(client: &reqwest::Client, base: &str, token: Option<&str>, query: &str) -> Result<Vec<HfModel>, EngineError> {
-    let url = reqwest::Url::parse_with_params(
-        &format!("{base}/api/models"),
-        [
-            ("search", query),
-            ("sort", "downloads"),
-            ("direction", "-1"),
-            ("limit", "30"),
-            ("expand[]", "gated"),
-            ("expand[]", "downloads"),
-            ("expand[]", "likes"),
-            ("expand[]", "tags"),
-        ],
-    )
-    .map_err(|e| EngineError::InvalidUrl { msg: e.to_string() })?;
+    let url = search_url(base, query)?;
     let models: Vec<WireModel> = get_json(client, url, token).await?;
     Ok(models
         .into_iter()
@@ -391,6 +391,17 @@ fn is_quant(u: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn empty_query_lists_trending() {
+        let url = search_url("https://hf.test", "  ").unwrap();
+        let q: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        assert!(q.contains(&("sort".into(), "trendingScore".into())));
+        assert!(!q.iter().any(|(k, _)| k == "search"));
+        let url = search_url("https://hf.test", "qwen").unwrap();
+        let q: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+        assert!(q.contains(&("sort".into(), "downloads".into())) && q.contains(&("search".into(), "qwen".into())));
+    }
+
     use super::*;
 
     fn f(path: &str, size: u64) -> HfFile {
