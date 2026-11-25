@@ -16,7 +16,8 @@ struct ContentView: View {
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        NavigationSplitView {
+        @Bindable var bound = model
+        return NavigationSplitView {
             SidebarView(selection: $destination)
                 // On the sidebar column (not the split view) so the field doesn't take toolbar space.
                 .searchable(text: $query, placement: .sidebar, prompt: "Search")
@@ -30,6 +31,8 @@ struct ContentView: View {
                         destination = .schedules
                     } else if path == "queues" {
                         destination = .queues
+                    } else if path == "speed" {
+                        destination = .speed
                     } else if path == "models" {
                         destination = .models
                     } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
@@ -44,6 +47,7 @@ struct ContentView: View {
                     case .models?: lastFolder = "models"
                     case .queues?: lastFolder = "queues"
                     case .schedules?: lastFolder = "schedules"
+                    case .speed?: lastFolder = "speed"
                     default: lastFolder = ""
                     }
                 }
@@ -70,6 +74,22 @@ struct ContentView: View {
             accept(texts.flatMap(Links.inText))
         } isTargeted: { setTargeted($0) }
         .task(id: model.generation) { await model.run() }
+        .task(id: model.generation) {
+            while !Task.isCancelled {
+                model.refreshSpeed()
+                try? await Task.sleep(for: .seconds(30 * 60))
+            }
+        }
+        .confirmationDialog("You're on a hotspot or metered connection. A test uses about 50 to 200 MB.",
+                            isPresented: $bound.confirmHotspot, titleVisibility: .visible) {
+            Button("Run Test") { Task { await model.runSpeedTest(force: true) } }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Let Rays test your speed a few times each night for a week? About 1 GB in total.",
+               isPresented: $bound.nightPromptShown) {
+            Button("Allow") { model.answerNightPrompt(allow: true) }
+            Button("Not Now", role: .cancel) { model.answerNightPrompt(allow: false) }
+        }
         .onChange(of: model.queues.map(\.config)) { drafts.reconcile(model.queues) }
         .onReceive(NotificationCenter.default.publisher(for: .openSorter)) { _ in destination = .sorter }
         .onReceive(NotificationCenter.default.publisher(for: .openCloud)) { _ in destination = .cloud }
@@ -93,6 +113,8 @@ struct ContentView: View {
                     CloudView()
                 case .models?:
                     ModelsView()
+                case .speed?:
+                    SpeedPage()
                 case .schedules?:
                     SchedulesPage(isDropTargeted: isDropTargeted, drafts: drafts)
                 case .queues?:

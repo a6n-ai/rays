@@ -184,10 +184,26 @@ struct JobRow: View {
                     Text(Links.clickable(part.text)).foregroundStyle(part.tint)
                 }
             }
+            slowHint
         }
         .font(.callout)
         .monospacedDigit()
         .lineLimit(1)
+    }
+
+    @ViewBuilder private var slowHint: some View {
+        if let hint = model.slowHint(for: job) {
+            HStack(spacing: 6) {
+                Text(hint).foregroundStyle(.secondary)
+                Button("Move to Best time") { model.moveToBestTime(job.id) }
+                    .buttonStyle(.link)
+                Button { model.dismissHint(job.id) } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Dismiss")
+                    .accessibilityLabel("Dismiss hint")
+            }
+        }
     }
 
     private var statusParts: [Part] {

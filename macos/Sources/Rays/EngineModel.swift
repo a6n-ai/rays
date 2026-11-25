@@ -17,6 +17,19 @@ final class EngineModel {
     /// Queue runs, newest first, at most `runLimit`.
     private(set) var runs: [QueueRun] = []
     static let runLimit = 200
+    private(set) var bestTime: BestTime?
+    private(set) var lastTest: SpeedTestResult?
+    private(set) var testing = false
+    private(set) var speedError: String?
+    private(set) var hourly: [UInt64?] = Array(repeating: nil, count: 24)
+    private(set) var speedSettings = SpeedSettings(autoTests: false, nightUntil: nil, nightPromptAnswered: true)
+    private(set) var network = NetworkKind.unknown
+    var confirmHotspot = false
+    var nightPromptShown = false
+    /// Slow-hint dismissals live only for this session.
+    private(set) var dismissedHints = Set<UInt64>()
+    @ObservationIgnored private var runningSince: [UInt64: Date] = [:]
+    @ObservationIgnored private var afterNightPrompt: (() -> Void)?
     var onQueueFinished: ((UInt64) -> Void)?
     @ObservationIgnored private var engine: Engine?
     @ObservationIgnored private var conditions: ConditionsMonitor?
@@ -83,7 +96,9 @@ final class EngineModel {
             queues = engine.queues()
             runs = engine.queueRuns(limit: UInt32(Self.runLimit))
             queues.forEach(syncWake)
-            conditions = ConditionsMonitor { wifi, onPower, idle, network in
+            refreshSpeed(engine)
+            conditions = ConditionsMonitor { [weak self] wifi, onPower, idle, network in
+                self?.network = network
                 engine.setConditions(wifi: wifi, onPower: onPower, idle: idle, network: network)
             }
             conditions?.start()
@@ -418,6 +433,7 @@ final class EngineModel {
     private func apply(_ event: JobEvent) {
         switch event {
         case .upsert(let job):
+            if job.isActive { runningSince[job.id] = runningSince[job.id] ?? Date() } else { runningSince[job.id] = nil }
             if let index = jobs.firstIndex(where: { $0.id == job.id }) {
                 jobs[index] = job
             } else {
@@ -425,6 +441,7 @@ final class EngineModel {
             }
             track(job)
         case .removed(let id):
+            runningSince[id] = nil
             files.forget(id)
             jobs.removeAll { $0.id == id }
         case .queueChanged(let queue):
@@ -586,5 +603,150 @@ enum SorterJournal {
             out[name] = String(body[..<cut.lowerBound])
         }
         return out
+    }
+}
+
+extension EngineModel {
+    /// Reads the engine's speed state. A test that was not saved stays shown until a newer one replaces it.
+    func refreshSpeed() { if let engine { refreshSpeed(engine) } }
+
+    fileprivate func refreshSpeed(_ engine: Engine) {
+        bestTime = engine.bestTime()
+        hourly = engine.hourlyTypical()
+        speedSettings = engine.speedSettings()
+        if let saved = engine.lastSpeedTest(), saved.at >= (lastTest?.at ?? 0) { lastTest = saved }
+    }
+
+    /// Asks first on a hotspot or metered connection. Ignored while a test is already running.
+    func requestSpeedTest() {
+        guard !testing else { return }
+        if network == .expensive { confirmHotspot = true } else { Task { await runSpeedTest(force: false) } }
+    }
+
+    func runSpeedTest(force: Bool) async {
+        guard let engine, !testing else { return }
+        testing = true
+        speedError = nil
+        defer { testing = false }
+        do {
+            lastTest = try await engine.runSpeedTest(force: force)
+        } catch {
+            speedError = Self.message(for: error)
+        }
+        refreshSpeed(engine)
+    }
+
+    func setAutoTests(_ on: Bool) {
+        guard let engine else { return }
+        var settings = engine.speedSettings()
+        settings.autoTests = on
+        engine.setSpeedSettings(s: settings)
+        speedSettings = engine.speedSettings()
+    }
+
+    func clearSpeedHistory() {
+        engine?.clearSpeedHistory()
+        lastTest = nil
+        refreshSpeed()
+    }
+
+    /// Whether the Best time queue's night week is running now.
+    var nightWeekActive: Bool { (speedSettings.nightUntil ?? 0) > Int64(Date().timeIntervalSince1970) }
+
+    func startNightWeek() {
+        guard let engine else { return }
+        engine.startNightWeek()
+        markNightPromptAnswered(engine)
+    }
+
+    private func markNightPromptAnswered(_ engine: Engine) {
+        var settings = engine.speedSettings()
+        settings.nightPromptAnswered = true
+        engine.setSpeedSettings(s: settings)
+        speedSettings = engine.speedSettings()
+    }
+
+    /// Runs `go` once the one-time night-test question has been answered, asking it first if needed.
+    func withNightPrompt(_ go: @escaping () -> Void) {
+        guard let engine else { return }
+        if engine.speedSettings().nightPromptAnswered { go(); return }
+        afterNightPrompt = go
+        nightPromptShown = true
+    }
+
+    func answerNightPrompt(allow: Bool) {
+        guard let engine else { return }
+        if allow { engine.startNightWeek() }
+        markNightPromptAnswered(engine)
+        afterNightPrompt?()
+        afterNightPrompt = nil
+    }
+
+    private static let bestTimeQueueKey = "bestTimeQueueID"
+
+    /// The Best time queue, made by the engine on first use; it gets the moon look unless the user picked one.
+    func bestTimeQueueID() throws -> UInt64 {
+        let engine = try runningEngine
+        let id = try engine.bestTimeQueue()
+        defaults.set(Int(id), forKey: Self.bestTimeQueueKey)
+        queues = engine.queues()
+        QueueAppearances.shared.setIfMissing(QueueAppearance(symbol: "moon.stars", color: "indigo"), for: id)
+        return id
+    }
+
+    func isBestTimeQueue(_ queue: QueueView) -> Bool {
+        queue.config.followBestTime || defaults.integer(forKey: Self.bestTimeQueueKey) == Int(queue.id)
+    }
+
+    func addAtBestTime(_ text: String) {
+        withNightPrompt { [self] in
+            do { add(text, queue: try bestTimeQueueID()) } catch { queueFailed("add to the Best time queue", error) }
+        }
+    }
+
+    func moveToBestTime(_ job: UInt64) {
+        dismissedHints.insert(job)
+        withNightPrompt { [self] in
+            do { moveToQueue(job: job, queue: try bestTimeQueueID()) } catch { queueFailed("move the download", error) }
+        }
+    }
+
+    func dismissHint(_ job: UInt64) { dismissedHints.insert(job) }
+
+    /// "Usually 3x faster at 01:00" when a big, slow download would do much better in the best window.
+    func slowHint(for job: JobView) -> String? {
+        guard job.state == .running, !dismissedHints.contains(job.id), (job.total ?? 0) >= 1_000_000_000,
+              job.bytesPerSec > 0, let since = runningSince[job.id], Date().timeIntervalSince(since) >= 60,
+              case .window(let start, let end, let typical, _, let confidence)? = bestTime, confidence != .low,
+              typical >= 2 * job.bytesPerSec else { return nil }
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let now = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        let inside = start <= end ? (Int(start)..<Int(end)).contains(now) : (now >= Int(start) || now < Int(end))
+        guard !inside else { return nil }
+        return "Usually \(typical / job.bytesPerSec)× faster at \(SchedulerTime.hhmm(start))"
+    }
+}
+
+extension BestTime {
+    /// "01:00–05:00", or the default window while there is not enough data.
+    var windowText: String {
+        if case .window(let start, let end, _, _, _) = self { return "\(SchedulerTime.hhmm(start))–\(SchedulerTime.hhmm(end))" }
+        return "01:00–06:00"
+    }
+
+    var hasWindow: Bool { if case .window = self { true } else { false } }
+}
+
+enum SpeedFormat {
+    /// 100 or more shows no decimals; below that, one.
+    static func mbps(_ bps: UInt64) -> String {
+        let value = Double(bps) * 8 / 1_000_000
+        return (value >= 100 ? String(Int(value.rounded())) : String(format: "%.1f", value)) + " Mb/s"
+    }
+
+    static func ago(_ at: Int64) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: Date(timeIntervalSince1970: TimeInterval(at)), relativeTo: Date())
     }
 }

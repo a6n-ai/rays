@@ -8,6 +8,7 @@ enum Destination: Hashable {
     case cloud
     case queues
     case schedules
+    case speed
 }
 
 struct SidebarFolder: Identifiable {
@@ -93,6 +94,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        SpeedCard(selection: $selection)
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .task(id: "\(EngineModel.downloadsURL.path(percentEncoded: false))|\(model.jobs.filter(\.isDone).count)|\(model.folderRevision)|\(activations)") {

@@ -64,6 +64,10 @@ struct QueueAppearance: Codable, Equatable {
         if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: Self.keyPrefix + String(id)) }
     }
 
+    func setIfMissing(_ value: QueueAppearance, for id: UInt64) {
+        if stored[id] == nil { set(value, for: id) }
+    }
+
     func clear(_ id: UInt64) {
         stored[id] = nil
         defaults.removeObject(forKey: Self.keyPrefix + String(id))

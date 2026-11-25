@@ -107,6 +107,12 @@ struct AddBar: View {
                 }
             }
             .pickerStyle(.inline)
+            Divider()
+            Button {
+                submitAtBestTime()
+            } label: {
+                Label(bestTimeTitle, systemImage: "moon.stars")
+            }
         } label: {
             HStack(spacing: 6) {
                 Label("Download", systemImage: "arrow.down")
@@ -149,6 +155,19 @@ struct AddBar: View {
         .glassEffect(reduceTransparency ? .regular : .regular.tint(Color.red.opacity(0.2)), in: .capsule)
         .glassEffectID("notice", in: glass)
         .glassEffectTransition(.matchedGeometry)
+    }
+
+    private var bestTimeTitle: String {
+        guard let best = model.bestTime else { return "At best time" }
+        return "At best time (\(best.windowText)\(best.hasWindow ? "" : ", default"))"
+    }
+
+    private func submitAtBestTime() {
+        guard !isBlank else { return }
+        let text = input
+        input = ""
+        chosen = nil
+        model.addAtBestTime(text)
     }
 
     private func submit() {

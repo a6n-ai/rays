@@ -5,6 +5,7 @@ struct ScheduleTab: View {
     @Binding var draft: QueueConfig
     let queue: QueueView
     let isDirty: Bool
+    @Environment(EngineModel.self) private var model
     @State private var wakeInstalled = false
 
     private var kind: RepeatKind { RepeatKind(draft.schedule) }
@@ -41,12 +42,25 @@ struct ScheduleTab: View {
                 if kind == .none { formNote("Runs only when you start it. Pick a repeat to run it at set times.") }
             }
             if draft.schedule != nil {
+                if model.isBestTimeQueue(queue) {
+                    formRow("Best time") {
+                        Toggle("Follow best time", isOn: Binding(get: { queue.config.followBestTime }, set: setFollow))
+                            .toggleStyle(.switch)
+                        formNote("Rays moves this schedule to your fastest hours once a day")
+                        if model.bestTime?.hasWindow == false {
+                            formNote("Default night window until Rays has 7 days of speed data")
+                        }
+                    }
+                }
                 formRow("Start at") {
                     DatePicker("Start at", selection: Binding(get: { SchedulerTime.clock(schedule.wrappedValue.startMin) },
                                                               set: { schedule.wrappedValue.startMin = SchedulerTime.minutes($0) }),
                                displayedComponents: .hourAndMinute)
                         .labelsHidden()
                         .fixedSize()
+                    Button { useBestTime() } label: { Label("Use best time", systemImage: "sparkles") }
+                        .disabled(!(model.bestTime?.hasWindow ?? false))
+                        .help(model.bestTime?.hasWindow == true ? "Fill in the fastest hours" : "Not enough speed data yet")
                     if !(draft.wake && wakeInstalled) {
                         formNote("Rays starts this queue at \(SchedulerTime.hhmm(schedule.wrappedValue.startMin)) if your Mac is awake and Rays is running.")
                     }
@@ -75,6 +89,18 @@ struct ScheduleTab: View {
         .toggleStyle(.checkbox)
         .formColumn()
         .task { wakeInstalled = await WakePermission.status().installed }
+    }
+
+    private func useBestTime() {
+        guard case .window(let start, let end, _, _, _)? = model.bestTime else { return }
+        schedule.wrappedValue.startMin = start
+        schedule.wrappedValue.stopMin = end
+    }
+
+    private func setFollow(_ on: Bool) {
+        var config = queue.config
+        config.followBestTime = on
+        do { _ = try model.saveQueue(config) } catch { model.queueFailed("change the queue", error) }
     }
 
     private func setKind(_ new: RepeatKind) {
