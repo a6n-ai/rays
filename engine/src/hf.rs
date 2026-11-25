@@ -180,7 +180,8 @@ pub struct HfVersion {
     pub recommended: bool,
 }
 
-const PREFERRED: [&str; 9] = ["Q4_K_M", "Q4_K_S", "Q5_K_M", "Q4_0", "Q5_K_S", "Q5_0", "Q6_K", "Q8_0", "IQ4_XS"];
+/// Closest smaller-or-equal quants first; the smallest version is the fallback.
+const PREFERRED: [&str; 13] = ["Q4_K_M", "Q4_K_S", "IQ4_XS", "Q4_0", "Q3_K_L", "Q3_K_M", "IQ3_M", "Q3_K_S", "Q5_K_S", "Q5_K_M", "Q5_0", "Q6_K", "Q8_0"];
 /// Checkpoint formats in priority order; pt, pth and ckpt are one tier.
 const WEIGHT_TIERS: [&[&str]; 6] = [&["safetensors"], &["bin"], &["pt", "pth", "ckpt"], &["h5"], &["msgpack"], &["onnx"]];
 const SKIPPED_DIRS: [&str; 4] = ["onnx/", "coreml/", "openvino/", "original/"];
@@ -197,6 +198,9 @@ pub fn hf_repo_from_input(input: String) -> Option<String> {
         "http://huggingface.co/",
         "https://hf.co/",
         "http://hf.co/",
+        "https://www.huggingface.co/",
+        "http://www.huggingface.co/",
+        "www.huggingface.co/",
         "huggingface.co/",
         "hf.co/",
     ];
@@ -207,7 +211,7 @@ pub fn hf_repo_from_input(input: String) -> Option<String> {
     let mut segs = rest.split('/');
     let org = segs.next()?;
     let repo = segs.next()?;
-    if org.is_empty() || repo.is_empty() || NON_MODEL_ROOTS.contains(&org) || (!from_url && segs.next().is_some()) {
+    if org.is_empty() || repo.is_empty() || NON_MODEL_ROOTS.contains(&org) || (!from_url && segs.any(|s| !s.is_empty())) {
         return None;
     }
     Some(format!("{org}/{repo}"))
@@ -285,9 +289,18 @@ fn default_checkpoint(files: &[HfFile]) -> Vec<String> {
         ["bin"] => "pytorch_model.bin.index.json",
         _ => "",
     };
+    // One extension per tier: the one with the most bytes, `pt` on a tie.
+    let size_of = |e: &str| files.iter().filter(|f| in_pool(f) && ext_is(&f.path, &[e])).map(|f| f.size).sum::<u64>();
+    let ext = tier.iter().copied().max_by_key(|e| (size_of(e), *e == "pt")).unwrap_or("");
+    let sharded = matches!(tier, ["safetensors"]) && files.iter().any(|f| f.path == index) && files.iter().any(|f| is_shard(&f.path));
+    let nonsharded = matches!(tier, ["safetensors"]) && !sharded && files.iter().any(|f| in_pool(f) && ext_is(&f.path, &[ext]) && !is_shard(&f.path));
     files
         .iter()
-        .filter(|f| is_config(&f.path) || f.path == index || (in_pool(f) && ext_is(&f.path, tier)))
+        .filter(|f| {
+            is_config(&f.path)
+                || f.path == index
+                || (in_pool(f) && ext_is(&f.path, &[ext]) && (!sharded || is_shard(&f.path)) && (!nonsharded || !is_shard(&f.path)))
+        })
         .map(|f| f.path.clone())
         .collect()
 }
@@ -347,12 +360,18 @@ fn strip_split_suffix(stem: &str) -> &str {
     }
 }
 
-/// Last `-` or `.` token that is a quant label, uppercased; FP16 is reported as F16.
+/// Last `-` or `.` token that is a quant label, or an `_` suffix of it; uppercased, FP16 is reported as F16.
 fn quant_label(stem: &str) -> Option<String> {
     stem.split(['-', '.']).rev().find_map(|t| {
-        let u = t.to_ascii_uppercase();
-        is_quant(&u).then(|| if u == "FP16" { "F16".to_owned() } else { u })
+        std::iter::once(t).chain(t.match_indices('_').map(|(i, _)| &t[i + 1..])).find_map(|c| {
+            let u = c.to_ascii_uppercase();
+            is_quant(&u).then(|| if u == "FP16" { "F16".to_owned() } else { u })
+        })
     })
+}
+
+fn is_shard(path: &str) -> bool {
+    path.strip_suffix(".safetensors").is_some_and(|s| strip_split_suffix(s).len() != s.len())
 }
 
 /// Uppercase token matching `I?Q\d(_[A-Z0-9]+)*`, or F16, BF16, F32, FP16.
@@ -465,8 +484,59 @@ mod tests {
             let files = names.iter().map(|(p, s)| f(p, *s)).collect();
             hf_versions(files).into_iter().find(|v| v.recommended).unwrap().label
         };
-        assert_eq!(picked(&[("x-Q8_0.gguf", 8), ("x-IQ4_XS.gguf", 3), ("x-Q5_K_M.gguf", 5)]), "Q5_K_M");
-        assert_eq!(picked(&[("x-Q2_K.gguf", 2), ("x-Q3_K_M.gguf", 3)]), "Q2_K");
+        assert_eq!(picked(&[("x-Q8_0.gguf", 8), ("x-IQ4_XS.gguf", 3), ("x-Q5_K_M.gguf", 5)]), "IQ4_XS");
+        assert_eq!(picked(&[("x-Q2_K.gguf", 2), ("x-Q9_0.gguf", 3)]), "Q2_K");
+    }
+
+    #[test]
+    fn recommended_closest_smaller_quant() {
+        let versions = hf_versions(vec![f("x-Q5_K_M.gguf", 5), f("x-Q4_0.gguf", 4), f("x-Q8_0.gguf", 8)]);
+        assert_eq!(versions.iter().find(|v| v.recommended).unwrap().label, "Q4_0");
+    }
+
+    #[test]
+    fn underscore_quant_names() {
+        let label = |name: &str| version_label(&format!("x/{name}"));
+        assert_eq!(label("model_Q4_K_M.gguf"), "Q4_K_M");
+        assert_eq!(label("Model-7B_q5_k_s.gguf"), "Q5_K_S");
+    }
+
+    #[test]
+    fn one_pytorch_extension() {
+        assert_eq!(hf_recommended(vec![f("model.pt", 1), f("model.ckpt", 1)]), vec!["model.pt"]);
+        assert_eq!(hf_recommended(vec![f("model.pt", 1), f("model.ckpt", 5)]), vec!["model.ckpt"]);
+    }
+
+    #[test]
+    fn sharded_safetensors_with_index() {
+        let files = vec![
+            f("model-00001-of-00002.safetensors", 1),
+            f("model-00002-of-00002.safetensors", 1),
+            f("consolidated.safetensors", 1),
+            f("model.safetensors.index.json", 1),
+        ];
+        let mut got = hf_recommended(files);
+        got.sort();
+        assert_eq!(
+            got,
+            vec!["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors", "model.safetensors.index.json"]
+        );
+    }
+
+    #[test]
+    fn nonsharded_safetensors_without_index() {
+        let files = vec![f("model.safetensors", 1), f("consolidated.safetensors", 1)];
+        let mut got = hf_recommended(files);
+        got.sort();
+        assert_eq!(got, vec!["consolidated.safetensors", "model.safetensors"]);
+    }
+
+    #[test]
+    fn input_trailing_slash_and_www() {
+        assert_eq!(hf_repo_from_input("Qwen/Qwen3-8B/".into()), Some("Qwen/Qwen3-8B".into()));
+        assert_eq!(hf_repo_from_input("https://huggingface.co/Qwen/Qwen3-8B/".into()), Some("Qwen/Qwen3-8B".into()));
+        assert_eq!(hf_repo_from_input("www.huggingface.co/Qwen/Qwen3-8B".into()), Some("Qwen/Qwen3-8B".into()));
+        assert_eq!(hf_repo_from_input("https://www.huggingface.co/Qwen/Qwen3-8B".into()), Some("Qwen/Qwen3-8B".into()));
     }
 
     #[test]
