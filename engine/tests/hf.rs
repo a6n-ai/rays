@@ -526,14 +526,15 @@ async fn sha_checked_on_finish() {
     let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
     assert!(matches!(&v.state, JobState::Failed { reason } if reason == "Checksum didn't match"), "{:?}", v.state);
     assert_eq!(v.done, 0);
-    assert!(std::fs::read_dir(&bad).unwrap().next().is_none(), "the file or its .part was left behind");
+    assert!(std::fs::read_dir(&bad).unwrap().all(|e| e.unwrap().file_name() == ".rays-model.json"), "the file or its .part was left behind");
 
     sched.resume(id);
     let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
     let JobState::Done { path } = v.state else { unreachable!() };
     assert!(std::fs::read(path).unwrap() == data());
-    let names: Vec<String> = std::fs::read_dir(&bad).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
-    assert_eq!(names, vec!["w.gguf".to_string()], "no .part left behind");
+    let mut names: Vec<String> = std::fs::read_dir(&bad).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    names.sort();
+    assert_eq!(names, vec![".rays-model.json".to_string(), "w.gguf".to_string()], "no .part left behind");
 }
 
 /// Starts a download that stalls at DROP_AT, pauses it, shuts the engine down and reopens it on the same data dir.
@@ -695,4 +696,66 @@ async fn failed_twin_from_another_url_is_replaced() {
     assert_eq!(views.iter().map(|v| v.id).collect::<Vec<_>>(), vec![id]);
     assert_eq!(views[0].url, format!("http://127.0.0.1:{}/gated/m/resolve/abc/w.gguf", hf.port()));
     sched.shutdown();
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn add_hf_writes_manifest() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("tmp/AI Models/open/m");
+    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest, None);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    let m = dl_engine::hf::read_manifest(&dest).expect("manifest written");
+    assert_eq!((m.repo.as_str(), m.sha.as_str()), ("open/m", "abc"));
+    assert_eq!(m.files, vec![file("w.gguf", SIZE as u64, None)]);
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    let res = sched.add_hf("open/m", "abc", vec![file("onnx/m.onnx", SIZE as u64, Some(data_sha()))], &dest, None);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    let m = dl_engine::hf::read_manifest(&dest).unwrap();
+    assert_eq!(m.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), ["w.gguf", "onnx/m.onnx"]);
+    let raw = std::fs::read_to_string(dest.join(".rays-model.json")).unwrap();
+    assert!(!raw.contains("token") && !raw.contains("http"), "{raw}");
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    sched.shutdown();
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn verify_reports_each_status() {
+    use dl_engine::hf::VerifyStatus;
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = b"0123456789".to_vec();
+    let sha: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+    std::fs::write(dir.path().join("ok.bin"), &bytes).unwrap();
+    std::fs::write(dir.path().join("sized.bin"), &bytes).unwrap();
+    std::fs::write(dir.path().join("short.bin"), b"012").unwrap();
+    std::fs::write(dir.path().join("bad.bin"), &bytes).unwrap();
+    let files = vec![
+        file("ok.bin", 10, Some(sha.clone())),
+        file("sized.bin", 10, None),
+        file("missing.bin", 10, Some(sha.clone())),
+        file("short.bin", 10, Some(sha.clone())),
+        file("bad.bin", 10, Some("00".repeat(32))),
+    ];
+    let got = dl_engine::hf::verify_files(dir.path(), files).await;
+    let statuses: Vec<_> = got.iter().map(|r| (r.path.as_str(), &r.status)).collect();
+    assert_eq!(
+        statuses,
+        vec![("ok.bin", &VerifyStatus::Ok), ("sized.bin", &VerifyStatus::SizeChecked), ("missing.bin", &VerifyStatus::Missing), ("short.bin", &VerifyStatus::WrongSize { actual: 3 }), ("bad.bin", &VerifyStatus::WrongChecksum)]
+    );
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn manifest_paths_are_safe() {
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("model");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dir.path().join("x"), b"abc").unwrap();
+    std::fs::write(
+        dest.join(".rays-model.json"),
+        r#"{"repo":"open/m","sha":"abc","files":[{"path":"../x","size":3,"sha256":null}]}"#,
+    )
+    .unwrap();
+    let m = dl_engine::hf::read_manifest(&dest).expect("manifest read");
+    let got = dl_engine::hf::verify_files(&dest, m.files).await;
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].status, dl_engine::hf::VerifyStatus::Missing);
 }

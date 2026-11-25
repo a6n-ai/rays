@@ -1,15 +1,17 @@
 //! Hugging Face repo input parsing, file grouping, and the API client for search and model info.
 use crate::types::{EngineError, JobId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use std::collections::BTreeMap;
+use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 
 /// Keychain service and account for the Hugging Face token; the S3 keys live under `ai.a6n.rays.s3`.
 pub const KEYCHAIN_SERVICE: &str = "ai.a6n.rays.hf";
 pub const TOKEN_ACCOUNT: &str = "token";
 
-#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HfFile {
     pub path: String,
     pub size: u64,
@@ -122,6 +124,126 @@ pub fn hf_target(dest_dir: &Path, path: &str) -> Option<(PathBuf, String)> {
     }
     let name = p.file_name()?.to_str()?.to_owned();
     Some((dest_dir.join(p.parent()?), name))
+}
+
+/// Written by `add_hf` next to the files; holds no token and no URL query.
+pub const MANIFEST_NAME: &str = ".rays-model.json";
+
+#[derive(uniffi::Record, Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HfManifest {
+    pub repo: String,
+    pub sha: String,
+    pub files: Vec<HfFile>,
+}
+
+#[derive(uniffi::Enum, Clone, Debug, PartialEq)]
+pub enum VerifyStatus {
+    Ok,
+    /// No checksum recorded, so only the size was compared.
+    SizeChecked,
+    Missing,
+    WrongSize { actual: u64 },
+    WrongChecksum,
+}
+
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct VerifyResult {
+    pub path: String,
+    pub status: VerifyStatus,
+}
+
+pub fn read_manifest(dir: &Path) -> Option<HfManifest> {
+    let bytes = std::fs::read(dir.join(MANIFEST_NAME)).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+/// Serialises writers, so two adds at once cannot each merge into the old file and drop the other's entries.
+static MANIFEST_LOCK: Mutex<()> = Mutex::new(());
+
+/// Adds or replaces `added` by path, then writes the manifest through a temp file and a rename.
+pub fn merge_manifest(dir: &Path, repo: &str, sha: &str, added: Vec<HfFile>) -> io::Result<()> {
+    let _guard = MANIFEST_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut manifest = match read_manifest(dir) {
+        // Another repo's files must not be listed under this one, so its manifest is replaced.
+        Some(m) if m.repo == repo => m,
+        _ => HfManifest { repo: repo.to_owned(), sha: sha.to_owned(), files: Vec::new() },
+    };
+    manifest.sha = sha.to_owned();
+    for file in added {
+        match manifest.files.iter_mut().find(|f| f.path == file.path) {
+            Some(existing) => *existing = file,
+            None => manifest.files.push(file),
+        }
+    }
+    let json = serde_json::to_vec_pretty(&manifest).map_err(io::Error::other)?;
+    std::fs::create_dir_all(dir)?;
+    let tmp = dir.join(format!("{MANIFEST_NAME}.tmp"));
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(&tmp, dir.join(MANIFEST_NAME))
+}
+
+pub fn sha256_file(path: &Path) -> io::Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = io::Read::read(&mut file, &mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Checks each file under `dir` against its size and, when recorded, its sha256. Missing and wrong-size files
+/// are answered without hashing; the rest are hashed two at a time on the blocking pool.
+pub async fn verify_files(dir: &Path, files: Vec<HfFile>) -> Vec<VerifyResult> {
+    let mut status: Vec<Option<VerifyStatus>> = Vec::with_capacity(files.len());
+    let mut to_hash: Vec<(usize, PathBuf, String)> = Vec::new();
+    for (i, file) in files.iter().enumerate() {
+        let quick = match hf_target(dir, &file.path) {
+            None => Some(VerifyStatus::Missing),
+            Some((parent, name)) => {
+                let path = parent.join(name);
+                match std::fs::metadata(&path) {
+                    Ok(m) if m.is_file() && m.len() != file.size => Some(VerifyStatus::WrongSize { actual: m.len() }),
+                    Ok(m) if m.is_file() => match &file.sha256 {
+                        None => Some(VerifyStatus::SizeChecked),
+                        Some(expected) => {
+                            to_hash.push((i, path, expected.to_ascii_lowercase()));
+                            None
+                        }
+                    },
+                    _ => Some(VerifyStatus::Missing),
+                }
+            }
+        };
+        status.push(quick);
+    }
+    for pair in to_hash.chunks(2) {
+        let tasks: Vec<_> = pair
+            .iter()
+            .map(|(i, path, expected)| {
+                let (path, expected) = (path.clone(), expected.clone());
+                (*i, tokio::task::spawn_blocking(move || (sha256_file(&path), expected)))
+            })
+            .collect();
+        for (i, task) in tasks {
+            status[i] = Some(match task.await {
+                Ok((Ok(actual), expected)) if actual == expected => VerifyStatus::Ok,
+                Ok((Ok(_), _)) => VerifyStatus::WrongChecksum,
+                // A file that cannot be read cannot be shown good, so it is reported as missing.
+                _ => VerifyStatus::Missing,
+            });
+        }
+    }
+    files
+        .into_iter()
+        .zip(status)
+        .map(|(file, status)| VerifyResult { path: file.path, status: status.unwrap_or(VerifyStatus::Missing) })
+        .collect()
 }
 
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]

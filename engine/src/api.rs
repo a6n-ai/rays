@@ -1,6 +1,6 @@
 //! UniFFI-exported `Engine` object: owns the tokio runtime and wires the modules together.
 use crate::events::EventHub;
-use crate::hf::{self, HfAdd, HfFile, HfModel, HfRepo};
+use crate::hf::{self, HfAdd, HfFile, HfManifest, HfModel, HfRepo, VerifyResult, VerifyStatus};
 use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
@@ -247,6 +247,15 @@ impl Engine {
     /// Queues a Hugging Face commit's files under `dest_dir`, one result per file, in order.
     pub fn add_hf(&self, repo: String, sha: String, files: Vec<HfFile>, dest_dir: String, queue: Option<u64>) -> Vec<HfAdd> {
         self.sched.add_hf(&repo, &sha, files, Path::new(&dest_dir), queue)
+    }
+    /// The `.rays-model.json` that `add_hf` wrote in `dir`, or None.
+    pub fn read_model_manifest(&self, dir: String) -> Option<HfManifest> {
+        hf::read_manifest(Path::new(&dir))
+    }
+    /// Checks files under `dir` offline. Hashing runs on the blocking pool, two files at a time.
+    pub async fn verify_files(&self, dir: String, files: Vec<HfFile>) -> Vec<VerifyResult> {
+        let missing = files.iter().map(|f| VerifyResult { path: f.path.clone(), status: VerifyStatus::Missing }).collect();
+        self.rt.spawn(async move { hf::verify_files(Path::new(&dir), files).await }).await.unwrap_or(missing)
     }
 
     /// Saves the Hugging Face token in the Keychain; `None` deletes it.

@@ -385,6 +385,7 @@ impl Scheduler {
     pub fn add_hf(self: &Arc<Self>, repo: &str, sha: &str, files: Vec<hf::HfFile>, dest_dir: &Path, queue: Option<u64>) -> Vec<hf::HfAdd> {
         let queue_id = queue.unwrap_or(1);
         let known = lock(&self.queues).contains_key(&queue_id);
+        let mut recorded = Vec::new();
         let results = files
             .into_iter()
             .map(|file| {
@@ -393,9 +394,16 @@ impl Scheduler {
                 } else {
                     hf::HfAddStatus::Rejected { error: "no such queue".to_owned() }
                 };
+                if !matches!(status, hf::HfAddStatus::Rejected { .. }) {
+                    recorded.push(file.clone());
+                }
                 hf::HfAdd { path: file.path, status }
             })
             .collect();
+        if !recorded.is_empty() {
+            // shortcut: a manifest that fails to write only costs offline verify; the downloads themselves still go ahead.
+            let _ = hf::merge_manifest(dest_dir, repo, sha, recorded);
+        }
         self.refresh();
         results
     }
