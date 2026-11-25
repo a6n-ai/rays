@@ -7,13 +7,26 @@ pub const MAX_LINE: usize = 1 << 20;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Request {
-    /// `queue` is a queue's id or name; absent means the Main queue.
-    Add { urls: Vec<String>, #[serde(default)] queue: Option<QueueRef> },
+    /// `queue` is a queue's id or name; absent means the Main queue. `best_time` adds to the Best time queue instead.
+    Add {
+        urls: Vec<String>,
+        #[serde(default)]
+        queue: Option<QueueRef>,
+        #[serde(default)]
+        best_time: bool,
+    },
     List,
     Queues,
+    /// The last speed test and the best time of day to download.
+    Speed,
+    #[serde(rename = "speed_test")]
+    SpeedTest {
+        #[serde(default)]
+        force: bool,
+    },
     // Queues are only listed, started, stopped or run now here. Editing one's config, schedule, finish action or
     // Run command, and deleting one, stay app-only: Run command executes shell commands, so letting a local
-    // socket client set it would be code execution.
+    // socket client set it would be code execution. Speed settings and clearing speed history stay app-only too.
     #[serde(rename = "queue_start")]
     QueueStart { queue: QueueRef },
     #[serde(rename = "queue_stop")]
@@ -96,7 +109,36 @@ pub struct Response {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub listing: Option<ListingLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<SpeedLine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed_test: Option<SpeedTestLine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct SpeedLine {
+    pub last: Option<SpeedTestLine>,
+    pub best_time: BestTimeLine,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct SpeedTestLine {
+    /// Bytes per second.
+    pub bps: u64,
+    pub latency_ms: u32,
+    /// Unix seconds.
+    pub at: i64,
+    /// False when downloads ran during the test, which skews it.
+    pub saved: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum BestTimeLine {
+    /// Minutes of the local day; `confidence` is low, medium or high.
+    Window { start_min: u16, end_min: u16, typical_bps: u64, days: u32, confidence: String },
+    NotEnoughData { days: u32, needed: u32 },
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -195,17 +237,32 @@ mod tests {
         round(Request::QueueStop { queue: QueueRef::Name("Night".into()) }, r#"{"op":"queue_stop","queue":"Night"}"#);
         round(Request::QueueRunNow { queue: QueueRef::Id(1) }, r#"{"op":"queue_run_now","queue":1}"#);
         round(
-            Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())) },
-            r#"{"op":"add","urls":["u"],"queue":"Night"}"#,
+            Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false },
+            r#"{"op":"add","urls":["u"],"queue":"Night","best_time":false}"#,
         );
     }
 
     #[test]
     fn add_still_takes_numeric_or_missing_queue() {
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":[],"queue":2}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec![], queue: Some(QueueRef::Id(2)) });
+        assert_eq!(r, Request::Add { urls: vec![], queue: Some(QueueRef::Id(2)), best_time: false });
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":[]}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec![], queue: None });
+        assert_eq!(r, Request::Add { urls: vec![], queue: None, best_time: false });
+    }
+
+    #[test]
+    fn add_best_time_is_optional() {
+        let r: Request = serde_json::from_str(r#"{"op":"add","urls":["u"],"best_time":true}"#).unwrap();
+        assert_eq!(r, Request::Add { urls: vec!["u".into()], queue: None, best_time: true });
+    }
+
+    #[test]
+    fn speed_requests_round_trip() {
+        round(Request::Speed, r#"{"op":"speed"}"#);
+        round(Request::SpeedTest { force: false }, r#"{"op":"speed_test","force":false}"#);
+        round(Request::SpeedTest { force: true }, r#"{"op":"speed_test","force":true}"#);
+        let r: Request = serde_json::from_str(r#"{"op":"speed_test"}"#).unwrap();
+        assert_eq!(r, Request::SpeedTest { force: false });
     }
 
     #[test]

@@ -38,7 +38,7 @@ fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, Str
             "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL),
             "capabilities": { "tools": {} },
             "serverInfo": { "name": "rays", "version": env!("CARGO_PKG_VERSION") },
-            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders."
+            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders, speed_test to measure download speed and best_time for the fastest time of day to download."
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),
@@ -90,7 +90,8 @@ fn tools() -> Value {
                 "type": "object",
                 "properties": {
                     "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-                    "queue": { "type": "string", "description": "Queue name or id from list_queues. Default: Main." }
+                    "queue": { "type": "string", "description": "Queue name or id from list_queues. Default: Main." },
+                    "best_time": { "type": "boolean", "default": false, "description": "Add to the Best time queue instead; queue is ignored." }
                 },
                 "required": ["urls"]
             }
@@ -170,6 +171,20 @@ fn tools() -> Value {
                 }
             },
             "annotations": { "destructiveHint": true }
+        },
+        {
+            "name": "speed_test",
+            "description": "Measure download speed against the speed test server now and save the result. Refused on a metered link unless force is true.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "force": { "type": "boolean", "default": false, "description": "Also test on a metered link." } }
+            }
+        },
+        {
+            "name": "best_time",
+            "description": "The last speed test and the fastest 4 hours of the day to download over the last 28 days (local time, with typical speed and confidence), or how many days of data are still needed.",
+            "inputSchema": { "type": "object", "properties": {} },
+            "annotations": { "readOnlyHint": true }
         }
     ])
 }
@@ -177,7 +192,14 @@ fn tools() -> Value {
 /// None means no such tool. Errors are tool errors the model can read, not protocol errors.
 fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Result<String, String>> {
     Some(match name {
-        "add_downloads" => urls(args).and_then(|urls| Ok(Request::Add { urls, queue: queue_arg(args)? })).and_then(|req| reply_text(ask(&req))),
+        "add_downloads" => urls(args)
+            .and_then(|urls| Ok(Request::Add { urls, queue: queue_arg(args)?, best_time: args.get("best_time").and_then(Value::as_bool).unwrap_or(false) }))
+            .and_then(|req| reply_text(ask(&req))),
+        "speed_test" => {
+            let force = args.get("force").and_then(Value::as_bool).unwrap_or(false);
+            reply_text(ask(&Request::SpeedTest { force }))
+        }
+        "best_time" => reply_text(ask(&Request::Speed)),
         "list_queues" => reply_text(ask(&Request::Queues)),
         "start_queue" => queue_req(args, |queue| Request::QueueStart { queue }).and_then(|req| reply_text(ask(&req))),
         "stop_queue" => queue_req(args, |queue| Request::QueueStop { queue }).and_then(|req| reply_text(ask(&req))),
@@ -287,7 +309,21 @@ mod tests {
         let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert_eq!(
             names,
-            ["add_downloads", "list_queues", "start_queue", "stop_queue", "run_queue_now", "verify_model", "list_downloads", "list_buckets", "browse_bucket", "sorter_status", "sort_folder"]
+            [
+                "add_downloads",
+                "list_queues",
+                "start_queue",
+                "stop_queue",
+                "run_queue_now",
+                "verify_model",
+                "list_downloads",
+                "list_buckets",
+                "browse_bucket",
+                "sorter_status",
+                "sort_folder",
+                "speed_test",
+                "best_time"
+            ]
         );
     }
 
@@ -309,14 +345,20 @@ mod tests {
         assert_eq!(call_tool("verify_model", json!({"dir": "rel"})), true);
         assert_eq!(call_tool("verify_model", json!({"dir": "/m"})), false);
         assert_eq!(call_tool("list_queues", json!({})), false);
+        assert_eq!(call_tool("speed_test", json!({"force": true})), false);
+        assert_eq!(call_tool("best_time", json!({})), false);
+        assert_eq!(call_tool("add_downloads", json!({"urls": ["https://a/y"], "best_time": true})), false);
         assert_eq!(
             seen,
             [
                 r#"QueueStop { queue: Name("Night") }"#,
                 "QueueRunNow { queue: Id(3) }",
-                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")) }"#,
+                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")), best_time: false }"#,
                 r#"VerifyModel { dir: "/m" }"#,
                 "Queues",
+                "SpeedTest { force: true }",
+                "Speed",
+                r#"Add { urls: ["https://a/y"], queue: None, best_time: true }"#,
             ]
         );
     }

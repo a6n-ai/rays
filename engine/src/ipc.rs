@@ -1,8 +1,10 @@
 //! Unix socket listener for the `dl` CLI. See design doc "Socket protocol".
 use crate::hf::{self, VerifyStatus};
-use crate::protocol::{self, Added, BucketLine, JobLine, ListingLine, ObjectLine, ProviderLine, QueueLine, QueueRef, Rejected, Request, Response, VerifyLine};
+use crate::protocol::{self, Added, BestTimeLine, BucketLine, JobLine, ListingLine, ObjectLine, ProviderLine, QueueLine, QueueRef, Rejected, Request, Response, SpeedLine, SpeedTestLine, VerifyLine};
 use crate::s3::{self, BucketConfig};
 use crate::scheduler::Scheduler;
+use crate::speed::{BestTime, Confidence};
+use crate::speedtest;
 use crate::types::{EngineError, JobState, QueueState, QueueView};
 use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
@@ -72,8 +74,13 @@ async fn handle(stream: UnixStream, sched: Arc<Scheduler>) {
 
 async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
     match serde_json::from_slice::<Request>(line) {
-        Ok(Request::Add { urls, queue }) => {
-            let queue = match queue.map(|q| find_queue(sched, &q)).transpose() {
+        Ok(Request::Add { urls, queue, best_time }) => {
+            let queue = if best_time {
+                sched.best_time_queue().map(Some).map_err(|e| e.to_string())
+            } else {
+                queue.map(|q| find_queue(sched, &q)).transpose()
+            };
+            let queue = match queue {
                 Ok(id) => id,
                 Err(e) => return Response { error: Some(e), ..Default::default() },
             };
@@ -100,6 +107,18 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             ..Default::default()
         },
         Ok(Request::Queues) => Response { ok: true, queues: sched.queues().into_iter().filter_map(queue_line).collect(), ..Default::default() },
+        Ok(Request::Speed) => Response {
+            ok: true,
+            speed: Some(SpeedLine {
+                last: speedtest::last(sched).map(speed_test_line),
+                best_time: best_time_line(sched.best_time()),
+            }),
+            ..Default::default()
+        },
+        Ok(Request::SpeedTest { force }) => match speedtest::run(sched, speedtest::DEFAULT_BASE, speedtest::DEFAULT_MS, force).await {
+            Ok(result) => Response { ok: true, speed_test: Some(speed_test_line(result)), ..Default::default() },
+            Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
+        },
         Ok(Request::QueueStart { queue }) => queue_op(sched, &queue, Scheduler::start_queue),
         Ok(Request::QueueStop { queue }) => queue_op(sched, &queue, Scheduler::stop_queue),
         Ok(Request::QueueRunNow { queue }) => queue_op(sched, &queue, Scheduler::run_queue_now),
@@ -180,6 +199,28 @@ fn resolve_queue(queues: &[(u64, String)], queue: &QueueRef) -> Result<u64, Stri
     pick(prefix, "start with")?.ok_or_else(|| format!("no queue \"{name}\""))
 }
 
+fn speed_test_line(r: speedtest::SpeedTestResult) -> SpeedTestLine {
+    SpeedTestLine { bps: r.bps, latency_ms: r.latency_ms, at: r.at, saved: r.saved }
+}
+
+fn best_time_line(best: BestTime) -> BestTimeLine {
+    match best {
+        BestTime::Window { start_min, end_min, typical_bps, days, confidence } => BestTimeLine::Window {
+            start_min,
+            end_min,
+            typical_bps,
+            days,
+            confidence: match confidence {
+                Confidence::Low => "low",
+                Confidence::Medium => "medium",
+                Confidence::High => "high",
+            }
+            .into(),
+        },
+        BestTime::NotEnoughData { days, needed } => BestTimeLine::NotEnoughData { days, needed },
+    }
+}
+
 fn queue_line(q: QueueView) -> Option<QueueLine> {
     let state = match q.state {
         QueueState::Open => "open",
@@ -248,6 +289,9 @@ fn state_name(state: &JobState) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::events::EventHub;
+    use crate::s3::MemorySecrets;
+    use crate::store::Store;
     use std::os::unix::net::UnixListener as StdListener;
 
     fn sock_in_tmp() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -268,6 +312,29 @@ mod tests {
         assert!(by("zzz").unwrap_err().contains("no queue"));
         assert_eq!(resolve_queue(&qs, &QueueRef::Id(4)), Ok(4));
         assert!(resolve_queue(&qs, &QueueRef::Id(9)).is_err());
+    }
+
+    #[tokio::test]
+    async fn speed_reports_not_enough_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(Store::open(dir.path()).unwrap());
+        let secrets = || Arc::new(MemorySecrets::default());
+        let sched = Scheduler::new(
+            tokio::runtime::Handle::current(),
+            store,
+            Arc::new(EventHub::new()),
+            dir.path().join("downloads"),
+            2,
+            4,
+            0,
+            secrets(),
+            secrets(),
+            "http://127.0.0.1:9".into(),
+        )
+        .unwrap();
+        let speed = respond(&sched, br#"{"op":"speed"}"#).await.speed.unwrap();
+        assert!(speed.last.is_none());
+        assert!(matches!(speed.best_time, BestTimeLine::NotEnoughData { days: 0, .. }));
     }
 
     #[tokio::test]

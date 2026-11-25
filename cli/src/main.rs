@@ -3,7 +3,7 @@ mod framing;
 mod mcp;
 mod sorter;
 
-use dl_engine::protocol::{QueueRef, Request, Response};
+use dl_engine::protocol::{BestTimeLine, QueueRef, Request, Response, SpeedLine, SpeedTestLine};
 use serde_json::{Value, json};
 use std::error::Error;
 use std::io::{BufRead, BufReader, Write};
@@ -15,11 +15,13 @@ use std::time::{Duration, Instant};
 const USAGE: &str = "usage:
   dl URL...                     download links with Rays
   dl list                       list downloads (also: dl --list)
-  dl add [--queue NAME|ID] URL...
-                                download links into a queue (default: Main)
+  dl add [--queue NAME|ID] [--best-time] URL...
+                                download links into a queue (default: Main), or the Best time queue
   dl queues [--json]            list queues with state, next start and job counts
   dl queue start|stop|run NAME|ID
                                 start, stop or run a queue now
+  dl speed                      last speed test and the best time of day to download
+  dl speed test [--force]       run a speed test now (--force also on a metered link)
   dl verify MODEL_FOLDER        check a Hugging Face model download against its record
   dl sort [FOLDER] [--all] [--dry-run] [--projects]
                                 sort FOLDER into category folders (default ~/Downloads)
@@ -86,7 +88,7 @@ fn main() -> ExitCode {
         }
         [a] if a == "mcp" => return mcp::serve(),
         [a] if a == "--list" || a == "list" => Request::List,
-        [cmd, ..] if ["add", "queues", "queue", "verify"].contains(&cmd.as_str()) => match queue_command(&args) {
+        [cmd, ..] if ["add", "queues", "queue", "verify", "speed"].contains(&cmd.as_str()) => match queue_command(&args) {
             Ok(req) => req,
             Err(e) => {
                 eprintln!("dl: {e}");
@@ -100,7 +102,7 @@ fn main() -> ExitCode {
         [cmd, rest @ ..] if cmd == "status" => return sorter::status(rest),
         [cmd, ..] if ["watch", "unwatch", "config"].contains(&cmd.as_str()) => return sorter::run(&args),
         [a, ..] if a.starts_with('-') => return usage(),
-        urls => Request::Add { urls: urls.to_vec(), queue: None },
+        urls => Request::Add { urls: urls.to_vec(), queue: None, best_time: false },
     };
 
     let reply = match ask_rays(&req) {
@@ -126,6 +128,16 @@ fn main() -> ExitCode {
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&rows).unwrap_or_default());
+        return ExitCode::SUCCESS;
+    }
+    if let Some(speed) = &reply.speed {
+        for line in speed_lines(speed, jiff::Timestamp::now().as_second()) {
+            println!("{line}");
+        }
+        return ExitCode::SUCCESS;
+    }
+    if let Some(test) = &reply.speed_test {
+        println!("{}", speed_test_line(test));
         return ExitCode::SUCCESS;
     }
     for q in &reply.queues {
@@ -159,14 +171,52 @@ fn local_time(secs: i64) -> Option<String> {
     Some(at.strftime("%a %d %b %H:%M").to_string())
 }
 
-/// `add`, `queues`, `queue start|stop|run` and `verify`; `args[0]` is the command.
+/// Speed lines for `dl speed`: the last test, then the best time of day.
+fn speed_lines(s: &SpeedLine, now: i64) -> Vec<String> {
+    let last = match &s.last {
+        Some(t) => format!("last test {} Mb/s, {} ms, {}", mbps(t.bps), t.latency_ms, ago(t.at, now)),
+        None => "no speed test yet".into(),
+    };
+    let best = match &s.best_time {
+        BestTimeLine::Window { start_min, end_min, typical_bps, days, confidence } => {
+            format!("best time {}–{}, usually {} Mb/s ({days} days, {confidence})", clock(*start_min), clock(*end_min), mbps(*typical_bps))
+        }
+        BestTimeLine::NotEnoughData { days, needed } => format!("not enough data: {days} of {needed} days"),
+    };
+    vec![last, best]
+}
+
+fn speed_test_line(t: &SpeedTestLine) -> String {
+    let note = if t.saved { "" } else { ", not saved: downloads ran during the test" };
+    format!("test {} Mb/s, {} ms{note}", mbps(t.bps), t.latency_ms)
+}
+
+/// Megabits per second from bytes per second: no decimals from 100 up, one decimal below.
+fn mbps(bps: u64) -> String {
+    let m = bps as f64 * 8.0 / 1_000_000.0;
+    if m >= 100.0 { format!("{m:.0}") } else { format!("{m:.1}") }
+}
+
+/// Minutes of the local day as `HH:MM`.
+fn clock(min: u16) -> String {
+    format!("{:02}:{:02}", min / 60, min % 60)
+}
+
+/// `N min ago` under an hour, else `N h ago`.
+fn ago(at: i64, now: i64) -> String {
+    let mins = (now - at).max(0) / 60;
+    if mins < 60 { format!("{mins} min ago") } else { format!("{} h ago", mins / 60) }
+}
+
+/// `add`, `queues`, `queue start|stop|run`, `verify` and `speed`; `args[0]` is the command.
 fn queue_command(args: &[String]) -> Result<Request, String> {
     match args {
         [c, rest @ ..] if c == "add" => {
-            let (mut queue, mut urls, mut it) = (None, Vec::new(), rest.iter());
+            let (mut queue, mut best_time, mut urls, mut it) = (None, false, Vec::new(), rest.iter());
             while let Some(a) = it.next() {
                 match a.as_str() {
                     "--queue" => queue = Some(QueueRef::parse(it.next().ok_or("--queue needs a name or id")?)),
+                    "--best-time" => best_time = true,
                     f if f.starts_with('-') => return Err(format!("unknown option {f}")),
                     _ => urls.push(a.clone()),
                 }
@@ -174,8 +224,11 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
             if urls.is_empty() {
                 return Err("add needs at least one URL".into());
             }
-            Ok(Request::Add { urls, queue })
+            Ok(Request::Add { urls, queue, best_time })
         }
+        [c] if c == "speed" => Ok(Request::Speed),
+        [c, t] if c == "speed" && t == "test" => Ok(Request::SpeedTest { force: false }),
+        [c, t, f] if c == "speed" && t == "test" && f == "--force" => Ok(Request::SpeedTest { force: true }),
         [c] if c == "queues" => Ok(Request::Queues),
         [c, f] if c == "queues" && f == "--json" => Ok(Request::Queues),
         [c, op, q] if c == "queue" => {
@@ -304,7 +357,7 @@ fn host_add(msg: &Value) -> Result<Value, String> {
         return Ok(json!({"ok": true, "added": 0, "rejected": []}));
     }
 
-    let resp = ask_rays(&Request::Add { urls, queue: None })?;
+    let resp = ask_rays(&Request::Add { urls, queue: None, best_time: false })?;
     if !resp.ok {
         return Err(resp.error.unwrap_or_else(|| "Rays rejected the request".into()));
     }
@@ -328,15 +381,41 @@ mod tests {
     fn add_queue_flag_parses_name_or_id() {
         assert_eq!(
             queue_command(&args(&["add", "--queue", "Night", "https://a/x", "https://a/y"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: Some(QueueRef::Name("Night".into())) }
+            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false }
         );
         assert_eq!(
             queue_command(&args(&["add", "https://a/x", "--queue", "3"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into()], queue: Some(QueueRef::Id(3)) }
+            Request::Add { urls: vec!["https://a/x".into()], queue: Some(QueueRef::Id(3)), best_time: false }
         );
-        assert_eq!(queue_command(&args(&["add", "https://a/x"])).unwrap(), Request::Add { urls: vec!["https://a/x".into()], queue: None });
+        assert_eq!(
+            queue_command(&args(&["add", "https://a/x"])).unwrap(),
+            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: false }
+        );
         assert!(queue_command(&args(&["add", "--queue"])).is_err());
         assert!(queue_command(&args(&["add", "--queue", "Night"])).is_err());
+    }
+
+    #[test]
+    fn best_time_add_and_speed_commands_parse() {
+        assert_eq!(
+            queue_command(&args(&["add", "--best-time", "https://a/x"])).unwrap(),
+            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: true }
+        );
+        assert_eq!(queue_command(&args(&["speed"])).unwrap(), Request::Speed);
+        assert_eq!(queue_command(&args(&["speed", "test"])).unwrap(), Request::SpeedTest { force: false });
+        assert_eq!(queue_command(&args(&["speed", "test", "--force"])).unwrap(), Request::SpeedTest { force: true });
+        assert!(queue_command(&args(&["speed", "fast"])).is_err());
+    }
+
+    #[test]
+    fn speed_lines_read_like_the_spec() {
+        let window = BestTimeLine::Window { start_min: 60, end_min: 300, typical_bps: 38_750_000, days: 14, confidence: "high".into() };
+        let s = SpeedLine { last: Some(SpeedTestLine { bps: 11_500_000, latency_ms: 14, at: 0, saved: true }), best_time: window };
+        assert_eq!(speed_lines(&s, 7200), ["last test 92.0 Mb/s, 14 ms, 2 h ago", "best time 01:00–05:00, usually 310 Mb/s (14 days, high)"]);
+        let s = SpeedLine { last: None, best_time: BestTimeLine::NotEnoughData { days: 3, needed: 7 } };
+        assert_eq!(speed_lines(&s, 0), ["no speed test yet", "not enough data: 3 of 7 days"]);
+        assert_eq!(mbps(1_250_000), "10.0");
+        assert_eq!(ago(0, 300), "5 min ago");
     }
 
     #[test]
