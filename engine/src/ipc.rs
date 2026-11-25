@@ -1,8 +1,9 @@
 //! Unix socket listener for the `dl` CLI. See design doc "Socket protocol".
-use crate::protocol::{self, Added, BucketLine, JobLine, ListingLine, ObjectLine, ProviderLine, Rejected, Request, Response};
+use crate::hf::{self, VerifyStatus};
+use crate::protocol::{self, Added, BucketLine, JobLine, ListingLine, ObjectLine, ProviderLine, QueueLine, QueueRef, Rejected, Request, Response, VerifyLine};
 use crate::s3::{self, BucketConfig};
 use crate::scheduler::Scheduler;
-use crate::types::{EngineError, JobState};
+use crate::types::{EngineError, JobState, QueueState, QueueView};
 use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -72,6 +73,10 @@ async fn handle(stream: UnixStream, sched: Arc<Scheduler>) {
 async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
     match serde_json::from_slice::<Request>(line) {
         Ok(Request::Add { urls, queue }) => {
+            let queue = match queue.map(|q| find_queue(sched, &q)).transpose() {
+                Ok(id) => id,
+                Err(e) => return Response { error: Some(e), ..Default::default() },
+            };
             let mut reply = Response { ok: true, ..Default::default() };
             let none = vec![None; urls.len()];
             for result in sched.add_to(urls, None, none, queue) {
@@ -94,6 +99,11 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
                 .collect(),
             ..Default::default()
         },
+        Ok(Request::Queues) => Response { ok: true, queues: sched.queues().into_iter().filter_map(queue_line).collect(), ..Default::default() },
+        Ok(Request::QueueStart { queue }) => queue_op(sched, &queue, Scheduler::start_queue),
+        Ok(Request::QueueStop { queue }) => queue_op(sched, &queue, Scheduler::stop_queue),
+        Ok(Request::QueueRunNow { queue }) => queue_op(sched, &queue, Scheduler::run_queue_now),
+        Ok(Request::VerifyModel { dir }) => verify_model(&dir).await,
         Ok(Request::Providers) => Response {
             ok: true,
             providers: s3::providers()
@@ -130,6 +140,75 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
         },
         Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
     }
+}
+
+fn queue_op(sched: &Arc<Scheduler>, queue: &QueueRef, op: fn(&Arc<Scheduler>, u64)) -> Response {
+    match find_queue(sched, queue) {
+        Ok(id) => {
+            op(sched, id);
+            Response { ok: true, ..Default::default() }
+        }
+        Err(e) => Response { error: Some(e), ..Default::default() },
+    }
+}
+
+fn find_queue(sched: &Scheduler, queue: &QueueRef) -> Result<u64, String> {
+    let queues = sched.queues();
+    let ids: Vec<u64> = match queue {
+        QueueRef::Id(id) => queues.iter().filter_map(|q| q.config.id).filter(|i| i == id).collect(),
+        QueueRef::Name(name) => queues.iter().filter(|q| q.config.name.eq_ignore_ascii_case(name)).filter_map(|q| q.config.id).collect(),
+    };
+    let label = match queue {
+        QueueRef::Id(id) => id.to_string(),
+        QueueRef::Name(name) => name.clone(),
+    };
+    match ids.as_slice() {
+        [id] => Ok(*id),
+        [] => Err(format!("no queue \"{label}\"")),
+        _ => Err(format!("several queues are named \"{label}\"; use the id")),
+    }
+}
+
+fn queue_line(q: QueueView) -> Option<QueueLine> {
+    let state = match q.state {
+        QueueState::Open => "open",
+        QueueState::WaitingForTime { .. } => "waiting for time",
+        QueueState::WaitingForCondition { .. } => "waiting for condition",
+        QueueState::Stopped => "stopped",
+        QueueState::Off => "off",
+    };
+    Some(QueueLine { id: q.config.id?, name: q.config.name, state: state.into(), next_run: q.next_run, queued: q.queued, running: q.running })
+}
+
+/// Reads and checks only through `hf`, which rejects unsafe paths and symlinks; nothing else touches `dir`.
+async fn verify_model(dir: &str) -> Response {
+    let fail = |e: &str| Response { error: Some(e.into()), ..Default::default() };
+    let dir = Path::new(dir);
+    if !dir.is_absolute() {
+        return fail("dir must be an absolute path");
+    }
+    let Some(manifest) = hf::read_manifest(dir) else {
+        return fail("no record of this download (.rays-model.json missing)");
+    };
+    let results = hf::verify_files(dir, manifest.files).await;
+    let bad = |s: &VerifyStatus| !matches!(s, VerifyStatus::Ok | VerifyStatus::SizeChecked);
+    let (problems, size_only) = (results.iter().filter(|r| bad(&r.status)).count(), results.iter().filter(|r| r.status == VerifyStatus::SizeChecked).count());
+    let missing = results.iter().filter(|r| r.status == VerifyStatus::Missing).count();
+    let summary = format!("{} files, {} ok, {problems} with problems ({missing} missing), {size_only} checked by size only", results.len(), results.len() - problems);
+    let verified = results
+        .into_iter()
+        .map(|r| {
+            let (status, actual) = match r.status {
+                VerifyStatus::Ok => ("ok", None),
+                VerifyStatus::SizeChecked => ("size-checked", None),
+                VerifyStatus::Missing => ("missing", None),
+                VerifyStatus::WrongSize { actual } => ("wrong-size", Some(actual)),
+                VerifyStatus::WrongChecksum => ("wrong-checksum", None),
+            };
+            VerifyLine { path: r.path, status: status.into(), actual }
+        })
+        .collect();
+    Response { ok: true, verified, summary: Some(summary), ..Default::default() }
 }
 
 fn done(result: Result<(), EngineError>) -> Response {

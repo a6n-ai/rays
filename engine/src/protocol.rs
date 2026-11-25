@@ -7,9 +7,22 @@ pub const MAX_LINE: usize = 1 << 20;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Request {
-    /// `queue` is the queue's id; absent means the Main queue.
-    Add { urls: Vec<String>, #[serde(default)] queue: Option<u64> },
+    /// `queue` is a queue's id or name; absent means the Main queue.
+    Add { urls: Vec<String>, #[serde(default)] queue: Option<QueueRef> },
     List,
+    Queues,
+    // Queues are only listed, started, stopped or run now here. Editing one's config, schedule, finish action or
+    // Run command, and deleting one, stay app-only: Run command executes shell commands, so letting a local
+    // socket client set it would be code execution.
+    #[serde(rename = "queue_start")]
+    QueueStart { queue: QueueRef },
+    #[serde(rename = "queue_stop")]
+    QueueStop { queue: QueueRef },
+    #[serde(rename = "queue_run_now")]
+    QueueRunNow { queue: QueueRef },
+    /// Checks the files of the model download in `dir` (an absolute path) against its `.rays-model.json`.
+    #[serde(rename = "verify_model")]
+    VerifyModel { dir: String },
     Providers,
     Buckets,
     /// Adds a bucket. An empty `endpoint` is filled from the `provider` preset with `region` and `field`.
@@ -47,6 +60,20 @@ pub enum Request {
     },
 }
 
+/// A queue by id, or by name (matched case-insensitively).
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum QueueRef {
+    Id(u64),
+    Name(String),
+}
+
+impl QueueRef {
+    pub fn parse(s: &str) -> Self {
+        s.parse().map_or_else(|_| Self::Name(s.to_owned()), Self::Id)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct Response {
     pub ok: bool,
@@ -60,10 +87,38 @@ pub struct Response {
     pub providers: Vec<ProviderLine>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub buckets: Vec<BucketLine>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub queues: Vec<QueueLine>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verified: Vec<VerifyLine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub listing: Option<ListingLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct QueueLine {
+    pub id: u64,
+    pub name: String,
+    /// open, waiting for time, waiting for condition, stopped or off
+    pub state: String,
+    /// Next scheduled start in unix seconds.
+    pub next_run: Option<i64>,
+    pub queued: u32,
+    pub running: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct VerifyLine {
+    pub path: String,
+    /// ok, size-checked, missing, wrong-size or wrong-checksum
+    pub status: String,
+    /// The size on disk, for wrong-size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actual: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -122,4 +177,45 @@ pub struct JobLine {
     pub state: String,
     pub done: u64,
     pub total: Option<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn round<T: Serialize + for<'a> Deserialize<'a> + PartialEq + std::fmt::Debug>(v: T, json: &str) {
+        assert_eq!(serde_json::to_string(&v).unwrap(), json);
+        assert_eq!(serde_json::from_str::<T>(json).unwrap(), v);
+    }
+
+    #[test]
+    fn queue_requests_round_trip() {
+        round(Request::Queues, r#"{"op":"queues"}"#);
+        round(Request::QueueStart { queue: QueueRef::Id(2) }, r#"{"op":"queue_start","queue":2}"#);
+        round(Request::QueueStop { queue: QueueRef::Name("Night".into()) }, r#"{"op":"queue_stop","queue":"Night"}"#);
+        round(Request::QueueRunNow { queue: QueueRef::Id(1) }, r#"{"op":"queue_run_now","queue":1}"#);
+        round(
+            Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())) },
+            r#"{"op":"add","urls":["u"],"queue":"Night"}"#,
+        );
+    }
+
+    #[test]
+    fn add_still_takes_numeric_or_missing_queue() {
+        let r: Request = serde_json::from_str(r#"{"op":"add","urls":[],"queue":2}"#).unwrap();
+        assert_eq!(r, Request::Add { urls: vec![], queue: Some(QueueRef::Id(2)) });
+        let r: Request = serde_json::from_str(r#"{"op":"add","urls":[]}"#).unwrap();
+        assert_eq!(r, Request::Add { urls: vec![], queue: None });
+    }
+
+    #[test]
+    fn verify_request_round_trips() {
+        round(Request::VerifyModel { dir: "/m".into() }, r#"{"op":"verify_model","dir":"/m"}"#);
+    }
+
+    #[test]
+    fn queue_ref_parses_ids_and_names() {
+        assert_eq!(QueueRef::parse("12"), QueueRef::Id(12));
+        assert_eq!(QueueRef::parse("Night"), QueueRef::Name("Night".into()));
+    }
 }

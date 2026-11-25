@@ -3,7 +3,7 @@ mod framing;
 mod mcp;
 mod sorter;
 
-use dl_engine::protocol::{Request, Response};
+use dl_engine::protocol::{QueueRef, Request, Response};
 use serde_json::{Value, json};
 use std::error::Error;
 use std::io::{BufRead, BufReader, Write};
@@ -15,6 +15,12 @@ use std::time::{Duration, Instant};
 const USAGE: &str = "usage:
   dl URL...                     download links with Rays
   dl list                       list downloads (also: dl --list)
+  dl add [--queue NAME|ID] URL...
+                                download links into a queue (default: Main)
+  dl queues [--json]            list queues with state, next start and job counts
+  dl queue start|stop|run NAME|ID
+                                start, stop or run a queue now
+  dl verify MODEL_FOLDER        check a Hugging Face model download against its record
   dl sort [FOLDER] [--all] [--dry-run] [--projects]
                                 sort FOLDER into category folders (default ~/Downloads)
   dl watch FOLDER | dl unwatch FOLDER
@@ -56,7 +62,9 @@ fn connect(path: &Path) -> std::io::Result<UnixStream> {
 }
 
 fn exchange(mut stream: UnixStream, req: &Request) -> Result<Response, Box<dyn Error>> {
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
+    // Verifying hashes whole model files, which takes far longer than any other request.
+    let wait = if matches!(req, Request::VerifyModel { .. }) { 3600 } else { 10 };
+    stream.set_read_timeout(Some(Duration::from_secs(wait)))?;
     let mut line = serde_json::to_string(req)?;
     line.push('\n');
     stream.write_all(line.as_bytes())?;
@@ -78,6 +86,13 @@ fn main() -> ExitCode {
         }
         [a] if a == "mcp" => return mcp::serve(),
         [a] if a == "--list" || a == "list" => Request::List,
+        [cmd, ..] if ["add", "queues", "queue", "verify"].contains(&cmd.as_str()) => match queue_command(&args) {
+            Ok(req) => req,
+            Err(e) => {
+                eprintln!("dl: {e}");
+                return usage();
+            }
+        },
         // Sorter commands run the sorter bundled beside dl; `dl sort` is the sorter's default command.
         [cmd, rest @ ..] if cmd == "bucket" => return bucket::run(rest),
         [cmd, link] if cmd == "ls" => return bucket::ls(link),
@@ -100,6 +115,21 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
 
+    if args.iter().any(|a| a == "--json") && args[0] == "queues" {
+        println!("{}", serde_json::to_string_pretty(&reply.queues).unwrap_or_default());
+        return ExitCode::SUCCESS;
+    }
+    for q in &reply.queues {
+        let next = q.next_run.map_or(String::new(), |t| format!("\tnext {t}"));
+        println!("{}\t{}\t{}\t{} queued, {} running{next}", q.id, q.name, q.state, q.queued, q.running);
+    }
+    for v in &reply.verified {
+        let actual = v.actual.map_or(String::new(), |n| format!(" ({n} bytes on disk)"));
+        println!("{}\t{}{actual}", v.status, v.path);
+    }
+    if let Some(summary) = &reply.summary {
+        println!("{summary}");
+    }
     for a in &reply.added {
         println!("added {} {}", a.id, a.url);
     }
@@ -110,7 +140,44 @@ fn main() -> ExitCode {
         let total = j.total.map_or_else(|| "?".to_string(), |t| t.to_string());
         println!("{}\t{}\t{}/{}\t{}", j.id, j.state, j.done, total, j.name);
     }
-    if reply.rejected.is_empty() { ExitCode::SUCCESS } else { ExitCode::from(1) }
+    let unverified = reply.verified.iter().any(|v| !matches!(v.status.as_str(), "ok" | "size-checked"));
+    if reply.rejected.is_empty() && !unverified { ExitCode::SUCCESS } else { ExitCode::from(1) }
+}
+
+/// `add`, `queues`, `queue start|stop|run` and `verify`; `args[0]` is the command.
+fn queue_command(args: &[String]) -> Result<Request, String> {
+    match args {
+        [c, rest @ ..] if c == "add" => {
+            let (mut queue, mut urls, mut it) = (None, Vec::new(), rest.iter());
+            while let Some(a) = it.next() {
+                match a.as_str() {
+                    "--queue" => queue = Some(QueueRef::parse(it.next().ok_or("--queue needs a name or id")?)),
+                    f if f.starts_with('-') => return Err(format!("unknown option {f}")),
+                    _ => urls.push(a.clone()),
+                }
+            }
+            if urls.is_empty() {
+                return Err("add needs at least one URL".into());
+            }
+            Ok(Request::Add { urls, queue })
+        }
+        [c] if c == "queues" => Ok(Request::Queues),
+        [c, f] if c == "queues" && f == "--json" => Ok(Request::Queues),
+        [c, op, q] if c == "queue" => {
+            let queue = QueueRef::parse(q);
+            match op.as_str() {
+                "start" => Ok(Request::QueueStart { queue }),
+                "stop" => Ok(Request::QueueStop { queue }),
+                "run" => Ok(Request::QueueRunNow { queue }),
+                _ => Err("queue takes start, stop or run".into()),
+            }
+        }
+        [c, dir] if c == "verify" => {
+            let abs = std::path::absolute(dir).map_err(|e| e.to_string())?;
+            Ok(Request::VerifyModel { dir: abs.to_string_lossy().into_owned() })
+        }
+        _ => Err("bad arguments".into()),
+    }
 }
 
 /// One request to Rays, opening the app if needed. Shared by the CLI and `dl mcp`.
@@ -240,6 +307,30 @@ mod tests {
 
     fn args(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn add_queue_flag_parses_name_or_id() {
+        assert_eq!(
+            queue_command(&args(&["add", "--queue", "Night", "https://a/x", "https://a/y"])).unwrap(),
+            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: Some(QueueRef::Name("Night".into())) }
+        );
+        assert_eq!(
+            queue_command(&args(&["add", "https://a/x", "--queue", "3"])).unwrap(),
+            Request::Add { urls: vec!["https://a/x".into()], queue: Some(QueueRef::Id(3)) }
+        );
+        assert_eq!(queue_command(&args(&["add", "https://a/x"])).unwrap(), Request::Add { urls: vec!["https://a/x".into()], queue: None });
+        assert!(queue_command(&args(&["add", "--queue"])).is_err());
+        assert!(queue_command(&args(&["add", "--queue", "Night"])).is_err());
+    }
+
+    #[test]
+    fn queue_commands_parse() {
+        assert_eq!(queue_command(&args(&["queues", "--json"])).unwrap(), Request::Queues);
+        assert_eq!(queue_command(&args(&["queue", "run", "Night"])).unwrap(), Request::QueueRunNow { queue: QueueRef::Name("Night".into()) });
+        assert_eq!(queue_command(&args(&["queue", "stop", "2"])).unwrap(), Request::QueueStop { queue: QueueRef::Id(2) });
+        assert!(queue_command(&args(&["queue", "delete", "2"])).is_err());
+        assert_eq!(queue_command(&args(&["verify", "/m/x"])).unwrap(), Request::VerifyModel { dir: "/m/x".into() });
     }
 
     #[test]

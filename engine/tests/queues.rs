@@ -458,6 +458,85 @@ fn ipc_add_with_queue() {
     engine.shutdown();
 }
 
+fn engine_with_queue(dir: &Path) -> (Arc<Engine>, std::path::PathBuf) {
+    let engine = engine_in(dir);
+    assert_eq!(engine.save_queue(queue("Night Shift", 0, 0)).unwrap(), 2);
+    (engine, dir.join("dl.sock"))
+}
+
+#[test]
+fn ipc_queues_lists_state_and_counts() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, sock) = engine_with_queue(dir.path());
+    engine.stop_queue(2);
+    ask(&sock, r#"{"op":"add","urls":["http://127.0.0.1:9/one"],"queue":2}"#);
+    let reply = ask(&sock, r#"{"op":"queues"}"#);
+    assert_eq!(reply["ok"], true);
+    let q = reply["queues"].as_array().unwrap();
+    assert_eq!(q.len(), 2);
+    assert_eq!((q[0]["id"].as_u64(), q[0]["state"].as_str()), (Some(1), Some("open")));
+    assert_eq!(q[1]["name"], "Night Shift");
+    assert_eq!(q[1]["state"], "stopped");
+    assert_eq!((q[1]["queued"].as_u64(), q[1]["running"].as_u64()), (Some(1), Some(0)));
+    engine.shutdown();
+}
+
+#[test]
+fn ipc_queue_start_stop_by_name_and_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, sock) = engine_with_queue(dir.path());
+    let state = |sock: &Path| ask(sock, r#"{"op":"queues"}"#)["queues"][1]["state"].as_str().unwrap().to_owned();
+    assert_eq!(ask(&sock, r#"{"op":"queue_stop","queue":"night shift"}"#)["ok"], true);
+    assert_eq!(state(&sock), "stopped");
+    assert_eq!(ask(&sock, r#"{"op":"queue_start","queue":2}"#)["ok"], true);
+    assert_eq!(state(&sock), "open");
+    assert_eq!(ask(&sock, r#"{"op":"queue_run_now","queue":"NIGHT SHIFT"}"#)["ok"], true);
+    let bad = ask(&sock, r#"{"op":"queue_stop","queue":"nope"}"#);
+    assert_eq!(bad["ok"], false);
+    assert!(bad["error"].as_str().unwrap().contains("no queue"));
+    engine.shutdown();
+}
+
+#[test]
+fn ipc_add_by_queue_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, sock) = engine_with_queue(dir.path());
+    engine.stop_queue(2);
+    let reply = ask(&sock, r#"{"op":"add","urls":["http://127.0.0.1:9/one"],"queue":"night shift"}"#);
+    let id = reply["added"][0]["id"].as_u64().expect("added");
+    assert_eq!(engine.snapshot().iter().find(|j| j.id == id).unwrap().queue_id, 2);
+    let reply = ask(&sock, r#"{"op":"add","urls":["http://127.0.0.1:9/two"],"queue":"nope"}"#);
+    assert_eq!(reply["ok"], false);
+    engine.shutdown();
+}
+
+#[test]
+fn ipc_verify_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, sock) = engine_with_queue(dir.path());
+    let model = dir.path().join("model");
+    std::fs::create_dir_all(&model).unwrap();
+    let ask_dir = |d: &str| ask(&sock, &serde_json::json!({"op": "verify_model", "dir": d}).to_string());
+
+    let r = ask_dir(model.to_str().unwrap());
+    assert_eq!(r["ok"], false);
+    assert_eq!(r["error"], "no record of this download (.rays-model.json missing)");
+    assert_eq!(ask_dir("relative/dir")["ok"], false);
+
+    std::fs::write(model.join("w.bin"), b"abc").unwrap();
+    std::fs::write(
+        model.join(".rays-model.json"),
+        r#"{"repo":"a/b","sha":"s","files":[{"path":"w.bin","size":3,"sha256":null},{"path":"gone.bin","size":1,"sha256":null}]}"#,
+    )
+    .unwrap();
+    let r = ask_dir(model.to_str().unwrap());
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["verified"][0], serde_json::json!({"path": "w.bin", "status": "size-checked"}));
+    assert_eq!(r["verified"][1]["status"], "missing");
+    assert!(r["summary"].as_str().unwrap().contains("1 missing"));
+    engine.shutdown();
+}
+
 fn runs(sched: &Scheduler) -> Vec<QueueRun> {
     sched.queue_runs(50)
 }

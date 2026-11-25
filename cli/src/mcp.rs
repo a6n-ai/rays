@@ -1,7 +1,7 @@
 //! `dl mcp`: a Model Context Protocol server on stdio (JSON-RPC 2.0, one message per line).
 //! Tools reach Rays through the same socket as `dl` and the bundled sorter through `sorter.rs`.
 use crate::sorter;
-use dl_engine::protocol::{Request, Response};
+use dl_engine::protocol::{QueueRef, Request, Response};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
@@ -38,7 +38,7 @@ fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, Str
             "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL),
             "capabilities": { "tools": {} },
             "serverInfo": { "name": "rays", "version": env!("CARGO_PKG_VERSION") },
-            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders."
+            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders."
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),
@@ -60,6 +60,27 @@ fn error(id: Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
+fn queue_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": { "queue": { "type": "string", "description": "Queue name (any case) or id from list_queues." } },
+        "required": ["queue"]
+    })
+}
+
+fn queue_arg(args: &Value) -> Result<Option<QueueRef>, String> {
+    match args.get("queue") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) if !s.is_empty() => Ok(Some(QueueRef::parse(s))),
+        Some(Value::Number(n)) if n.as_u64().is_some() => Ok(n.as_u64().map(QueueRef::Id)),
+        _ => Err("queue must be a queue name or id".into()),
+    }
+}
+
+fn queue_req(args: &Value, make: fn(QueueRef) -> Request) -> Result<Request, String> {
+    queue_arg(args)?.map(make).ok_or_else(|| "queue is required".into())
+}
+
 fn tools() -> Value {
     json!([
         {
@@ -67,9 +88,43 @@ fn tools() -> Value {
             "description": "Download one or more http/https links, or s3://bucket/key objects from buckets added to Rays. Returns the new download ids and any rejected links.",
             "inputSchema": {
                 "type": "object",
-                "properties": { "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 } },
+                "properties": {
+                    "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                    "queue": { "type": "string", "description": "Queue name or id from list_queues. Default: Main." }
+                },
                 "required": ["urls"]
             }
+        },
+        {
+            "name": "list_queues",
+            "description": "Rays download queues: id, name, state (open, waiting for time, waiting for condition, stopped, off), next scheduled start in unix seconds, and counts of queued and running downloads.",
+            "inputSchema": { "type": "object", "properties": {} },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "start_queue",
+            "description": "Start a queue: lifts a stop on a queue without a schedule, and on a scheduled queue is the same as run_queue_now.",
+            "inputSchema": queue_schema()
+        },
+        {
+            "name": "stop_queue",
+            "description": "Stop a queue: its queued downloads wait and its running ones pause until the queue is started again.",
+            "inputSchema": queue_schema()
+        },
+        {
+            "name": "run_queue_now",
+            "description": "Run a queue now, whatever its schedule window and conditions say, until its run finishes.",
+            "inputSchema": queue_schema()
+        },
+        {
+            "name": "verify_model",
+            "description": "Check a Hugging Face model downloaded by Rays against the record Rays kept of it (.rays-model.json). Returns one line per file (ok, size-checked, missing, wrong-size, wrong-checksum) and a summary. Needs the absolute path of the model folder.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "dir": { "type": "string", "description": "Absolute path of the model folder." } },
+                "required": ["dir"]
+            },
+            "annotations": { "readOnlyHint": true }
         },
         {
             "name": "list_downloads",
@@ -122,7 +177,15 @@ fn tools() -> Value {
 /// None means no such tool. Errors are tool errors the model can read, not protocol errors.
 fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Result<String, String>> {
     Some(match name {
-        "add_downloads" => urls(args).and_then(|urls| reply_text(ask(&Request::Add { urls, queue: None }))),
+        "add_downloads" => urls(args).and_then(|urls| Ok(Request::Add { urls, queue: queue_arg(args)? })).and_then(|req| reply_text(ask(&req))),
+        "list_queues" => reply_text(ask(&Request::Queues)),
+        "start_queue" => queue_req(args, |queue| Request::QueueStart { queue }).and_then(|req| reply_text(ask(&req))),
+        "stop_queue" => queue_req(args, |queue| Request::QueueStop { queue }).and_then(|req| reply_text(ask(&req))),
+        "run_queue_now" => queue_req(args, |queue| Request::QueueRunNow { queue }).and_then(|req| reply_text(ask(&req))),
+        "verify_model" => match args.get("dir").and_then(Value::as_str) {
+            Some(dir) if dir.starts_with('/') => reply_text(ask(&Request::VerifyModel { dir: dir.to_owned() })),
+            _ => Err("dir must be an absolute path".into()),
+        },
         "list_downloads" => reply_text(ask(&Request::List)),
         "list_buckets" => reply_text(ask(&Request::Buckets)),
         "browse_bucket" => browse(args).and_then(|req| reply_text(ask(&req))),
@@ -222,7 +285,40 @@ mod tests {
         assert_eq!(r["result"]["serverInfo"]["name"], "rays");
         let r = ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#).unwrap();
         let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["add_downloads", "list_downloads", "list_buckets", "browse_bucket", "sorter_status", "sort_folder"]);
+        assert_eq!(
+            names,
+            ["add_downloads", "list_queues", "start_queue", "stop_queue", "run_queue_now", "verify_model", "list_downloads", "list_buckets", "browse_bucket", "sorter_status", "sort_folder"]
+        );
+    }
+
+    #[test]
+    fn queue_tools_pass_name_or_id_and_verify_needs_absolute_dir() {
+        let mut seen = Vec::new();
+        let mut rec = |req: &Request| {
+            seen.push(format!("{req:?}"));
+            Ok(Response { ok: true, ..Default::default() })
+        };
+        let mut call_tool = |name: &str, args: Value| {
+            let line = json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":args}}).to_string();
+            handle_line(&line, &mut rec).unwrap()["result"]["isError"].clone()
+        };
+        assert_eq!(call_tool("stop_queue", json!({"queue": "Night"})), false);
+        assert_eq!(call_tool("run_queue_now", json!({"queue": 3})), false);
+        assert_eq!(call_tool("start_queue", json!({})), true);
+        assert_eq!(call_tool("add_downloads", json!({"urls": ["https://a/x"], "queue": "Night"})), false);
+        assert_eq!(call_tool("verify_model", json!({"dir": "rel"})), true);
+        assert_eq!(call_tool("verify_model", json!({"dir": "/m"})), false);
+        assert_eq!(call_tool("list_queues", json!({})), false);
+        assert_eq!(
+            seen,
+            [
+                r#"QueueStop { queue: Name("Night") }"#,
+                "QueueRunNow { queue: Id(3) }",
+                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")) }"#,
+                r#"VerifyModel { dir: "/m" }"#,
+                "Queues",
+            ]
+        );
     }
 
     #[test]
