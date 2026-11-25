@@ -9,6 +9,7 @@ use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
 use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, now_secs};
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, AtomicBool, AtomicI64, AtomicU64, Ordering, AtomicU32};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -31,6 +32,8 @@ pub struct Scheduler {
     connections: AtomicU32,
     /// Downloads started from now on replace a same-name file (see `download::RunOpts`).
     replace_existing: AtomicBool,
+    /// Moves a replaced file to the trash; tests swap it for a local move.
+    trash: Mutex<fn(&Path) -> io::Result<()>>,
     /// One bucket shared by every transfer, so the cap is global.
     limiter: Arc<RateLimiter>,
     client: reqwest::Client,
@@ -121,6 +124,7 @@ impl Scheduler {
             max_running: AtomicUsize::new((max_running as usize).max(1)),
             connections: AtomicU32::new(connections.clamp(1, MAX_CONNECTIONS)),
             replace_existing: AtomicBool::new(false),
+            trash: Mutex::new(download::trash_file),
             limiter: Arc::new(RateLimiter::new(speed_limit)),
             client,
             secrets,
@@ -176,6 +180,11 @@ impl Scheduler {
         self.replace_existing.store(on, Ordering::Relaxed);
     }
 
+    /// Applies to downloads started after this call.
+    pub fn set_trash(&self, trash: fn(&Path) -> io::Result<()>) {
+        *lock(&self.trash) = trash;
+    }
+
     pub fn difficult_hosts(&self) -> Vec<HostView> {
         self.store.hosts().unwrap_or_default()
     }
@@ -198,6 +207,9 @@ impl Scheduler {
                 .into_iter()
                 .map(|url| AddResult { url, id: None, error: Some("destination must be an absolute path with no ..".to_owned()) })
                 .collect();
+        }
+        if !fixed_names.is_empty() && fixed_names.len() != urls.len() {
+            return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("names must match urls".to_owned()) }).collect();
         }
         let mut fixed = fixed_names.into_iter();
         let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten(), None)).collect();
@@ -590,7 +602,8 @@ impl Scheduler {
             let host = download::host_port(&self.hf_base).unwrap_or_default();
             let token = if download::host_port(&url).as_deref() == Some(host.as_str()) { self.hf_token() } else { None };
             let hf = download::HfAccess { host, token };
-            let opts = download::RunOpts { replace_existing: self.replace_existing.load(Ordering::Relaxed), hf, ..Default::default() };
+            let trash = *lock(&self.trash);
+            let opts = download::RunOpts { replace_existing: self.replace_existing.load(Ordering::Relaxed), trash, hf };
             let limiter = Arc::clone(&self.limiter);
             let store = Arc::clone(&self.store);
             let sign = self.sign_for(&url);

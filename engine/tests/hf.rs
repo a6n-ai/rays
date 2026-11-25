@@ -342,6 +342,28 @@ async fn gated_401_with_saved_token_says_rejected() {
     assert!(matches!(&v.state, JobState::Failed { reason } if reason == REJECTED_MSG), "{:?}", v.state);
 }
 
+fn move_aside(path: &FsPath) -> std::io::Result<()> {
+    let mut to = path.as_os_str().to_owned();
+    to.push(".trashed");
+    std::fs::rename(path, to)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn scheduler_replace_uses_injected_trash() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let downloads = dir.path().join("downloads");
+    std::fs::write(downloads.join("w.gguf"), b"old").unwrap();
+    sched.set_trash(move_aside);
+    sched.set_replace_existing(true);
+    let id = add(&sched, &downloads, format!("http://127.0.0.1:{}/open/m/resolve/abc/w.gguf", hf.port()));
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+    assert!(std::fs::read(downloads.join("w.gguf")).unwrap() == data());
+    assert_eq!(std::fs::read(downloads.join("w.gguf.trashed")).unwrap(), b"old");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn no_token_no_header() {
     let (cdn, _) = fake_cdn().await;

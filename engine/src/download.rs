@@ -106,7 +106,7 @@ fn model_page(job_url: &str) -> Option<String> {
 }
 
 /// On macOS the default backend drives Finder through AppleScript, which raises an Automation prompt; NSFileManager does not.
-fn trash_file(path: &Path) -> io::Result<()> {
+pub(crate) fn trash_file(path: &Path) -> io::Result<()> {
     #[cfg(target_os = "macos")]
     {
         use trash::macos::{DeleteMethod, TrashContextExtMacos};

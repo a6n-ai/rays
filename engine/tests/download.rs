@@ -382,13 +382,28 @@ fn add_rejects_unsafe_dir_and_file_name_without_a_job() {
     let engine = engine_in(root.path());
     let url = "https://example.com/f.bin".to_string();
     let dir = root.path().join("ok").to_string_lossy().into_owned();
-    for name in ["../x", "/abs", "a/b", ""] {
+    for name in ["../x", "/abs", "a/b", "", ".", "..", "a\0b"] {
         let r = engine.add_to(vec![url.clone()], Some(dir.clone()), vec![Some(name.into())]).remove(0);
         assert!(r.id.is_none() && r.error.is_some(), "name {name:?} accepted");
     }
     for bad_dir in ["rel/dir".to_string(), "/tmp/../x".to_string()] {
         let r = engine.add_to(vec![url.clone()], Some(bad_dir.clone()), vec![None]).remove(0);
         assert!(r.id.is_none() && r.error.is_some(), "dir {bad_dir:?} accepted");
+    }
+    assert!(engine.snapshot().is_empty());
+}
+
+#[test]
+fn add_rejects_names_that_do_not_match_urls() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = engine_in(root.path());
+    let urls = vec!["https://example.com/a.bin".to_string(), "https://example.com/b.bin".to_string()];
+    let dir = root.path().join("ok").to_string_lossy().into_owned();
+    let results = engine.add_to(urls.clone(), Some(dir), vec![Some("one.bin".into())]);
+    assert_eq!(results.len(), 2);
+    for (r, url) in results.iter().zip(&urls) {
+        assert!(r.id.is_none() && r.error.as_deref() == Some("names must match urls"), "{r:?}");
+        assert_eq!(&r.url, url);
     }
     assert!(engine.snapshot().is_empty());
 }
