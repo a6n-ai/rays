@@ -1,0 +1,87 @@
+---
+import { Image } from 'astro:assets';
+import ThemeToggle from './ThemeToggle.astro';
+import icon from '../assets/icon.png';
+
+interface Props {
+	current?: 'features';
+}
+const { current } = Astro.props;
+---
+
+<header class="mark">
+	<Image src={icon} alt="" width={28} height={28} />
+	<span>Rays</span>
+	<span class="by">by <a class="slide" href="https://a6n.ai">a6n</a></span>
+	<nav class="top" aria-label="Site">
+		<a class="slide" href="/docs/">Docs</a>
+		<a class="slide" href="/features/" aria-current={current === 'features' ? 'page' : undefined}>Features</a>
+		<a class="slide wide" href="/docs/app/browser/">Extension</a>
+		<a class="slide" href="/releases/">Release notes</a>
+		<ThemeToggle />
+	</nav>
+</header>
+
+<style>
+	.mark {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding-top: 48px;
+		font: 600 1.125rem var(--font-display);
+		letter-spacing: -0.01em;
+	}
+	.top {
+		display: flex;
+		align-items: center;
+		gap: 18px;
+		margin-left: auto;
+		font: 400 var(--t-small) var(--font-text);
+	}
+	.top a,
+	.by {
+		white-space: nowrap;
+	}
+	.top a {
+		color: var(--muted);
+		text-decoration: none;
+	}
+	.top a:hover,
+	.top a[aria-current] {
+		color: var(--ink);
+	}
+	.top a[aria-current]::after {
+		transform: scaleX(1);
+	}
+	.by {
+		color: var(--muted);
+		font-weight: 400;
+	}
+	.by a {
+		color: inherit;
+		text-underline-offset: 3px;
+	}
+	.by a:hover {
+		color: var(--ink);
+	}
+	.mark > :global(img) {
+		view-transition-name: rays-logo;
+	}
+	.mark :global(img) {
+		width: 28px;
+		height: 28px;
+	}
+	@media (max-width: 899px) {
+		.mark {
+			padding-top: 8px;
+		}
+	}
+	@media (max-width: 600px) {
+		.top .wide {
+			display: none;
+		}
+		.top {
+			gap: 12px;
+		}
+	}
+</style>

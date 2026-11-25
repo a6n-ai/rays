@@ -1,0 +1,205 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteNav from '../components/SiteNav.astro';
+import Panel from '../components/Panel.astro';
+import Newsletter from '../components/Newsletter.astro';
+import { GROUPS } from '../components/features-data';
+import { svg } from '../components/docs/icons';
+---
+
+<Base
+	title="Features | Rays"
+	description="Everything Rays does: fast downloads, on-device AI sorting, Hugging Face models, queues and schedules, S3 buckets, browser extensions, MCP and a command line. Free for Mac."
+>
+	<div class="page">
+		<main id="main" class="column" data-pagefind-body data-pagefind-meta="title:Rays features">
+			<SiteNav current="features" />
+
+			<section class="intro" aria-labelledby="features-title">
+				<h1 id="features-title">Everything Rays does</h1>
+				<p>
+					Rays is free, open source and made for macOS 26. Pick a group to jump to it, or open its docs page for the
+					details.
+				</p>
+				<nav class="jump" aria-label="Feature groups">
+					{GROUPS.map((g) => <a href={`#${g.id}`}>{g.title}</a>)}
+				</nav>
+			</section>
+
+			{GROUPS.map((g) => (
+				<section class="group" aria-labelledby={g.id}>
+					<h2 id={g.id}>
+						<span class="gicon" set:html={svg(g.icon, 22)} />
+						{g.title}
+					</h2>
+					<p class="summary">
+						{g.summary} <a href={g.href}>Read the docs</a>
+					</p>
+					<dl>
+						{g.items.map((it) => (
+							<div>
+								<dt>
+									<span class="icon" set:html={svg(it.icon, 20)} />
+									{it.title}
+								</dt>
+								<dd>
+									{it.text}
+									{it.href && <> <a href={it.href}>How it works</a></>}
+								</dd>
+							</div>
+						))}
+					</dl>
+				</section>
+			))}
+
+			<Newsletter />
+
+			<footer class="foot">
+				<a class="slide" href="/">Home</a>
+				<span class="rule" aria-hidden="true"></span>
+				<a class="slide" href="/docs/">Docs</a>
+				<a class="slide" href="/releases/">Release notes</a>
+				<a class="slide" href="/support/">Support</a>
+				<a class="slide" href="/privacy/">Privacy</a>
+				<a class="slide" href="/terms/">Terms</a>
+				<a class="slide" href="https://github.com/a6n-ai/rays">GitHub</a>
+				<span>AGPL-3.0</span>
+			</footer>
+		</main>
+		<Panel />
+	</div>
+</Base>
+
+<style>
+	.intro {
+		display: grid;
+		gap: 16px;
+		padding-block: 56px 24px;
+	}
+	h1 {
+		margin: 0;
+		font: 500 clamp(2.25rem, 4.4vw, 4.25rem) / 1.05 var(--font-display);
+		letter-spacing: -0.035em;
+		text-wrap: balance;
+	}
+	.intro p {
+		margin: 0;
+		max-width: 40rem;
+		color: var(--muted);
+		text-wrap: pretty;
+	}
+	.jump {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 20px;
+		font-size: var(--t-small);
+	}
+	.jump a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 32px;
+		color: var(--ink);
+		text-decoration-color: var(--line);
+		text-underline-offset: 4px;
+		transition: color 160ms var(--ease-out), text-decoration-color 160ms var(--ease-out);
+	}
+	.jump a:hover {
+		color: var(--accent);
+		text-decoration-color: currentColor;
+	}
+	.group {
+		display: grid;
+		gap: 10px;
+		padding-block: 36px 12px;
+		scroll-margin-top: 16px;
+	}
+	h2 {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin: 0;
+		font: 500 clamp(1.5rem, 2.6vw, 2rem) / 1.15 var(--font-display);
+		letter-spacing: -0.03em;
+	}
+	.gicon,
+	.icon {
+		display: inline-flex;
+		flex: none;
+		color: var(--accent);
+	}
+	.summary {
+		margin: 0;
+		max-width: var(--measure);
+		color: var(--muted);
+	}
+	.group dl {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0 32px;
+		margin: 8px 0 0;
+	}
+	.group dl div {
+		display: grid;
+		align-content: start;
+		gap: 4px;
+		padding-block: 16px;
+		border-top: 1px solid var(--faint);
+	}
+	.group dt {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		font-weight: 500;
+	}
+	.group dd {
+		margin: 0;
+		padding-left: 30px;
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.5;
+		text-wrap: pretty;
+	}
+	.group dd a,
+	.summary a {
+		color: var(--ink);
+		text-decoration-color: var(--line);
+		text-underline-offset: 4px;
+	}
+	.group dd a:hover,
+	.summary a:hover {
+		color: var(--accent);
+		text-decoration-color: currentColor;
+	}
+	@media (max-width: 600px) {
+		.group dl {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+	.foot {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px 20px;
+		padding: 48px 0 40px;
+		font: 0.875rem var(--font-mono);
+		color: var(--muted);
+	}
+	.foot a,
+	.foot span {
+		white-space: nowrap;
+	}
+	.foot a {
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.rule {
+		flex: 1 1 2rem;
+		height: 1px;
+		background: var(--line);
+	}
+	@media (max-width: 899px) {
+		.intro {
+			padding-block: 24px 16px;
+		}
+	}
+</style>

@@ -16,7 +16,8 @@ const DMG = 'https://rays.a6n.ai/download/Rays.dmg?src=docs';
 	<div class="brand">
 		<a href="/" class="logo"><Image src={icon} alt="" width={24} height={24} /><span>Rays</span></a>
 		<span class="divider" aria-hidden="true"></span>
-		<a href="/docs/" class="section">Docs</a>
+		<a href="/docs/" class="section" aria-current="true">Docs</a>
+			<a href="/features/" class="section tab">Features</a>
 		<div class="search"><Search /></div>
 	</div>
 	<nav class="crumbs" aria-label="Breadcrumb">
@@ -77,6 +78,13 @@ const DMG = 'https://rays.a6n.ai/download/Rays.dmg?src=docs';
 	}
 	.section {
 		font-weight: 500;
+	}
+	.tab {
+		color: var(--sl-color-gray-3);
+		transition: color 150ms;
+	}
+	.tab:hover {
+		color: var(--sl-color-white);
 	}
 	.logo img {
 		width: 24px;

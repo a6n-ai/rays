@@ -38,6 +38,9 @@
 			engine: { elevation: 2.3, tilt: 24 },
 			sorting: { elevation: 0.75, tilt: 40 },
 			private: { elevation: 0.15, tilt: 52 },
+			features: { elevation: 1.4, tilt: 30 },
+			models: { elevation: 1.6, tilt: 34 },
+			queues: { elevation: 0.9, tilt: 38 },
 			anywhere: { elevation: 1.1, tilt: 34 },
 		};
 		const sections = [...document.querySelectorAll<HTMLElement>('.passage')].filter((s) => (s.querySelector('h2')?.id ?? '') in LAND);

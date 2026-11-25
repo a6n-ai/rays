@@ -1,5 +1,4 @@
 ---
-import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
 import WordDrum from '../components/WordDrum.astro';
 import DrumPause from '../components/DrumPause.astro';
@@ -8,8 +7,9 @@ import Passage from '../components/Passage.astro';
 import Panel from '../components/Panel.astro';
 import Newsletter from '../components/Newsletter.astro';
 import Faq from '../components/Faq.astro';
-import ThemeToggle from '../components/ThemeToggle.astro';
-import icon from '../assets/icon.png';
+import SiteNav from '../components/SiteNav.astro';
+import { OVERVIEW } from '../components/features-data';
+import { svg } from '../components/docs/icons';
 ---
 
 <Base
@@ -18,17 +18,7 @@ import icon from '../assets/icon.png';
 >
 	<div class="page">
 		<main id="main" class="column" data-pagefind-body data-pagefind-meta="title:Rays: free download manager for Mac">
-			<header class="mark">
-				<Image src={icon} alt="" width={28} height={28} />
-				<span>Rays</span>
-				<span class="by">by <a class="slide" href="https://a6n.ai">a6n</a></span>
-				<nav class="top" aria-label="Site">
-					<a class="slide" href="/docs/">Docs</a>
-					<a class="slide wide" href="/docs/app/browser/">Extension</a>
-					<a class="slide" href="/releases/">Release notes</a>
-					<ThemeToggle />
-				</nav>
-			</header>
+			<SiteNav />
 
 			<section class="hero" aria-labelledby="hero-title">
 				<div class="headline">
@@ -40,7 +30,7 @@ import icon from '../assets/icon.png';
 				<DrumPause />
 				</div>
 				<Panel />
-				<p class="sub">Rays downloads from your browser, Terminal, AI assistants and Hugging Face at full line speed. Then every file lands in a folder that fits, sorted by AI that never leaves your Mac. Free.</p>
+				<p class="sub">Rays downloads from your browser, Terminal, AI assistants and Hugging Face at full line speed, in queues that run on your schedule. Then every file lands in a folder that fits, sorted by AI that never leaves your Mac. Free.</p>
 				<InstallBar />
 			</section>
 
@@ -53,6 +43,27 @@ import icon from '../assets/icon.png';
 					We think a download isn't done when the last byte lands. It's done when the file is where you'll look for
 					it. Rays does both halves.
 				</p>
+			</Passage>
+
+			<Passage label="Features" id="features">
+				<p>Everything Rays does today, in five groups. Each one opens its docs page.</p>
+				<div class="overview">
+					{OVERVIEW.map((g) => (
+						<section aria-labelledby={`ov-${g.id}`}>
+							<h3 id={`ov-${g.id}`}>
+								<a href={g.href}>
+									<Fragment set:html={svg(g.icon, 22)} />
+									<span class="name">{g.title}</span>
+								</a>
+							</h3>
+							<p>{g.summary}</p>
+							<ul>
+								{g.short.map((t) => <li>{t}</li>)}
+							</ul>
+						</section>
+					))}
+				</div>
+				<p><a href="/features/">See all features</a></p>
 			</Passage>
 
 			<Passage label="Downloads" id="downloads">
@@ -189,6 +200,49 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 				</dl>
 			</Passage>
 
+			<Passage label="Models" id="models">
+				<p>
+					Search Hugging Face from Rays. Trending models show as cards with a type colour and icon, and you can filter
+					by Text, Vision, Image, Audio or Embeddings.
+				</p>
+				<p>Download the one quantization you need, or save it straight into LM Studio's models folder.</p>
+				<dl class="features">
+					<div>
+						<dt>Verify what you downloaded</dt>
+						<dd>Rays checks each file's size and SHA-256 offline, and downloads again only the files that are bad.</dd>
+					</div>
+					<div>
+						<dt>Same engine</dt>
+						<dd>A model file downloads like any other, with pause, resume and your speed limit.</dd>
+					</div>
+				</dl>
+				<p><a href="/docs/app/models/">Read about models</a></p>
+			</Passage>
+
+			<Passage label="Queues" id="queues">
+				<p>
+					Main is the default queue. Add more, each with its own icon, colour, speed limit and number of files at a
+					time. Then say when each one runs.
+				</p>
+				<ol class="flow" aria-label="How a scheduled queue runs">
+					<li><span class="step">Starts</span><code>start time</code><p>once, every day or on chosen days, with an optional stop time</p></li>
+					<li><span class="step">Checks</span><code>conditions</code><p>Wi-Fi only (not a hotspot), charging, or the Mac idle</p></li>
+					<li><span class="step">Runs</span><code>its own limits</code><p>the queue's speed limit and files at a time</p></li>
+					<li><span class="step">Finishes</span><code>your choice</code><p>play a sound, quit, sleep, lock, shut down, or run a command</p></li>
+				</ol>
+				<dl class="features">
+					<div>
+						<dt>Wake the Mac</dt>
+						<dd>Optional. Rays can wake a sleeping Mac for a scheduled queue. It asks for your admin password once.</dd>
+					</div>
+					<div>
+						<dt>Activity history</dt>
+						<dd>A history of what your queues have done.</dd>
+					</div>
+				</dl>
+				<p><a href="/docs/app/queues/">Read about queues and schedules</a></p>
+			</Passage>
+
 			<Passage label="Private" id="private">
 				<p class="statement">Your files stay on your Mac.</p>
 				<p>Sorting runs on Apple's on-device model. Nothing is uploaded, and there is no account to make.</p>
@@ -196,7 +250,7 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 
 			<Passage label="Anywhere" id="anywhere">
 				<p>
-					Rays comes with the <a href="/docs/dl/"><code>dl</code> command</a>, so you can download and sort from Terminal, or let AI assistants do it over MCP. The
+					Rays comes with the <a href="/docs/dl/"><code>dl</code> command</a>, so you can download and sort from Terminal, or let AI assistants do it over <a href="/docs/mcp/">MCP</a>: they can add downloads to a queue, start and stop queues, and verify a model. The
 					Rays extension for <a href="https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail">Chrome</a> and <a href="https://addons.mozilla.org/firefox/addon/rays@a6n.ai/">Firefox</a> sends links to Rays with a right-click.
 				</p>
 				<a class="browsers" href="/docs/app/browser/">
@@ -224,7 +278,7 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 				<a class="slide" href="https://github.com/a6n-ai/rays">GitHub</a>
 				<span class="rule" aria-hidden="true"></span>
 				<a class="slide" href="/docs/">Docs</a>
-				<a class="slide" href="/docs/features/">Features</a>
+				<a class="slide" href="/features/">Features</a>
 				<a class="slide" href="/docs/app/browser/">Browser extension</a>
 				<a class="slide" href="/releases/">Release notes</a>
 				<a class="slide" href="/support/">Support</a>
@@ -252,32 +306,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 </script>
 
 <style>
-	.mark {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding-top: 48px;
-		font: 600 1.125rem var(--font-display);
-		letter-spacing: -0.01em;
-	}
-	.top {
-		display: flex;
-		align-items: center;
-		gap: 18px;
-		margin-left: auto;
-		font: 400 var(--t-small) var(--font-text);
-	}
-	.top a,
-	.by {
-		white-space: nowrap;
-	}
-	.top a {
-		color: var(--muted);
-		text-decoration: none;
-	}
-	.top a:hover {
-		color: var(--ink);
-	}
 	/* The underline draws under the label only, not under the browser icons; the icons hop in turn. */
 	.browsers .label {
 		background: linear-gradient(currentColor, currentColor) left bottom / 0 1px no-repeat;
@@ -312,24 +340,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 	}
 	.browsers span {
 		margin-left: 6px;
-	}
-	.by {
-		color: var(--muted);
-		font-weight: 400;
-	}
-	.by a {
-		color: inherit;
-		text-underline-offset: 3px;
-	}
-	.by a:hover {
-		color: var(--ink);
-	}
-	.mark > :global(img) {
-		view-transition-name: rays-logo;
-	}
-	.mark :global(img) {
-		width: 28px;
-		height: 28px;
 	}
 	.hero {
 		display: grid;
@@ -540,6 +550,74 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		font-size: var(--t-small);
 		line-height: 1.45;
 	}
+	/* Feature overview: five groups on one set of rules, two across, the last one full width. */
+	.overview {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 32px;
+		margin: 16px 0 8px;
+		max-width: var(--measure);
+	}
+	.overview section {
+		display: grid;
+		align-content: start;
+		gap: 8px;
+		padding-top: 16px;
+		border-top: 1px solid var(--line);
+	}
+	.overview section:last-child:nth-child(odd) {
+		grid-column: 1 / -1;
+	}
+	.overview h3 {
+		margin: 0;
+		font: 500 1.25rem / 1.2 var(--font-display);
+		letter-spacing: -0.02em;
+	}
+	.overview h3 a {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 32px;
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.overview h3 a :global(svg) {
+		flex: none;
+		color: var(--accent);
+	}
+	.overview .name {
+		background: linear-gradient(currentColor, currentColor) left bottom / 0 1px no-repeat;
+		padding-bottom: 2px;
+		transition: background-size 220ms var(--ease-out);
+	}
+	.overview h3 a:hover .name,
+	.overview h3 a:focus-visible .name {
+		background-size: 100% 1px;
+	}
+	.overview section > p {
+		margin: 0;
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.45;
+	}
+	.overview ul {
+		display: grid;
+		gap: 2px;
+		margin: 4px 0 0;
+		padding: 0;
+		list-style: none;
+		font-size: var(--t-small);
+		line-height: 1.5;
+	}
+	.overview li::before {
+		content: '';
+		display: inline-block;
+		width: 5px;
+		height: 5px;
+		margin: 0 10px 2px 0;
+		border-radius: 50%;
+		background: var(--muted);
+	}
 	.features {
 		display: grid;
 		gap: 0;
@@ -575,13 +653,10 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 			grid-template-columns: 2rem minmax(0, 1fr) 6.5rem;
 			gap: 10px;
 		}
-		.top .wide {
-			display: none;
-		}
-		.top {
-			gap: 12px;
-		}
 		.features div {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.overview {
 			grid-template-columns: minmax(0, 1fr);
 		}
 	}
@@ -609,9 +684,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		background: var(--line);
 	}
 	@media (max-width: 899px) {
-		.mark {
-			padding-top: 8px;
-		}
 		.hero {
 			min-height: 0;
 			padding-block: 24px 40px;
