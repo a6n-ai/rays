@@ -72,6 +72,9 @@ struct SidebarView: View {
                 Label("Schedules", systemImage: "calendar.badge.clock")
                     .tag(Destination.schedules)
             }
+            Section("Tools") {
+                SpeedCard().tag(Destination.speed)
+            }
             Section("Folders", isExpanded: $foldersExpanded) {
                 if denied {
                     VStack(alignment: .leading, spacing: 6) {
@@ -91,9 +94,6 @@ struct SidebarView: View {
                     // The downloads root's subfolders are already listed here, so it doesn't expand.
                     FolderNode(url: folder.url, count: folder.count, expandable: folder.url != EngineModel.downloadsURL)
                 }
-            }
-            Section {
-                SpeedCard().tag(Destination.speed)
             }
         }
         .listStyle(.sidebar)
