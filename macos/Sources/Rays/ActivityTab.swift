@@ -2,17 +2,10 @@ import SwiftUI
 
 /// What is running now, what starts next, and the last runs.
 struct ActivityTab: View {
-    let open: (UInt64, QueueSection?) -> Void
+    let open: (UInt64) -> Void
     @Environment(EngineModel.self) private var model
 
     private var running: [QueueView] { model.sortedQueues.filter { $0.state == .open && $0.running > 0 } }
-    private var upcoming: [(queue: QueueView, next: Int64)] {
-        model.queues.compactMap { queue in
-            guard queue.config.enabled, queue.config.schedule != nil, let next = queue.nextRun else { return nil }
-            return (queue, next)
-        }
-        .sorted { $0.next < $1.next }
-    }
 
     var body: some View {
         List {
@@ -23,27 +16,11 @@ struct ActivityTab: View {
                 ForEach(running) { queue in
                     runningRow(queue)
                         .contentShape(Rectangle())
-                        .onTapGesture { open(queue.id, .downloads) }
+                        .onTapGesture { open(queue.id) }
                         .hoverHighlight()
                         .rowStyle()
                 }
             } header: { header("Running now") }
-            Section {
-                if upcoming.isEmpty {
-                    note("Nothing scheduled") {
-                        Button("Schedule a queue") { open(1, .schedule) }
-                            .buttonStyle(.glass)
-                            .controlSize(.small)
-                    }
-                }
-                ForEach(upcoming, id: \.queue.id) { item in
-                    upcomingRow(item.queue, next: item.next)
-                        .contentShape(Rectangle())
-                        .onTapGesture { open(item.queue.id, .schedule) }
-                        .hoverHighlight()
-                        .rowStyle()
-                }
-            } header: { header("Upcoming") }
             Section {
                 if model.runs.isEmpty {
                     note("No runs yet")
@@ -80,28 +57,13 @@ struct ActivityTab: View {
         let run = model.openRun(queue.id)
         var detail = "\(queue.running) downloading"
         if let run { detail += " · " + countText(files: run.filesDone, bytes: run.bytesDone) + " this run" }
-        return row(symbol: "arrow.down.circle.fill", tint: .blue, title: queue.config.name, detail: detail) { EmptyView() }
-    }
-
-    private func upcomingRow(_ queue: QueueView, next: Int64) -> some View {
-        let date = Date(timeIntervalSince1970: TimeInterval(next))
-        return row(symbol: "clock", tint: .orange, title: queue.config.name, detail: queue.config.schedule?.summary ?? "") {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(SchedulerTime.nextRunText(next))
-                TimelineView(.periodic(from: .now, by: 60)) { _ in
-                    Text(date.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .monospacedDigit()
-        }
+        return row(leading: QueueTile(queue: queue), title: queue.config.name, detail: detail) { EmptyView() }
     }
 
     private func historyRow(_ run: QueueRun) -> some View {
-        let name = model.queues.first { $0.id == run.queueId }?.config.name ?? "Deleted queue"
+        let queue = model.queues.first { $0.id == run.queueId }
         let outcome = Outcome(run.outcome)
-        return row(symbol: outcome.symbol, tint: outcome.tint, title: name, detail: timeText(run)) {
+        return row(leading: historyTile(queue), title: queue?.config.name ?? "Deleted queue", detail: timeText(run)) {
             HStack(spacing: LayoutMetrics.gap) {
                 Text(countText(files: run.filesDone, bytes: run.bytesDone))
                     .font(.callout)
@@ -117,12 +79,13 @@ struct ActivityTab: View {
         }
     }
 
-    private func row(symbol: String, tint: Color, title: String, detail: String, @ViewBuilder trailing: () -> some View) -> some View {
+    @ViewBuilder private func historyTile(_ queue: QueueView?) -> some View {
+        if let queue { QueueTile(queue: queue) } else { ModelTile(symbol: "trash", color: .gray) }
+    }
+
+    private func row(leading: some View, title: String, detail: String, @ViewBuilder trailing: () -> some View) -> some View {
         HStack(spacing: LayoutMetrics.gap) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(tint)
-                .frame(width: LayoutMetrics.iconSize, height: LayoutMetrics.iconSize)
+            leading
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.body.weight(.semibold))

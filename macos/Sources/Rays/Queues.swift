@@ -43,21 +43,48 @@ extension QueueView {
         }
     }
 
-    /// For example "Weekdays 02:00–07:30 · Wi-Fi · next Mon 02:00 · 3 waiting", or "Not scheduled · 2 downloading".
-    var statusLine: String {
-        var parts: [String] = []
+    /// The pieces of the status line, each with a small symbol. `withNext` adds the next start.
+    func statusParts(withNext: Bool = true) -> [QueueStatusPart] {
+        var parts: [QueueStatusPart] = []
         if let schedule = config.schedule {
-            parts.append(schedule.summary)
-            if let conditions = schedule.conditionsText { parts.append(conditions) }
-            if config.enabled, let next = nextRun {
-                parts.append("next " + Date(timeIntervalSince1970: TimeInterval(next)).formatted(Date.FormatStyle().weekday(.abbreviated).hour().minute()))
+            parts.append(QueueStatusPart(symbol: "calendar", text: schedule.summary))
+            if let conditions = schedule.conditionsText {
+                parts.append(QueueStatusPart(symbol: schedule.wifi ? "wifi" : schedule.power ? "bolt" : "moon", text: conditions))
+            }
+            if withNext, config.enabled, let next = nextRun {
+                parts.append(QueueStatusPart(symbol: "clock", text: "next " + Date(timeIntervalSince1970: TimeInterval(next)).formatted(Date.FormatStyle().weekday(.abbreviated).hour().minute())))
             }
         } else {
-            parts.append("Not scheduled")
+            parts.append(QueueStatusPart(symbol: "calendar", text: "Not scheduled"))
         }
-        if running > 0 { parts.append("\(running) downloading") }
-        if queued > 0 { parts.append("\(queued) waiting") }
-        return parts.joined(separator: " · ")
+        if running > 0 { parts.append(QueueStatusPart(symbol: "arrow.down.circle.fill", text: "\(running) downloading", tint: .blue)) }
+        if queued > 0 { parts.append(QueueStatusPart(symbol: "arrow.down.circle", text: "\(queued) waiting")) }
+        return parts
+    }
+
+    var statusLine: String { statusParts().map(\.text).joined(separator: " · ") }
+}
+
+struct QueueStatusPart {
+    let symbol: String
+    let text: String
+    var tint: Color?
+}
+
+/// A status line with a small inline symbol before each piece.
+struct QueueStatusText: View {
+    let parts: [QueueStatusPart]
+
+    var body: some View {
+        parts.enumerated().reduce(Text("")) { text, item in
+            let piece = Text("\(Image(systemName: item.element.symbol)) \(item.element.text)")
+            return text + Text(item.offset == 0 ? "" : "  ·  ") + (item.element.tint.map { piece.foregroundColor($0) } ?? piece)
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+        .lineLimit(1)
+        .truncationMode(.tail)
     }
 }
 
@@ -96,7 +123,7 @@ extension EngineModel {
     func openRun(_ queue: UInt64) -> QueueRun? { runs.first { $0.queueId == queue && $0.endedAt == nil } }
 
     /// A new unscheduled queue using the defaults chosen in the Queues settings, or nil after the failure is shown in the notice line.
-    func newQueue() -> UInt64? {
+    func newQueue(schedule: QueueSchedule? = nil) -> UInt64? {
         let defaults = UserDefaults.standard
         let finish = FinishKind(rawValue: defaults.string(forKey: SettingsKey.queueDefaultFinish) ?? "")?.action ?? .nothing
         do {
@@ -104,7 +131,7 @@ extension EngineModel {
                 id: nil, name: "New queue",
                 maxRunning: UInt32(max(0, defaults.integer(forKey: SettingsKey.queueDefaultMaxRunning))),
                 speedLimit: UInt64(max(0, defaults.integer(forKey: SettingsKey.queueDefaultSpeed))),
-                enabled: true, schedule: nil, retryFailed: false, wake: false, whenFinished: finish))
+                enabled: true, schedule: schedule, retryFailed: false, wake: false, whenFinished: finish))
         } catch {
             queueFailed("create the queue", error)
             return nil

@@ -50,22 +50,28 @@ struct QueueListTab: View {
     }
 }
 
-private struct QueueRow: View {
+struct QueueRow: View {
     let queue: QueueView
     let isDirty: Bool
-    let onDelete: () -> Void
+    /// Replaces the status line, e.g. Schedules shows the next run beside the row instead.
+    var trailing: AnyView?
+    var parts: [QueueStatusPart]?
+    let onDelete: (() -> Void)?
     @Environment(EngineModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
 
-    private var tint: Color { queue.badge?.tint ?? .secondary }
+    init(queue: QueueView, isDirty: Bool, parts: [QueueStatusPart]? = nil, trailing: AnyView? = nil, onDelete: (() -> Void)? = nil) {
+        self.queue = queue
+        self.isDirty = isDirty
+        self.parts = parts
+        self.trailing = trailing
+        self.onDelete = onDelete
+    }
 
     var body: some View {
         HStack(spacing: LayoutMetrics.gap) {
-            Image(systemName: queue.config.schedule == nil ? "list.bullet" : "clock")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(tint)
-                .frame(width: LayoutMetrics.iconSize, height: LayoutMetrics.iconSize)
+            QueueTile(queue: queue)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(queue.config.name)
@@ -84,54 +90,67 @@ private struct QueueRow: View {
                         Circle().fill(.secondary).frame(width: 6, height: 6).accessibilityLabel("Unsaved changes")
                     }
                 }
-                Text(queue.statusLine)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                QueueStatusText(parts: parts ?? queue.statusParts())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if let badge = queue.badge { QueueBadgePill(badge: badge) }
-            startStopButton
-            moreMenu
+            if let trailing { trailing }
+            if let badge = queue.badge, queue.state != .open { QueueBadgePill(badge: badge) }
+            if onDelete != nil { moreMenu }
             Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .tint(.accentColor)
                 .help("Enabled")
+            if onDelete != nil { primaryButton }
         }
         .frame(height: LayoutMetrics.rowHeight)
         .padding(.horizontal, LayoutMetrics.hoverInset)
         .listRowBackground(RowHighlight(selected: false, hovered: isHovered))
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHovered)
-        .contextMenu { actions }
+        .contextMenu { if onDelete != nil { actions } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(queue.config.name), \(queue.statusLine)")
     }
 
-    private var startStopButton: some View {
-        Button {
-            if queue.isStopped { model.startQueue(queue.id) } else { model.stopQueue(queue.id) }
-        } label: {
-            Image(systemName: queue.isStopped ? "play.circle" : "stop.circle")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.secondary)
+    private enum Primary {
+        case start, stop, run
+        var symbol: String { self == .stop ? "stop.fill" : "play.fill" }
+        var title: String { self == .start ? "Start queue" : self == .stop ? "Stop queue" : "Run now" }
+        var tint: Color { self == .stop ? .red : .blue }
+    }
+
+    private var primary: Primary { queue.running > 0 ? .stop : queue.isStopped ? .start : .run }
+
+    private func perform(_ action: Primary) {
+        switch action {
+        case .start: model.startQueue(queue.id)
+        case .stop: model.stopQueue(queue.id)
+        case .run: model.runQueueNow(queue.id)
+        }
+    }
+
+    private var primaryButton: some View {
+        Button { perform(primary) } label: {
+            Image(systemName: primary.symbol)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(primary.tint)
+                .offset(x: primary == .stop ? 0 : 1)
+                .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
+                .glassEffect(.regular.interactive(), in: .circle)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .opacity(isHovered ? 1 : 0)
-        .allowsHitTesting(isHovered)
-        .help(queue.isStopped ? "Start queue" : "Stop queue")
-        .accessibilityLabel(queue.isStopped ? "Start queue" : "Stop queue")
+        .disabled(primary == .run && isDirty)
+        .help("\(primary.title) \(queue.config.name)")
+        .accessibilityLabel("\(primary.title) \(queue.config.name)")
     }
 
     private var moreMenu: some View {
         Menu { actions } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.system(size: 16, weight: .medium))
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.secondary)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                 .contentShape(Circle())
@@ -140,6 +159,8 @@ private struct QueueRow: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
+        .opacity(isHovered ? 1 : 0)
+        .allowsHitTesting(isHovered)
         .help("More")
         .accessibilityLabel("More actions for \(queue.config.name)")
     }
@@ -150,7 +171,7 @@ private struct QueueRow: View {
         Button(queue.isStopped ? "Start queue" : "Stop queue") {
             if queue.isStopped { model.startQueue(queue.id) } else { model.stopQueue(queue.id) }
         }
-        if !queue.isMain {
+        if !queue.isMain, let onDelete {
             Divider()
             Button("Delete queue…", role: .destructive, action: onDelete)
         }

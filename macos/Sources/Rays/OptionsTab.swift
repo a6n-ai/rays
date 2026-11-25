@@ -16,6 +16,9 @@ struct OptionsTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Grid(alignment: .topLeading, horizontalSpacing: 12, verticalSpacing: LayoutMetrics.gap) {
+                if let queue = model.queues.first(where: { $0.id == queueId }) {
+                    formRow("Icon & color") { QueueIconPicker(queue: queue) }
+                }
                 formRow("Simultaneous") {
                     Stepper(value: Binding(get: { shownRunning }, set: { draft.maxRunning = UInt32($0) }), in: 0...max(cap, 1)) {
                         Text(shownRunning == 0 ? "Same as Rays" : "\(shownRunning) download\(shownRunning == 1 ? "" : "s") at a time")

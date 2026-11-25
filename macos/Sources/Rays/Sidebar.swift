@@ -7,6 +7,7 @@ enum Destination: Hashable {
     case folder(URL)
     case cloud
     case queues
+    case schedules
 }
 
 struct SidebarFolder: Identifiable {
@@ -57,14 +58,18 @@ struct SidebarView: View {
                 Label("Models", systemImage: "cube")
                     .padding(.leading, 18)
                     .tag(Destination.models)
-                Label("Queues", systemImage: "list.bullet.rectangle")
-                    .tag(Destination.queues)
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
                 Label("Cloud", systemImage: "cloud")
                     .tag(Destination.cloud)
             } header: {
                 Text("Rays")
+            }
+            Section("Queues") {
+                Label("Queues", systemImage: "list.bullet.rectangle")
+                    .tag(Destination.queues)
+                Label("Schedules", systemImage: "calendar.badge.clock")
+                    .tag(Destination.schedules)
             }
             Section("Folders", isExpanded: $foldersExpanded) {
                 if denied {

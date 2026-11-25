@@ -26,6 +26,8 @@ struct ContentView: View {
                         destination = .sorter
                     } else if path == "cloud" {
                         destination = .cloud
+                    } else if path == "schedules" {
+                        destination = .schedules
                     } else if path == "queues" {
                         destination = .queues
                     } else if path == "models" {
@@ -40,7 +42,10 @@ struct ContentView: View {
                     case .sorter?: lastFolder = "sorter"
                     case .cloud?: lastFolder = "cloud"
                     case .models?: lastFolder = "models"
-                    case .queues?: lastFolder = "queues"
+                    case .schedules?:
+                    SchedulesPage(isDropTargeted: isDropTargeted, drafts: drafts)
+                case .queues?: lastFolder = "queues"
+                    case .schedules?: lastFolder = "schedules"
                     default: lastFolder = ""
                     }
                 }

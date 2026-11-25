@@ -16,7 +16,7 @@ struct QueuesPage: View {
             Group {
                 switch section {
                 case .queues: QueueListTab(drafts: drafts, open: { open($0, nil) })
-                case .activity: ActivityTab(open: open)
+                case .activity: ActivityTab(open: { open($0, nil) })
                 case .settings: QueueSettingsTab()
                 }
             }

@@ -11,6 +11,7 @@ struct QueueHeader: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: LayoutMetrics.gap) {
+            QueueTile(queue: queue, size: 44)
             VStack(alignment: .leading, spacing: 6) {
                 TextField("Queue name", text: $draft.name)
                     .textFieldStyle(.plain)

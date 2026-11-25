@@ -227,17 +227,15 @@ struct ModelDetailView: View {
 
     private var queuePicker: some View {
         Menu {
-            ForEach(model.sortedQueues) { option in
-                Button { chosenQueue = option.id } label: {
-                    if option.id == queueId {
-                        Label(option.config.name, systemImage: "checkmark")
-                    } else {
-                        Text(option.config.name)
-                    }
+            Picker("Queue", selection: Binding(get: { queueId }, set: { chosenQueue = $0 })) {
+                ForEach(model.sortedQueues) { option in
+                    Label(option.config.name, systemImage: QueueAppearances.shared.appearance(for: option).symbol).tag(option.id)
                 }
             }
+            .pickerStyle(.inline)
         } label: {
-            Label(model.queues.first { $0.id == queueId }?.config.name ?? "Main", systemImage: "list.bullet")
+            Label(model.queues.first { $0.id == queueId }?.config.name ?? "Main",
+                  systemImage: model.queues.first { $0.id == queueId }.map { QueueAppearances.shared.appearance(for: $0).symbol } ?? "tray.full.fill")
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
         }

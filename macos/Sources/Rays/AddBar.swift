@@ -101,15 +101,12 @@ struct AddBar: View {
         let dimmed = !isEnabled || !ready
         // Always the round icon; a pasted link fills it with the accent colour instead of growing a label.
         Menu {
-            ForEach(model.sortedQueues) { option in
-                Button { chosen = option.id } label: {
-                    if option.id == target {
-                        Label(option.config.name, systemImage: "checkmark")
-                    } else {
-                        Text(option.config.name)
-                    }
+            Picker("Queue", selection: Binding(get: { target }, set: { chosen = $0 })) {
+                ForEach(model.sortedQueues) { option in
+                    Label(option.config.name, systemImage: QueueAppearances.shared.appearance(for: option).symbol).tag(option.id)
                 }
             }
+            .pickerStyle(.inline)
         } label: {
             HStack(spacing: 6) {
                 Label("Download", systemImage: "arrow.down")

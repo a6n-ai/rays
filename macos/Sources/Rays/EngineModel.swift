@@ -264,6 +264,7 @@ final class EngineModel {
         try engine.deleteQueue(id: id)
         queues = engine.queues()
         WakePermission.sync(queue: id, wake: false, nextRun: nil)
+        QueueAppearances.shared.clear(id)
     }
 
     /// Shows a queue action's failure in the notice line; `notice` is only settable in this file.
