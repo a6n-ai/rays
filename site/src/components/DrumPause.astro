@@ -1,5 +1,5 @@
 ---
-// Pause/play for the word drum, kept outside the <h1> so the heading stays plain text.
+// Pause/play for the hero's motion: the word drum and the landscape. It sits in the landscape's corner, outside the <h1>.
 ---
 <button type="button" class="pause" data-pagefind-ignore data-drum-toggle aria-pressed="false" aria-label="Pause animation">
 	<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>
@@ -19,6 +19,7 @@
 			? '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 2.5v11a1 1 0 0 0 1.5.86l9-5.5a1 1 0 0 0 0-1.72l-9-5.5A1 1 0 0 0 4 2.5Z"/></svg>'
 			: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>';
 		apply();
+		window.dispatchEvent(new CustomEvent('rays:motion', { detail: paused }));
 	});
 	if (ring) new IntersectionObserver(([e]) => ((visible = e.isIntersecting), apply())).observe(ring.parentElement!);
 </script>

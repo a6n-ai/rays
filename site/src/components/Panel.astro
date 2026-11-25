@@ -1,9 +1,12 @@
 ---
+import DrumPause from './DrumPause.astro';
 // Decorative panel: the Topography landscape (WebGL, src/scripts/topography.ts). Every scroll, down or up, walks
 // forward over the land. Lines use the Rays logo colours. The card colour shows until it loads.
 ---
 
-<div class="panel" aria-hidden="true" data-topography></div>
+<div class="panel" data-topography>
+	<DrumPause />
+</div>
 
 <script>
 	import { mountTopography } from '../scripts/topography';
@@ -17,15 +20,19 @@
 	if (el) {
 		const isLight = () => document.documentElement.dataset.theme === 'light';
 		const theme = () => ({ palette: PALETTES[isLight() ? 'light' : 'dark'], lightMode: isLight() });
+		const SPEED = 0.08;
 		const view = mountTopography(el, {
 			...theme(),
 			lineCount: 24,
 			glow: 0.7,
-			speed: 0.08,
+			speed: SPEED,
 			scrollTravel: 0.004,
 			// Phones show a short strip, where 1x pixels look the same and scrolling stays smooth.
 			dpr: matchMedia('(max-width: 899px)').matches ? 1 : Math.min(window.devicePixelRatio || 1, 2),
 		});
+		// The landscape is decoration; only the pause button in the corner is for assistive tech.
+		el.querySelector('canvas')?.setAttribute('aria-hidden', 'true');
+		window.addEventListener('rays:motion', (e) => view.update({ speed: (e as CustomEvent<boolean>).detail ? 0 : SPEED }));
 		new MutationObserver(() => view.update(theme())).observe(document.documentElement, {
 			attributes: true,
 			attributeFilter: ['data-theme'],
@@ -90,6 +97,14 @@
 			inset 0 14px 28px -10px var(--well-shade),
 			inset 0 -10px 22px -14px var(--well-lip),
 			inset 0 0 0 1px var(--well-lip);
+	}
+	/* Above the glass rim, in the corner of the art it pauses. */
+	.panel :global(.pause) {
+		position: absolute;
+		right: 16px;
+		bottom: 16px;
+		z-index: 2;
+		background: var(--well);
 	}
 	@media (max-width: 899px) {
 		.panel {

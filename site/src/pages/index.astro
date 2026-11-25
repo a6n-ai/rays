@@ -1,7 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
 import WordDrum from '../components/WordDrum.astro';
-import DrumPause from '../components/DrumPause.astro';
 import InstallBar from '../components/InstallBar.astro';
 import Passage from '../components/Passage.astro';
 import Panel from '../components/Panel.astro';
@@ -29,7 +28,6 @@ import { svg } from '../components/docs/icons';
 					<span aria-hidden="true" class="lead">File management for</span>
 					<WordDrum />
 				</h1>
-				<DrumPause />
 				</div>
 				<Panel />
 				<p class="sub">Rays downloads from your browser, Terminal, AI assistants and Hugging Face at full line speed, in queues that run on your schedule. Then every file lands in a folder that fits, sorted by AI that never leaves your Mac. Free.</p>
@@ -381,7 +379,7 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		align-content: center;
 		padding-block: 48px;
 	}
-	/* One 40rem column. The pause button sits just past the drum's right edge, on the line it controls. */
+	/* One 40rem column. */
 	.headline {
 		--fs: clamp(2.25rem, 4.4vw, 4.25rem);
 		position: relative;
@@ -404,11 +402,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		max-width: 40rem;
 		color: var(--muted);
 		text-wrap: pretty;
-	}
-	.headline :global(.pause) {
-		position: absolute;
-		left: calc(6.6 * var(--fs) + 8px);
-		bottom: calc(0.14 * var(--fs));
 	}
 	/* Sorting as four stops on one line: the file's name changes from the first stop to the last. */
 	.flow {
