@@ -260,10 +260,10 @@ mod best_time {
         let id = e.best_time_queue().unwrap();
         assert_eq!(follow_config(&e, id).schedule.unwrap().stop_min, Some(300));
         *clock.lock().unwrap() = date(2026, 11, 26).at(10, 0, 0, 0);
-        events(&rt, &e, 300);
-        events(&rt, &e, 300);
+        // The hub holds a delivery back up to 2 s, so quiet means a gap longer than that.
+        while !events(&rt, &e, 2500).is_empty() {}
         e.tick();
-        assert!(events(&rt, &e, 300).is_empty());
+        assert!(events(&rt, &e, 2500).is_empty());
         assert_eq!(follow_config(&e, id).schedule.unwrap().stop_min, Some(300));
     }
 
