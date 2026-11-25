@@ -3,7 +3,7 @@ title: "Queues and schedules"
 description: "Group downloads into queues, run a queue on a schedule, and choose what your Mac does when it finishes."
 ---
 
-**Queues** group downloads. Each queue has its own icon, speed limit and simultaneous count, and can have a schedule. In the sidebar, **Queues** sits under **Downloads** and has two pages: **Queues** and **Schedules**.
+**Queues** group downloads. Each queue has its own icon, speed limit and simultaneous count, and can have a schedule. The sidebar has a **Queues** section with two pages: **Queues** and **Schedules**.
 
 ## Queues
 
