@@ -147,7 +147,7 @@ private struct HoverHighlight: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     func hoverHighlight() -> some View { modifier(HoverHighlight()) }
 
     func rowStyle() -> some View {

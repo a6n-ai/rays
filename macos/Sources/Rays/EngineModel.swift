@@ -24,6 +24,11 @@ final class EngineModel {
     private(set) var hourly: [UInt64?] = Array(repeating: nil, count: 24)
     private(set) var speedSettings = SpeedSettings(autoTests: false, nightUntil: nil, nightPromptAnswered: true)
     private(set) var network = NetworkKind.unknown
+    private(set) var speedProgress: SpeedProgress?
+    /// The running (or last) test's rate over time, for the live chart.
+    private(set) var liveSamples: [LivePoint] = []
+    private(set) var speedHistory: [SpeedSample] = []
+    @ObservationIgnored private var ignoreProgressUntil = Date.distantPast
     var confirmHotspot = false
     var nightPromptShown = false
     /// Slow-hint dismissals live only for this session.
@@ -465,8 +470,17 @@ final class EngineModel {
                 runs.insert(run, at: 0)
                 if runs.count > Self.runLimit { runs.removeLast() }
             }
-        case .speedTestProgress:
-            break
+        case .speedTestProgress(let phase, let bps, let elapsed, let total):
+            // A late event from a test that already ended must not bring the indicator back.
+            if !testing, phase == .download, Date() < ignoreProgressUntil { break }
+            if phase == .latency { liveSamples = [] } else { liveSamples.append(LivePoint(ms: elapsed, bps: bps)) }
+            speedProgress = SpeedProgress(phase: phase, bps: bps, elapsedMs: elapsed, totalMs: total)
+            // A test the app did not start (an automatic one) ends here; there is no result call to clear it.
+            if !testing, elapsed >= total {
+                speedProgress = nil
+                refreshSpeed()
+                loadSpeedHistory()
+            }
         }
     }
 }
@@ -627,7 +641,7 @@ extension EngineModel {
 
     /// Asks first on a hotspot or metered connection. Ignored while a test is already running.
     func requestSpeedTest() {
-        guard !testing else { return }
+        guard !testing, speedProgress == nil else { return }
         if network == .expensive { confirmHotspot = true } else { Task { await runSpeedTest(force: false) } }
     }
 
@@ -635,14 +649,35 @@ extension EngineModel {
         guard let engine, !testing else { return }
         testing = true
         speedError = nil
-        defer { testing = false }
+        liveSamples = []
+        defer {
+            testing = false
+            speedProgress = nil
+            ignoreProgressUntil = Date().addingTimeInterval(1)
+        }
         do {
             lastTest = try await engine.runSpeedTest(force: force)
         } catch {
-            speedError = Self.message(for: error)
+            let message = Self.message(for: error)
+            // Stopping is the user's own action, not a failure.
+            if message != "Speed test stopped" {
+                speedError = message
+                Task {
+                    try? await Task.sleep(for: .seconds(10))
+                    if speedError == message { speedError = nil }
+                }
+            }
         }
         refreshSpeed(engine)
+        loadSpeedHistory()
     }
+
+    func cancelSpeedTest() { if testing { engine?.cancelSpeedTest() } }
+
+    func loadSpeedHistory() { speedHistory = engine?.speedHistory(limit: 500) ?? [] }
+
+    /// A test is running that the app did not start; it can't be stopped.
+    var automaticTestRunning: Bool { speedProgress != nil && !testing }
 
     func setAutoTests(_ on: Bool) {
         guard let engine else { return }
@@ -767,3 +802,37 @@ func minuteInWindow(_ minute: Int, start: Int, end: Int) -> Bool {
 }
 
 func hourInWindow(_ h: Int, start: Int, end: Int) -> Bool { minuteInWindow(h * 60, start: start, end: end) }
+
+struct SpeedProgress: Equatable {
+    var phase: SpeedTestPhase
+    var bps: UInt64
+    var elapsedMs: UInt32
+    var totalMs: UInt32
+
+    var fraction: Double { totalMs == 0 ? 0 : min(1, Double(elapsedMs) / Double(totalMs)) }
+}
+
+struct LivePoint: Equatable {
+    var ms: UInt32
+    var bps: UInt64
+}
+
+extension NetworkKind {
+    var title: String {
+        switch self {
+        case .wifi: "Wi-Fi"
+        case .wired: "Wired"
+        case .expensive: "Hotspot"
+        case .other, .unknown: "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .wifi: "wifi"
+        case .wired: "cable.connector"
+        case .expensive: "antenna.radiowaves.left.and.right"
+        case .other, .unknown: "network"
+        }
+    }
+}

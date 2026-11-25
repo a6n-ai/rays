@@ -25,7 +25,7 @@ enum FileKind: String, CaseIterable, Identifiable {
 }
 
 enum ListSort: String, CaseIterable, Identifiable {
-    case newest = "Newest first", oldest = "Oldest first", name = "Name", size = "Largest first", nextRun = "Next run"
+    case newest = "Newest first", fastest = "Fastest", oldest = "Oldest first", name = "Name", size = "Largest first", nextRun = "Next run"
     var id: Self { self }
 }
 
@@ -130,7 +130,7 @@ extension Array where Element == JobView {
         }
         // Ids grow with each new download, so they order by when it was added.
         return switch sort {
-        case .newest, .nextRun: jobs.sorted { $0.id > $1.id }
+        case .newest, .nextRun, .fastest: jobs.sorted { $0.id > $1.id }
         case .oldest: jobs.sorted { $0.id < $1.id }
         case .name: jobs.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         case .size: jobs.sorted { ($0.total ?? $0.done) > ($1.total ?? $1.done) }
