@@ -3,6 +3,7 @@
 use dl_engine::events::EventHub;
 use dl_engine::queue::{FinishAction, QueueConfig, QueueSchedule, Repeat};
 use dl_engine::s3::MemorySecrets;
+use dl_engine::speed::NetworkKind;
 use dl_engine::scheduler::Scheduler;
 use dl_engine::store::Store;
 use dl_engine::types::{JobId, JobState, JobView, QueueRun, RunOutcome};
@@ -220,10 +221,10 @@ async fn conditions_gate() {
     let v = r.sched.view(id).unwrap();
     assert_eq!((v.state, v.waiting.as_deref()), (JobState::Queued, Some("Waiting for Wi-Fi")), "conditions start unmet");
 
-    r.sched.set_conditions(true, false, false);
+    r.sched.set_conditions(true, false, false, NetworkKind::Unknown);
     wait_for(&r.sched, id, |v| busy(v) && v.done > 0).await;
 
-    r.sched.set_conditions(false, false, false);
+    r.sched.set_conditions(false, false, false, NetworkKind::Unknown);
     let held = wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
     assert_eq!(held.waiting.as_deref(), Some("Waiting for Wi-Fi"));
     assert!(held.done > 0);
@@ -656,17 +657,17 @@ async fn condition_drop_keeps_one_run() {
     let mut cfg = queue("Wi-Fi only", 0, 0);
     cfg.schedule = Some(all_day(true));
     let q = r.sched.save_queue(&cfg).unwrap();
-    r.sched.set_conditions(true, false, false);
+    r.sched.set_conditions(true, false, false, NetworkKind::Unknown);
     let id = add(&r.sched, &base, "w", 1024, Some(q));
     wait_for(&r.sched, id, |v| busy(v) && v.done > 0).await;
 
-    r.sched.set_conditions(false, false, false);
+    r.sched.set_conditions(false, false, false, NetworkKind::Unknown);
     wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     let all = runs(&r.sched);
     assert_eq!((all.len(), all[0].outcome.clone()), (1, RunOutcome::Running));
 
-    r.sched.set_conditions(true, false, false);
+    r.sched.set_conditions(true, false, false, NetworkKind::Unknown);
     wait_for(&r.sched, id, is_done).await;
     tokio::time::sleep(Duration::from_millis(400)).await;
     let all = runs(&r.sched);

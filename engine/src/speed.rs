@@ -120,6 +120,42 @@ pub fn typical_bps_at(local: &[(jiff::civil::DateTime, u64)], hour: u8) -> Optio
     (v.len() >= MIN_BUCKET).then(|| median(v))
 }
 
+/// Folds per-tick download rates into one sample per clean wall-clock minute. Pure: the caller supplies time and rates.
+#[derive(Default)]
+pub struct Sampler {
+    minute: i64,
+    sum: u64,
+    ticks: u64,
+    clean: bool,
+    network: Option<NetworkKind>,
+}
+
+const MIN_SAMPLE_BPS: u64 = 50_000;
+
+impl Sampler {
+    /// Call once per progress tick. Returns the finished minute's sample when `at` enters a new minute.
+    pub fn observe(&mut self, at: i64, total_bps: u64, any_running: bool, limited: bool, network: NetworkKind) -> Option<SpeedSample> {
+        let minute = at.div_euclid(60);
+        let done = (self.ticks > 0 && minute != self.minute).then(|| {
+            let bps = self.sum / self.ticks;
+            self.network.filter(|_| self.clean && bps > MIN_SAMPLE_BPS).map(|network| SpeedSample {
+                at: self.minute * 60,
+                bps,
+                source: SampleSource::Downloads,
+                network,
+            })
+        });
+        if done.is_some() || self.ticks == 0 {
+            *self = Sampler { minute, clean: true, ..Sampler::default() };
+        }
+        self.sum += total_bps;
+        self.ticks += 1;
+        self.network = Some(network);
+        self.clean &= any_running && !limited && matches!(network, NetworkKind::Wifi | NetworkKind::Wired | NetworkKind::Other);
+        done.flatten()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,5 +289,51 @@ mod tests {
         assert_eq!(typical_bps_at(&samples(1, 3, |_| 7), 3), Some(7));
         let even: Vec<_> = [10u64, 40, 20, 30].iter().map(|&b| (date(2026, 10, 1).at(3, 0, 0, 0), b)).collect();
         assert_eq!(typical_bps_at(&even, 3), Some(25));
+    }
+
+    fn run_minute(s: &mut Sampler, bps: u64, running: bool, limited_at: Option<i64>, net: NetworkKind) -> Option<SpeedSample> {
+        for t in (0..60).step_by(5) {
+            assert_eq!(s.observe(t, bps, running, limited_at == Some(t), net), None);
+        }
+        s.observe(60, bps, true, false, net)
+    }
+
+    #[test]
+    fn full_minute_sampled() {
+        let got = run_minute(&mut Sampler::default(), 1_000_000, true, None, NetworkKind::Wifi);
+        assert_eq!(got, Some(SpeedSample { at: 0, bps: 1_000_000, source: SampleSource::Downloads, network: NetworkKind::Wifi }));
+    }
+
+    #[test]
+    fn limited_minute_not_sampled() {
+        assert_eq!(run_minute(&mut Sampler::default(), 1_000_000, true, Some(25), NetworkKind::Wifi), None);
+    }
+
+    #[test]
+    fn idle_tick_not_sampled() {
+        let mut s = Sampler::default();
+        for t in (0..60).step_by(5) {
+            s.observe(t, 1_000_000, t != 30, false, NetworkKind::Wifi);
+        }
+        assert_eq!(s.observe(60, 1_000_000, true, false, NetworkKind::Wifi), None);
+    }
+
+    #[test]
+    fn slow_not_sampled() {
+        assert_eq!(run_minute(&mut Sampler::default(), 40_000, true, None, NetworkKind::Wifi), None);
+    }
+
+    #[test]
+    fn expensive_not_sampled() {
+        assert_eq!(run_minute(&mut Sampler::default(), 1_000_000, true, None, NetworkKind::Expensive), None);
+        assert_eq!(run_minute(&mut Sampler::default(), 1_000_000, true, None, NetworkKind::Unknown), None);
+    }
+
+    #[test]
+    fn next_minute_starts_clean() {
+        let mut s = Sampler::default();
+        run_minute(&mut s, 1_000_000, true, Some(25), NetworkKind::Wifi);
+        let got = (65..=120).step_by(5).find_map(|t| s.observe(t, 1_000_000, true, false, NetworkKind::Wired));
+        assert_eq!(got.map(|g| (g.at, g.network)), Some((60, NetworkKind::Wired)));
     }
 }

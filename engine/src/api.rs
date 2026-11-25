@@ -4,6 +4,7 @@ use crate::hf::{self, HfAdd, HfFile, HfManifest, HfModel, HfRepo, VerifyResult, 
 use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
+use crate::speed::NetworkKind;
 use crate::store::Store;
 use crate::queue::QueueConfig;
 use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView, QueueRun, QueueView};
@@ -96,8 +97,8 @@ impl Engine {
     }
 
     /// What the app measured: connected over Wi-Fi, on power, idle for a while.
-    pub fn set_conditions(&self, wifi: bool, on_power: bool, idle: bool) {
-        self.sched.set_conditions(wifi, on_power, idle);
+    pub fn set_conditions(&self, wifi: bool, on_power: bool, idle: bool, network: NetworkKind) {
+        self.sched.set_conditions(wifi, on_power, idle, network);
     }
 
     pub fn pause(&self, id: JobId) {

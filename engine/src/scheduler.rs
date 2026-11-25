@@ -6,6 +6,7 @@ use crate::limit::RateLimiter;
 use crate::names;
 use crate::cloud;
 use crate::queue::{self, QueueConfig, Repeat};
+use crate::speed::{NetworkKind, Sampler};
 use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
 use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, QueueRun, QueueState, QueueView, RunOutcome, now_secs};
@@ -186,6 +187,10 @@ pub struct Scheduler {
     stopping: AtomicBool,
     queues: Mutex<std::collections::BTreeMap<u64, QueueRt>>,
     conditions: Mutex<Conditions>,
+    network: Mutex<NetworkKind>,
+    sampler: Mutex<Sampler>,
+    /// Day number (unix days) of the last speed-log prune.
+    pruned_day: AtomicI64,
     clock: Mutex<Clock>,
     /// One `refresh` at a time, so edges and events are not interleaved.
     refreshing: Mutex<()>,
@@ -305,6 +310,9 @@ impl Scheduler {
             stopping: AtomicBool::new(false),
             queues: Mutex::new(queues),
             conditions: Mutex::new((false, false, false)),
+            network: Mutex::new(NetworkKind::Unknown),
+            sampler: Mutex::new(Sampler::default()),
+            pruned_day: AtomicI64::new(i64::MIN),
             clock: Mutex::new(clock),
             refreshing: Mutex::new(()),
         });
@@ -316,7 +324,7 @@ impl Scheduler {
                 match weak.upgrade() {
                     // It fsyncs, so it runs on the blocking pool, not on one of the two runtime threads.
                     Some(s) => {
-                        let _ = tokio::task::spawn_blocking(move || s.flush_progress()).await;
+                        let _ = tokio::task::spawn_blocking(move || { s.flush_progress(); s.sample_speed(); }).await;
                     }
                     None => break,
                 }
@@ -960,6 +968,32 @@ impl Scheduler {
         }
     }
 
+    /// Feeds the speed log: one sample per clean minute of unthrottled downloading. Runs every progress tick.
+    fn sample_speed(&self) {
+        let (now, day) = (now_secs(), now_secs().div_euclid(86_400));
+        if self.pruned_day.swap(day, Ordering::Relaxed) != day {
+            let _ = self.store.prune_samples(now - 60 * 86_400);
+        }
+        let lives = lock(&self.jobs).to_vec();
+        let (mut total, mut any, mut limited) = (0, false, false);
+        for live in &lives {
+            let (id, running, queue) = {
+                let job = lock(&live.job);
+                (job.id, job.state == JobState::Running, job.queue_id)
+            };
+            if running {
+                any = true;
+                total += self.bytes_per_sec(id, true, live.done.load(Ordering::Relaxed));
+                // A queue limiter also checks the global one through its parent.
+                limited |= self.queue_limiter(queue).is_limited();
+            }
+        }
+        let network = *lock(&self.network);
+        if let Some(sample) = lock(&self.sampler).observe(now, total, any, limited, network) {
+            let _ = self.store.add_sample(&sample);
+        }
+    }
+
     fn view_of(&self, live: &Live) -> JobView {
         let done = live.done.load(Ordering::Relaxed);
         let job = lock(&live.job);
@@ -1025,8 +1059,9 @@ impl Scheduler {
     }
 
     /// What the app last measured. Queues that need a condition hold until it is true.
-    pub fn set_conditions(self: &Arc<Self>, wifi: bool, on_power: bool, idle: bool) {
+    pub fn set_conditions(self: &Arc<Self>, wifi: bool, on_power: bool, idle: bool, network: NetworkKind) {
         *lock(&self.conditions) = (wifi, on_power, idle);
+        *lock(&self.network) = network;
         self.refresh();
     }
 

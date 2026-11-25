@@ -83,8 +83,8 @@ final class EngineModel {
             queues = engine.queues()
             runs = engine.queueRuns(limit: UInt32(Self.runLimit))
             queues.forEach(syncWake)
-            conditions = ConditionsMonitor { wifi, onPower, idle in
-                engine.setConditions(wifi: wifi, onPower: onPower, idle: idle)
+            conditions = ConditionsMonitor { wifi, onPower, idle, network in
+                engine.setConditions(wifi: wifi, onPower: onPower, idle: idle, network: network)
             }
             conditions?.start()
         } catch {

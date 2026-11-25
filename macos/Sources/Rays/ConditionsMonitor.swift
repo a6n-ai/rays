@@ -7,19 +7,21 @@ import OSLog
 @MainActor
 final class ConditionsMonitor {
     private static let log = Logger(subsystem: "app.rays", category: "conditions")
-    private let report: (_ wifi: Bool, _ onPower: Bool, _ idle: Bool) -> Void
+    private let report: (_ wifi: Bool, _ onPower: Bool, _ idle: Bool, _ network: NetworkKind) -> Void
     private let pathMonitor = NWPathMonitor()
     private var timer: Timer?
     private var wifi = false
+    private var network = NetworkKind.unknown
 
-    init(report: @escaping (_ wifi: Bool, _ onPower: Bool, _ idle: Bool) -> Void) {
+    init(report: @escaping (_ wifi: Bool, _ onPower: Bool, _ idle: Bool, _ network: NetworkKind) -> Void) {
         self.report = report
     }
 
     func start() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let wifi = path.usesInterfaceType(.wifi) && !path.isExpensive
-            Task { @MainActor in self?.update(wifi: wifi) }
+            let network = Self.kind(of: path)
+            Task { @MainActor in self?.update(wifi: wifi, network: network) }
         }
         pathMonitor.start(queue: .global(qos: .utility))
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
@@ -34,8 +36,16 @@ final class ConditionsMonitor {
         timer = nil
     }
 
-    private func update(wifi: Bool) {
+    nonisolated private static func kind(of path: NWPath) -> NetworkKind {
+        if path.isExpensive { return .expensive }
+        if path.usesInterfaceType(.wifi) { return .wifi }
+        if path.usesInterfaceType(.wiredEthernet) { return .wired }
+        return path.status == .satisfied ? .other : .unknown
+    }
+
+    private func update(wifi: Bool, network: NetworkKind) {
         self.wifi = wifi
+        self.network = network
         reportNow()
     }
 
@@ -43,7 +53,7 @@ final class ConditionsMonitor {
         let onPower = Self.onPower
         let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .null) >= 300
         Self.log.debug("setConditions wifi=\(self.wifi) onPower=\(onPower) idle=\(idle)")
-        report(wifi, onPower, idle)
+        report(wifi, onPower, idle, network)
     }
 
     /// A desktop Mac has no battery and reports AC power, so it counts as on power.
