@@ -19,7 +19,7 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $destination, onNewQueue: newQueue, onSchedule: { openSchedule($0) },
-                        isDirty: { drafts.isDirty($0) })
+                        isDirty: { drafts.isDirty($0) }, onDeleted: { drafts.items[$0] = nil })
                 // On the sidebar column (not the split view) so the field doesn't take toolbar space.
                 .searchable(text: $query, placement: .sidebar, prompt: "Search")
                 .onAppear {
@@ -66,6 +66,7 @@ struct ContentView: View {
             accept(texts.flatMap(Links.inText))
         } isTargeted: { setTargeted($0) }
         .task(id: model.generation) { await model.run() }
+        .onChange(of: model.queues.map(\.config)) { drafts.reconcile(model.queues) }
         .onReceive(NotificationCenter.default.publisher(for: .openSorter)) { _ in destination = .sorter }
         .onReceive(NotificationCenter.default.publisher(for: .openCloud)) { _ in destination = .cloud }
         .onReceive(NotificationCenter.default.publisher(for: .openDownloads)) { _ in destination = .downloads }

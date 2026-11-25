@@ -51,13 +51,20 @@ struct QueueHeader: View {
                     .disabled(isDirty)
                     .help(isDirty ? "Save your changes first" : "Run this queue now")
             }
-            Toggle("Enabled", isOn: $draft.enabled)
+            Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: setEnabled))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .help("Enabled")
         }
         .padding(.horizontal, LayoutMetrics.margin)
         .padding(.vertical, 10)
+    }
+
+    /// Saves at once against the saved config, so name edits still waiting in the draft are not saved with it. A failure leaves the switch where it was.
+    private func setEnabled(_ on: Bool) {
+        var config = queue.config
+        config.enabled = on
+        do { _ = try model.saveQueue(config) } catch { model.queueFailed("change the queue", error) }
     }
 
     private static func conditionSymbol(_ missing: [String]) -> String {

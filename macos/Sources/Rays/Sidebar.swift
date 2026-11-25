@@ -44,6 +44,7 @@ struct SidebarView: View {
     let onNewQueue: () -> Void
     let onSchedule: (UInt64) -> Void
     let isDirty: (UInt64) -> Bool
+    let onDeleted: (UInt64) -> Void
     @State private var folders: [SidebarFolder] = []
     @State private var deleting: QueueView?
     @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = false
@@ -113,6 +114,7 @@ struct SidebarView: View {
                 if let id = deleting?.id {
                     do {
                         try model.deleteQueue(id)
+                        onDeleted(id)
                         if selection == .queue(id) { selection = .downloads }
                     } catch {
                         model.queueFailed("delete the queue", error)
@@ -149,6 +151,9 @@ extension SidebarView {
             HStack {
                 Text(queue.config.name)
                 Spacer()
+                if isDirty(queue.id) {
+                    Circle().fill(.secondary).frame(width: 6, height: 6).accessibilityLabel("Unsaved changes")
+                }
                 queueBadge(queue)
             }
         } icon: {
