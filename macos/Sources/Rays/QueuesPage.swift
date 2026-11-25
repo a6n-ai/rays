@@ -65,8 +65,8 @@ struct QueuesPage: View {
                 .buttonStyle(.plain)
                 .help("New queue")
                 Menu {
-                    Button("Start all queues") { model.setAllQueues(running: true) }
-                    Button("Stop all queues") { model.setAllQueues(running: false) }
+                    Button("Start all queues", systemImage: "play.circle") { model.setAllQueues(running: true) }
+                    Button("Stop all queues", systemImage: "stop.circle") { model.setAllQueues(running: false) }
                 } label: {
                     ToolbarIcon(symbol: "play.circle", title: "Start or stop all queues")
                 }

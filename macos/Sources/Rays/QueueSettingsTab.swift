@@ -43,7 +43,7 @@ struct QueueSettingsTab: View {
             } header: {
                 Text("Wake")
             } footer: {
-                Text("Keep-awake lets a scheduled queue start while your Mac sleeps. Rays asks for your administrator password once, to allow setting wake times and nothing else.")
+                Text("Rays can wake your Mac to start a scheduled queue. It asks for your administrator password once, to allow setting wake times and nothing else. Without it, keep your Mac awake and Rays running at the start time.")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
             }
@@ -68,7 +68,7 @@ struct QueueSettingsTab: View {
             } header: {
                 Text("Defaults for new queues")
             } footer: {
-                Text("Defaults apply to queues you create from now on.")
+                Text("Defaults apply to queues you create from now on. Run command and Shut down are set per queue.")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
             }

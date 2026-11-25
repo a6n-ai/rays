@@ -98,6 +98,7 @@ private struct QueueRow: View {
             Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
+                .tint(.accentColor)
                 .help("Enabled")
         }
         .frame(height: LayoutMetrics.rowHeight)
@@ -122,6 +123,7 @@ private struct QueueRow: View {
         }
         .buttonStyle(.plain)
         .opacity(isHovered ? 1 : 0)
+        .allowsHitTesting(isHovered)
         .help(queue.isStopped ? "Start queue" : "Stop queue")
         .accessibilityLabel(queue.isStopped ? "Start queue" : "Stop queue")
     }

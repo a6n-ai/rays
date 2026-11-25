@@ -24,6 +24,7 @@ struct ActivityTab: View {
                     runningRow(queue)
                         .contentShape(Rectangle())
                         .onTapGesture { open(queue.id, .downloads) }
+                        .hoverHighlight()
                         .rowStyle()
                 }
             } header: { header("Running now") }
@@ -39,6 +40,7 @@ struct ActivityTab: View {
                     upcomingRow(item.queue, next: item.next)
                         .contentShape(Rectangle())
                         .onTapGesture { open(item.queue.id, .schedule) }
+                        .hoverHighlight()
                         .rowStyle()
                 }
             } header: { header("Upcoming") }
@@ -86,9 +88,11 @@ struct ActivityTab: View {
         return row(symbol: "clock", tint: .orange, title: queue.config.name, detail: queue.config.schedule?.summary ?? "") {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(SchedulerTime.nextRunText(next))
-                Text(date.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                TimelineView(.periodic(from: .now, by: 60)) { _ in
+                    Text(date.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
             .monospacedDigit()
         }
@@ -170,7 +174,19 @@ private struct Outcome {
     }
 }
 
+private struct HoverHighlight: ViewModifier {
+    @State private var hovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .listRowBackground(RowHighlight(selected: false, hovered: hovered))
+            .onHover { hovered = $0 }
+    }
+}
+
 private extension View {
+    func hoverHighlight() -> some View { modifier(HoverHighlight()) }
+
     func rowStyle() -> some View {
         listRowInsets(EdgeInsets(top: LayoutMetrics.rowSpacing / 2, leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
                                  bottom: LayoutMetrics.rowSpacing / 2, trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
