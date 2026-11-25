@@ -13,6 +13,15 @@ struct ModelDetailView: View {
     @State private var chosen: URL?
     @State private var added: [HfAdd]?
     @State private var freeBytes: UInt64?
+    /// Notes from the disk for the selected files, read when the choice changes rather than on every redraw.
+    @State private var fileNotes: [String: String] = [:]
+    @State private var downloading = false
+
+    private struct NoteInputs: Equatable {
+        let selected: Set<String>
+        let dir: URL
+        let replace: Bool
+    }
 
     init(repo: HfRepo, destinations: [String: [String: String]]) {
         self.repo = repo
@@ -41,11 +50,12 @@ struct ModelDetailView: View {
             if case .alreadyQueued = status { return true }
             return false
         }
+        func follow(_ n: Int) -> String { n == 1 ? "it" : "them" }
         switch (new, queued) {
         case (0, 0): return nil
-        case (_, 0): return "Added \(plural(new)). Follow them in Downloads"
-        case (0, _): return "\(plural(queued)) already in Downloads. Follow them in Downloads"
-        default: return "Added \(plural(new)), \(queued) already in Downloads. Follow them in Downloads"
+        case (_, 0): return "Added \(plural(new)). Follow \(follow(new)) in Downloads"
+        case (0, _): return "\(plural(queued)) already in Downloads. Follow \(follow(queued)) in Downloads"
+        default: return "Added \(plural(new)), \(plural(queued)) already in Downloads. Follow them in Downloads"
         }
     }
 
@@ -87,6 +97,7 @@ struct ModelDetailView: View {
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
         .task(id: dir) { freeBytes = Self.freeSpace(near: dir) }
+        .task(id: NoteInputs(selected: selected, dir: dir, replace: replaceExisting)) { fileNotes = diskNotes() }
         .onChange(of: selected) { _, _ in added = nil }
         .onChange(of: dir) { _, _ in added = nil }
     }
@@ -192,13 +203,25 @@ struct ModelDetailView: View {
             default: return nil
             }
         }
-        guard selected.contains(file.path) else { return nil }
-        let target = dir.appending(path: file.path)
-        guard FileManager.default.fileExists(atPath: target.path(percentEncoded: false)) else { return nil }
-        let size = try? target.resourceValues(forKeys: [.fileSizeKey]).fileSize
-        if size == Int(file.size) { return ("Already downloaded", false) }
-        if replaceExisting { return ("Replaces the file there", false) }
-        return ("Saves as \(Self.freeName(for: target)). Some apps need exact file names", false)
+        return fileNotes[file.path].map { ($0, false) }
+    }
+
+    /// The notes that need the disk: a same-name file already in the folder for each selected file.
+    private func diskNotes() -> [String: String] {
+        var notes: [String: String] = [:]
+        for file in repo.files where selected.contains(file.path) {
+            let target = dir.appending(path: file.path)
+            guard FileManager.default.fileExists(atPath: target.path(percentEncoded: false)) else { continue }
+            let size = try? target.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            if size == Int(file.size) {
+                notes[file.path] = "Already downloaded"
+            } else if replaceExisting {
+                notes[file.path] = "Replaces the file there"
+            } else {
+                notes[file.path] = "Saves as \(Self.freeName(for: target)). Some apps need exact file names"
+            }
+        }
+        return notes
     }
 
     private var saveTo: some View {
@@ -239,11 +262,15 @@ struct ModelDetailView: View {
             }
             HStack {
                 Spacer()
-                Button("Download \(byteText(total))") {
-                    added = model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir)
+                Button(total == 0 ? "Download" : "Download \(byteText(total))") {
+                    downloading = true
+                    Task {
+                        added = await model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir)
+                        downloading = false
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(files.isEmpty || notEnoughSpace || needsToken)
+                .disabled(files.isEmpty || notEnoughSpace || needsToken || downloading)
             }
         }
     }

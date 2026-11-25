@@ -211,9 +211,15 @@ struct DownloadsTab: View {
                     .fixedSize()
                 }
 
-                Picker("If a file with the same name exists", selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) })) {
-                    Text("Keep both").tag(false)
-                    Text("Replace (old file goes to the Trash)").tag(true)
+                SettingRow(symbol: "doc.on.doc", color: .blue,
+                           title: "If a file with the same name exists", hint: "Applies to every download.") {
+                    Picker("If a file with the same name exists", selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) })) {
+                        Text("Keep both").tag(false)
+                        Text("Replace (old file goes to the Trash)").tag(true)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
             }
 
@@ -247,7 +253,7 @@ struct DownloadsTab: View {
                     if hasToken { Text("Saved").foregroundStyle(.secondary) }
                     Button("Save", action: saveToken)
                         .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    Button("Remove") { setToken(nil) }
+                    Button("Remove") { _ = setToken(nil) }
                         .disabled(!hasToken)
                 }
                 if let tokenError { ErrorLine(text: tokenError) }
@@ -269,19 +275,21 @@ struct DownloadsTab: View {
         }
     }
 
+    /// The field keeps the typed token when the save fails, so the user can retry or copy it.
     private func saveToken() {
-        setToken(token.trimmingCharacters(in: .whitespacesAndNewlines))
-        if tokenError == nil { token = "" }
+        if setToken(token.trimmingCharacters(in: .whitespacesAndNewlines)) { token = "" }
     }
 
-    private func setToken(_ value: String?) {
+    @discardableResult private func setToken(_ value: String?) -> Bool {
+        defer { hasToken = model.hasHFToken }
         do {
             try model.setHFToken(value)
             tokenError = nil
+            return true
         } catch {
             tokenError = EngineModel.message(for: error)
+            return false
         }
-        hasToken = model.hasHFToken
     }
 
     private var limitSelection: Binding<Int> {

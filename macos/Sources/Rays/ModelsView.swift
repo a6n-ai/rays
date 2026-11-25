@@ -106,9 +106,13 @@ struct ModelsView: View {
         try? await Task.sleep(for: .milliseconds(300))
         guard token == request, !Task.isCancelled else { return }
         // A bare org/repo is searched like any text (it may be half typed); only a pasted link opens directly.
+        // A link that finds no model, like a half-typed one, falls through to a search of the same text.
         if text.localizedCaseInsensitiveContains("huggingface.co") || text.localizedCaseInsensitiveContains("hf.co"),
-           let id = hfRepoFromInput(input: text) {
-            await open(id, fromResults: false)
+           let id = hfRepoFromInput(input: text), let found = try? await model.hfModel(id) {
+            guard token == request, !Task.isCancelled else { return }
+            repo = found
+            openedFromResults = false
+            error = nil
             return
         }
         repo = nil
