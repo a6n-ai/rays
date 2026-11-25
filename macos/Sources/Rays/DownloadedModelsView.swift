@@ -40,6 +40,7 @@ enum VerifyState: Equatable {
     case noRecord
     case failed(String)
     case checked(Checked)
+    case queued(Int, issues: [String])
 
     struct Checked: Equatable {
         let repo: String
@@ -48,6 +49,8 @@ enum VerifyState: Equatable {
         let results: [VerifyResult]
         /// Checked against the latest Hugging Face revision, not the recorded download.
         let latest: Bool
+        /// Red lines that are not a file's own status: skipped paths, trash failures.
+        var issues: [String] = []
 
         var problems: [VerifyResult] { results.filter { $0.status.problem != nil } }
     }
@@ -115,10 +118,15 @@ struct DownloadedModelsView: View {
         .task(id: "\(folder.path)|\(revision)") {
             let base = folder
             models = await Task.detached(priority: .userInitiated) { DownloadedModel.scan(base) }.value
+            let listed = Set(models.map(\.id))
+            checks = checks.filter { listed.contains($0.key) }
             loaded = true
         }
         .onAppear { watch() }
-        .onChange(of: folder) { _, _ in watch() }
+        .onChange(of: folder) { _, _ in
+            checks = [:]
+            watch()
+        }
         .onDisappear { watcher.stop() }
     }
 
@@ -156,22 +164,52 @@ struct DownloadedModelsView: View {
 
     private func redownload(_ item: DownloadedModel, _ checked: VerifyState.Checked) {
         let bad = Set(checked.problems.map(\.path))
-        let files = checked.files.filter { bad.contains($0.path) }
+        var base = checked
+        var files: [HfFile] = []
+        for file in checked.files where bad.contains(file.path) {
+            if isInside(file.path, of: item.url) {
+                files.append(file)
+            } else {
+                base.issues.append("\(file.path) — unsafe path")
+            }
+        }
+        guard !files.isEmpty else {
+            checks[item.id] = .checked(base)
+            return
+        }
         run(item) {
+            var kept = base
             // With replace off the engine keeps both copies, so the bad ones go first to keep the names exact.
             if !replaceExisting {
+                let fm = FileManager.default
                 for file in files {
                     let url = item.url.appending(path: file.path)
-                    if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
-                        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    guard fm.fileExists(atPath: url.path(percentEncoded: false)) else { continue }
+                    do {
+                        try fm.trashItem(at: url, resultingItemURL: nil)
+                    } catch {
+                        kept.issues.append("Couldn't move \(file.path) to the Trash: \(EngineModel.message(for: error))")
+                        return .checked(kept)
                     }
                 }
             }
-            _ = try await model.addModel(repo: checked.repo, sha: checked.sha, files: files, to: item.url)
-            revision += 1
-            let results = try await model.verifyFiles(item.url, files: checked.files)
-            return .checked(.init(repo: checked.repo, sha: checked.sha, files: checked.files, results: results, latest: checked.latest))
+            let added = try await model.addModel(repo: kept.repo, sha: kept.sha, files: files, to: item.url)
+            var queued = 0
+            for result in added {
+                switch result.status {
+                case .added: queued += 1
+                case .rejected(let error): kept.issues.append("\(result.path) — \(error)")
+                default: break
+                }
+            }
+            return .queued(queued, issues: kept.issues)
         }
+    }
+
+    /// Manifest paths come from the network or a file on disk, so only a relative path that stays inside the folder is used.
+    private func isInside(_ path: String, of folder: URL) -> Bool {
+        guard !path.hasPrefix("/"), !path.split(separator: "/").contains("..") else { return false }
+        return folder.appending(path: path).standardizedFileURL.path.hasPrefix(folder.standardizedFileURL.path + "/")
     }
 
     /// One check per folder at a time, so a second Verify cannot start while one runs.
@@ -222,6 +260,7 @@ private struct DownloadedModelRow: View {
                         ProgressView()
                             .controlSize(.small)
                             .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                            .accessibilityLabel("Verifying \(item.name)")
                     } else {
                         Button(action: verify) {
                             Image(systemName: "checkmark.shield")
@@ -288,14 +327,20 @@ private struct DownloadedModelRow: View {
                 .font(.callout)
                 .foregroundStyle(.red)
         case .checked(let checked):
+            let total = checked.results.count
             let sizeOnly = checked.results.filter { $0.status == .sizeChecked }.count
+            let problems = checked.problems.count
             VStack(alignment: .leading, spacing: 6) {
-                if checked.problems.isEmpty {
-                    Label("All \(checked.results.count) files match", systemImage: "checkmark")
+                if problems == 0 && sizeOnly == 0 {
+                    Label(total == 1 ? "All 1 file matches" : "All \(total) files match", systemImage: "checkmark")
+                        .foregroundStyle(.green)
+                } else if problems == 0 {
+                    let matching = total - sizeOnly
+                    Label(matching == 1 ? "1 file matches" : "\(matching) files match", systemImage: "checkmark")
                         .foregroundStyle(.green)
                 }
                 if sizeOnly > 0 {
-                    Text("\(sizeOnly) files checked by size only")
+                    Text(sizeOnly == 1 ? "1 file checked by size only" : "\(sizeOnly) files checked by size only")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(checked.problems, id: \.path) { result in
@@ -304,12 +349,30 @@ private struct DownloadedModelRow: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                if !checked.problems.isEmpty {
-                    Button("Re-download \(checked.problems.count) files") { redownload(checked) }
+                ForEach(checked.issues, id: \.self) { issue in
+                    Text(issue)
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if problems > 0 {
+                    Button(problems == 1 ? "Re-download 1 file" : "Re-download \(problems) files") { redownload(checked) }
                 }
                 if checked.latest {
                     Text("Checked against the latest revision")
                         .foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout)
+        case .queued(let count, let issues):
+            VStack(alignment: .leading, spacing: 6) {
+                Label(count == 1 ? "Queued 1 file in Downloads" : "Queued \(count) files in Downloads", systemImage: "arrow.down.circle")
+                    .foregroundStyle(.secondary)
+                ForEach(issues, id: \.self) { issue in
+                    Text(issue)
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
             .font(.callout)
