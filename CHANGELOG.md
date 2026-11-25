@@ -6,6 +6,8 @@
 - **Verify** a downloaded model on the **Downloaded** tab. Rays checks each file's size and SHA-256 checksum offline, lists files that are missing or changed, and **Re-download** fetches only those.
 - **Queues.** A new **Queues** section in the sidebar. **Main** always exists and takes new downloads. Add more queues, each with its own icon and colour, speed limit, number of files at a time, and what your Mac does when the queue finishes: play a sound, quit Rays, sleep, lock the screen, shut down or run a command.
 - **Schedules.** Run a queue once, every day or on chosen days, with a start time and an optional stop time. Add conditions: only on Wi-Fi, only while charging, or only when the Mac is idle. **Activity** shows queues running now and the last 200 runs.
+- **Command line and MCP.** `dl queues`, `dl add --queue <name>`, `dl queue start|stop|run <name>` and `dl verify <folder>`. AI assistants get the same through new MCP tools: `list_queues`, `start_queue`, `stop_queue`, `run_queue_now`, `verify_model`, and a `queue` option on `add_downloads`.
+- **Features page** on the website, with every feature in one place.
 - **Wake the Mac** to start a scheduled queue. It's off by default and asks for your administrator password once. **Remove** takes the permission away.
 
 ## 0.1.19 (24 Nov 2026)
