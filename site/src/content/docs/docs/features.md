@@ -80,5 +80,4 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 
 - **Torrents.** Not yet.
 - **Video grabbing** from sites like YouTube. Rays downloads files from direct links.
-- **Scheduling** downloads for a later time.
 - **Windows or Linux.** Rays is a Mac app. The engine and `dl` are open source if you want to try them elsewhere.
