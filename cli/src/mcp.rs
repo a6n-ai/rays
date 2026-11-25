@@ -174,10 +174,10 @@ fn tools() -> Value {
         },
         {
             "name": "speed_test",
-            "description": "Measure download speed against the speed test server now and save the result. Refused on a metered link unless force is true.",
+            "description": "Measure download speed against the speed test server now and save the result. Refused on a metered link, or on a network Rays has not identified (for example while the Rays app is closed), unless force is true. A forced test on such a network is not saved.",
             "inputSchema": {
                 "type": "object",
-                "properties": { "force": { "type": "boolean", "default": false, "description": "Also test on a metered link. Set only when the user asked for it." } }
+                "properties": { "force": { "type": "boolean", "default": false, "description": "Also test on a metered or unidentified network. Set only when the user asked for it." } }
             }
         },
         {

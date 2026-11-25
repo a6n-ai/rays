@@ -31,7 +31,7 @@ Any MCP client:
 | `start_queue` | `queue`: name or id | Starts a queue. On a scheduled queue this is the same as `run_queue_now`. |
 | `stop_queue` | `queue`: name or id | Stops a queue: its queued downloads wait and its running ones pause. |
 | `run_queue_now` | `queue`: name or id | Runs a queue now, whatever its schedule and conditions say. |
-| `speed_test` | `force` (optional boolean) | Measures download speed now and saves the result. Refused on a metered link unless `force` is true. |
+| `speed_test` | `force` (optional boolean) | Measures download speed now and saves the result. Refused on a metered link, or on a network Rays has not identified (for example while the app is closed), unless `force` is true. A forced test on those is not saved. |
 | `best_time` | none | The last speed test and the fastest four hours of the day to download, with typical speed, or how many days of data are still needed. |
 | `verify_model` | `dir`: absolute path of a model folder | Checks a model that Rays downloaded from Hugging Face against its record: one line per file and a summary. |
 | `list_buckets` | none | The [S3 buckets](/docs/s3/) added to Rays, with provider and endpoint. |

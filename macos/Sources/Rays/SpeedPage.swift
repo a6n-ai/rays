@@ -87,7 +87,7 @@ private struct SpeedOverview: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
                     if let test = model.lastTest, !test.saved, progress == nil {
-                        Text(model.lastTestMetered ? "Tested on a hotspot, so this result wasn't saved" : "Downloads were running, so this result wasn't saved")
+                        Text(model.unsavedReason)
                             .font(.callout)
                             .foregroundStyle(.orange)
                     }
@@ -219,13 +219,13 @@ private struct SpeedHistoryTab: View {
     var body: some View {
         VStack(spacing: 0) {
             ListControls(statuses: ["All", "Speed tests", "Downloads"], status: $filter, kind: $kind, showsKind: false,
-                         sorts: [.newest, .fastest], sort: $sort, count: 0, page: $page)
+                         sorts: [.newest, .fastest], sort: $sort, count: shown.count, page: $page)
             if shown.isEmpty {
                 EmptyState(symbol: "clock.arrow.circlepath", title: "No speed history yet",
                            message: "Run a test, or download something. Rays keeps 60 days.")
             } else {
                 List {
-                    ForEach(shown.enumerated().map { (id: "\($0.element.at)-\($0.offset)", sample: $0.element) }, id: \.id) { entry in
+                    ForEach(ListControls.page(shown, page).enumerated().map { (id: "\(page)-\($0.offset)", sample: $0.element) }, id: \.id) { entry in
                         let (id, sample) = (entry.id, entry.sample)
                         row(sample)
                             .hoverHighlight()

@@ -80,7 +80,7 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(30 * 60))
             }
         }
-        .confirmationDialog("You're on a hotspot or metered connection. A test uses about 50 to 200 MB.",
+        .confirmationDialog(model.confirmTestTitle,
                             isPresented: $bound.confirmHotspot, titleVisibility: .visible) {
             Button("Run Test") { Task { await model.runSpeedTest(force: true) } }
             Button("Cancel", role: .cancel) {}

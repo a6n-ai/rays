@@ -35,7 +35,7 @@ The page says "Speed data stays on this Mac." Nothing about your speed is upload
 
 A test takes about 10 seconds and uses Cloudflare's speed test server.
 
-- On a hotspot or a metered connection, Rays asks before it starts.
+- On a hotspot, a metered connection or a network Rays can't identify yet, Rays asks before it starts.
 - On a hotspot, a metered link or a network Rays can't identify yet, a test is not saved, and without your go-ahead it does not run.
 - If downloads were running during the test, Rays shows the result but does not save it, because other traffic would skew it.
 - While an automatic test runs, the Overview header says "Automatic test". It can't be stopped.
@@ -48,13 +48,13 @@ A test takes about 10 seconds and uses Cloudflare's speed test server.
 
 ## Best time downloads
 
-When you add downloads, the **Download** button's menu has **At best time (01:00–05:00)**. This puts them in the **Best time** queue, which Rays creates the first time you use it. Its schedule follows the best window. See [Queues and schedules](/docs/app/queues/#best-time-queue).
+When you add downloads, the **Download** button's menu has **At best time** with the window, for example **At best time (01:00–05:00)**. Until Rays has 7 days of speed data it reads **At best time (01:00–06:00, default)**. This puts them in the **Best time** queue, which Rays creates the first time you use it. Its schedule follows the best window. See [Queues and schedules](/docs/app/queues/#best-time-queue).
 
 A large download (1 GB or more) that is running much slower than the best window shows "Usually N× faster at 01:00", with a **Move to Best time** button.
 
 ## Command line and MCP
 
-- `dl speed` prints the last test and the best time. `dl speed test` runs a test now, and `dl speed test --force` also runs it on a metered link.
+- `dl speed` prints the last test and the best time. `dl speed test` runs a test now, and `dl speed test --force` also runs it on a metered link or a network Rays can't identify, for example while the app is closed. A forced test on those is not saved.
 - `dl add --best-time <url…>` adds downloads to the Best time queue.
 - The MCP tools are `speed_test` (with `force`), `best_time`, and `add_downloads` with `best_time`. See [MCP](/docs/mcp/) and [The dl command](/docs/dl/).
 

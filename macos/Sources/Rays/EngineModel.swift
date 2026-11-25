@@ -20,7 +20,7 @@ final class EngineModel {
     private(set) var bestTime: BestTime?
     private(set) var lastTest: SpeedTestResult?
     /// The newest test ran on a metered or unknown network, which is never saved.
-    private(set) var lastTestMetered = false
+    private(set) var lastTestNetwork = NetworkKind.unknown
     private(set) var testing = false
     private(set) var speedError: String?
     private(set) var hourly: [UInt64?] = Array(repeating: nil, count: 24)
@@ -660,17 +660,32 @@ extension EngineModel {
         if bestQueueId != nil, !speedSettings.nightPromptAnswered { nightPromptShown = true }
     }
 
-    /// Asks first on a hotspot or metered connection. Ignored while a test is already running.
+    /// Asks first on a hotspot, a metered connection or a network not identified yet. Ignored while a test is already running.
     func requestSpeedTest() {
         guard !testing, speedProgress == nil else { return }
-        if network == .expensive { confirmHotspot = true } else { Task { await runSpeedTest(force: false) } }
+        if network == .expensive || network == .unknown { confirmHotspot = true } else { Task { await runSpeedTest(force: false) } }
+    }
+
+    var confirmTestTitle: String {
+        network == .unknown
+            ? "Rays can't tell which network you're on yet. A test uses about 50 to 200 MB."
+            : "You're on a hotspot or metered connection. A test uses about 50 to 200 MB."
+    }
+
+    /// Why the last test result wasn't saved.
+    var unsavedReason: String {
+        switch lastTestNetwork {
+        case .expensive: "Tested on a hotspot, so this result wasn't saved"
+        case .unknown: "Rays couldn't tell which network this was, so this result wasn't saved"
+        default: "Downloads were running, so this result wasn't saved"
+        }
     }
 
     func runSpeedTest(force: Bool) async {
         guard let engine, !testing else { return }
         testing = true
         speedError = nil
-        lastTestMetered = network == .expensive || network == .unknown
+        lastTestNetwork = network
         liveSamples = []
         defer {
             testing = false
@@ -708,7 +723,8 @@ extension EngineModel {
 
     func cancelSpeedTest() { if testing { engine?.cancelSpeedTest() } }
 
-    func loadSpeedHistory() { speedHistory = engine?.speedHistory(limit: 500) ?? [] }
+    /// All 60 kept days: at most one sample a minute, about 86 400 rows.
+    func loadSpeedHistory() { speedHistory = engine?.speedHistory(limit: 100_000) ?? [] }
 
     /// A test is running that the app did not start; it can't be stopped.
     var automaticTestRunning: Bool { speedProgress != nil && !testing }
