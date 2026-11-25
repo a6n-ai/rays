@@ -63,10 +63,17 @@ fn connect(path: &Path) -> std::io::Result<UnixStream> {
     }
 }
 
+/// Verifying hashes whole model files, and a speed test runs for seconds; other requests answer at once.
+fn read_timeout(req: &Request) -> Duration {
+    match req {
+        Request::VerifyModel { .. } => Duration::from_secs(3600),
+        Request::SpeedTest { .. } => Duration::from_secs(60),
+        _ => Duration::from_secs(10),
+    }
+}
+
 fn exchange(mut stream: UnixStream, req: &Request) -> Result<Response, Box<dyn Error>> {
-    // Verifying hashes whole model files, which takes far longer than any other request.
-    let wait = if matches!(req, Request::VerifyModel { .. }) { 3600 } else { 10 };
-    stream.set_read_timeout(Some(Duration::from_secs(wait)))?;
+    stream.set_read_timeout(Some(read_timeout(req)))?;
     let mut line = serde_json::to_string(req)?;
     line.push('\n');
     stream.write_all(line.as_bytes())?;
@@ -393,6 +400,13 @@ mod tests {
         );
         assert!(queue_command(&args(&["add", "--queue"])).is_err());
         assert!(queue_command(&args(&["add", "--queue", "Night"])).is_err());
+    }
+
+    #[test]
+    fn read_timeout_covers_speed_tests_and_verify() {
+        assert_eq!(read_timeout(&Request::SpeedTest { force: false }), Duration::from_secs(60));
+        assert_eq!(read_timeout(&Request::VerifyModel { dir: "/m".into() }), Duration::from_secs(3600));
+        assert_eq!(read_timeout(&Request::List), Duration::from_secs(10));
     }
 
     #[test]
