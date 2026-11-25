@@ -1,6 +1,6 @@
 # Speed insights: speed test, speed log, best-time downloads
 
-Status: approved for planning pending user review, 25 Nov 2026.
+Status: approved (2026-11-25)
 
 ## Intent
 
