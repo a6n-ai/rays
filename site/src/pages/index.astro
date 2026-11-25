@@ -7,8 +7,6 @@ import Panel from '../components/Panel.astro';
 import Newsletter from '../components/Newsletter.astro';
 import Faq from '../components/Faq.astro';
 import SiteNav from '../components/SiteNav.astro';
-import { Image } from 'astro:assets';
-import sorterShot from '../assets/sorter.png';
 import { OVERVIEW } from '../components/features-data';
 import { svg } from '../components/docs/icons';
 ---
@@ -34,16 +32,6 @@ import { svg } from '../components/docs/icons';
 				<InstallBar />
 			</section>
 
-			<figure class="shot">
-					<Image
-						src={sorterShot}
-						alt="The Rays Sorter tab: on-device AI is ready, new files sort after 10 seconds, files are renamed from their content, and the Documents and Downloads folders are watched."
-						widths={[640, 960, 1280]}
-						sizes="(max-width: 899px) calc(100vw - 32px), 640px"
-						loading="lazy"
-					/>
-					<figcaption>The Sorter tab in Rays: the folders it watches and when it files new arrivals.</figcaption>
-				</figure>
 
 				<Passage title="A download isn't done at the last byte" id="why">
 				<p>
@@ -350,23 +338,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 	}
 	.browsers span {
 		margin-left: 6px;
-	}
-	.shot {
-		margin: 0 0 8px;
-		max-width: 40rem;
-	}
-	.shot img {
-		width: 100%;
-		filter: drop-shadow(0 24px 32px rgb(0 0 0 / 0.28));
-	}
-	:global(:root[data-theme='light']) .shot img {
-		filter: drop-shadow(0 20px 28px rgb(60 40 20 / 0.22));
-	}
-	.shot figcaption {
-		margin-top: 12px;
-		color: var(--muted);
-		font-size: var(--t-small);
-		max-width: var(--measure);
 	}
 	.more a {
 		display: inline-flex;
