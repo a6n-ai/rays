@@ -590,3 +590,66 @@ async fn add_again_while_queued_is_not_a_second_job() {
     assert_eq!(sched.views().len(), 1, "the second add made a job");
     sched.shutdown();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn invalid_checksum_is_rejected_at_add() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("models");
+    for bad in ["abc".to_string(), "g".repeat(64), "0".repeat(65)] {
+        let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(bad.clone()))], &dest);
+        assert_eq!(
+            res[0].status,
+            HfAddStatus::Rejected { error: "Hugging Face gave an invalid checksum for this file".into() },
+            "{bad:?}"
+        );
+    }
+    assert!(sched.views().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn uppercase_checksum_still_verifies() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("models");
+    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha().to_uppercase()))], &dest);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn same_name_in_another_folder_is_a_new_job() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let first = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dir.path().join("a"));
+    let HfAddStatus::Added { id } = first[0].status else { panic!("{:?}", first[0]) };
+    wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
+
+    let second = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dir.path().join("b"));
+    let HfAddStatus::Added { id: other } = second[0].status else { panic!("{:?}", second[0]) };
+    assert_ne!(other, id);
+    assert_eq!(sched.views().len(), 2);
+    sched.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn failed_twin_is_resumed_not_duplicated() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("models");
+    let first = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let HfAddStatus::Added { id } = first[0].status else { panic!("{:?}", first[0]) };
+    wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
+
+    let again = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    assert_eq!(again[0].status, HfAddStatus::Added { id });
+    assert_eq!(sched.views().len(), 1, "the failed twin was duplicated");
+}

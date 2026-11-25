@@ -231,18 +231,17 @@ impl Scheduler {
         results
     }
 
-    /// A job that has not finished for the same folder and name, or the same URL. Done and Failed jobs do not count.
-    fn pending_twin(&self, folder: &Path, name: &str, url: &str) -> Option<JobId> {
+    /// The first job for the same folder and name whose state passes `keep`. Same file means same folder and name.
+    fn twin(&self, folder: &Path, name: &str, keep: impl Fn(&JobState) -> bool) -> Option<JobId> {
         let default = lock(&self.dir).clone();
         lock(&self.jobs).iter().find_map(|live| {
             let job = lock(&live.job);
             let job_dir = job.dir.as_deref().unwrap_or(default.as_path());
-            let same_file = (job_dir == folder && job.name == name) || job.url == url;
-            (same_file && !matches!(job.state, JobState::Done { .. } | JobState::Failed { .. })).then_some(job.id)
+            (job_dir == folder && job.name == name && keep(&job.state)).then_some(job.id)
         })
     }
 
-    fn add_hf_file(&self, repo: &str, sha: &str, dest_dir: &Path, file: &hf::HfFile) -> hf::HfAddStatus {
+    fn add_hf_file(self: &Arc<Self>, repo: &str, sha: &str, dest_dir: &Path, file: &hf::HfFile) -> hf::HfAddStatus {
         let rejected = |error: &str| hf::HfAddStatus::Rejected { error: error.to_owned() };
         if !is_plain_abs(dest_dir) {
             return rejected("destination must be an absolute path with no ..");
@@ -250,14 +249,21 @@ impl Scheduler {
         let Some((parent, name)) = hf::hf_target(dest_dir, &file.path) else {
             return rejected("unsafe file path");
         };
+        if !file.sha256.as_deref().is_none_or(|h| h.len() == 64 && h.bytes().all(|c| c.is_ascii_hexdigit())) {
+            return rejected("Hugging Face gave an invalid checksum for this file");
+        }
         if std::fs::metadata(parent.join(&name)).is_ok_and(|m| m.is_file() && m.len() == file.size) {
             return hf::HfAddStatus::AlreadyThere;
         }
         let Some(url) = hf::file_url(&self.hf_base, repo, sha, &file.path) else {
             return rejected("not a Hugging Face file");
         };
-        if let Some(id) = self.pending_twin(&parent, &name, &url) {
+        if let Some(id) = self.twin(&parent, &name, |s| !matches!(s, JobState::Done { .. } | JobState::Failed { .. })) {
             return hf::HfAddStatus::AlreadyQueued { id };
+        }
+        if let Some(id) = self.twin(&parent, &name, |s| matches!(s, JobState::Failed { .. })) {
+            self.resume(id);
+            return hf::HfAddStatus::Added { id };
         }
         let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone());
         match (res.id, res.error) {
@@ -531,8 +537,12 @@ impl Scheduler {
     /// Reads the Keychain once, the first time the token is needed; later reads come from memory.
     /// Blocking: call it off the runtime workers (see `warm_hf_token`, `hf_token_off_thread`).
     fn hf_token(&self) -> Option<String> {
-        let mut cache = lock(&self.hf_token_cache);
-        cache.get_or_insert_with(|| self.hf_secrets.get(hf::TOKEN_ACCOUNT)).clone()
+        let cached = lock(&self.hf_token_cache).clone();
+        if let Some(token) = cached {
+            return token;
+        }
+        let token = self.hf_secrets.get(hf::TOKEN_ACCOUNT);
+        lock(&self.hf_token_cache).get_or_insert(token).clone()
     }
 
     /// Loads the token now, on the caller's blocking thread, so later reads never block a worker.
