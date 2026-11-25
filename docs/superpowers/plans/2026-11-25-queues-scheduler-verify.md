@@ -328,3 +328,42 @@
 - [ ] **Step 1:** Write the pages in the existing voice, with no em dashes.
 - [ ] **Step 2:** `cd site && npm run build` succeeds.
 - [ ] **Step 3:** Commit `Docs: queues, scheduler, model verify`.
+
+---
+
+## Revision tasks (user direction 2026-11-25; spec section "Revision: one Queues page")
+
+### Task 6b: Engine queue run history
+**Files:** modify `engine/src/store.rs` (a migration adding `queue_runs` and CRUD), `engine/src/scheduler.rs` (open a run when one starts, close it at run end with its outcome), `engine/src/types.rs`, and `engine/src/api.rs`. Tests go in `engine/tests/queues.rs`.
+**Interfaces (Produces):**
+- `#[derive(uniffi::Enum)] pub enum RunOutcome { Running, Finished, WindowClosed, StoppedByUser, AppQuit }`
+- `#[derive(uniffi::Record)] pub struct QueueRun { id: u64, queue_id: u64, started_at: i64, ended_at: Option<i64>, files_done: u32, bytes_done: u64, outcome: RunOutcome }`
+- `Engine::queue_runs(limit: u32) -> Vec<QueueRun>`, newest first
+- `JobEvent::RunChanged { run: QueueRun }`
+- Keep the newest 200 rows and prune older ones on insert.
+
+**Tests:**
+- `run_recorded_on_finish`: two jobs finish, giving one run with Finished, files_done 2 and bytes > 0.
+- `window_close_records_windowclosed`: uses the injected clock.
+- `stop_queue_records_stopped_by_user`
+- `open_run_closed_as_app_quit_on_restart`
+- `runs_pruned_to_200`
+
+**Verify:** run `cargo test -q -p dl-engine --test queues`, the other engine test binaries, clippy, `scripts/build-engine.sh` and `swift build`.
+
+### Task 6c: One Queues page (app)
+**Files:**
+- `Sidebar.swift`: replace the per-queue rows with one `Destination.queues`.
+- `ContentView.swift`: routing.
+- Create `QueuesPage.swift` (toolbar and tabs), `QueueListTab.swift`, `ActivityTab.swift` and `QueueSettingsTab.swift`.
+- Reuse `QueuePage` as the pushed detail view, merging its Downloads/Schedule/Options into one scrolling detail. Its own toolbar tab group is removed.
+- `EngineModel.swift`: `runs: [QueueRun]`, loaded at start and updated on `RunChanged`, plus the defaults for new queues in `@AppStorage` (`queueDefaultMaxRunning`, `queueDefaultSpeed`, `queueDefaultFinish`), used by `newQueue()`.
+
+**Spec:** the spec's "Revision" section and the UI guide. Rows use the Downloads list style (RowHighlight, LayoutMetrics, no system selection fill). The Activity sections have headers. Empty states:
+- "No queue is running"
+- "Nothing scheduled", with the action "Schedule a queue"
+- "No runs yet"
+
+**Start all / Stop all** call `startQueue` or `stopQueue` for every enabled queue.
+
+**Verify:** `swift build` passes, and the controller checks the screens visually.

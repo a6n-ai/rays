@@ -188,3 +188,17 @@ The user asked for queues *and* a scheduler like the reference, and A is the onl
 - How a held job is represented: a flag on `Queued`, or a new state. It must be clearly distinct from user Pause in the UI ("Waiting for schedule").
 - Tick interval details, and the time zone and DST handling of windows (use local time).
 - Layout specifics of the sheet within the reference structure. Use Liquid Glass for the tiles and pills.
+
+## Revision (2026-11-25, user direction): one Queues page
+
+This replaces the per-queue sidebar rows and the scheduler sheet.
+
+- **Sidebar.** A single **Queues** item, in the Rays section after Models, with the symbol `list.bullet.rectangle`. It shows no per-queue rows.
+- **Queues page toolbar.** The centre group has three tabs: **Queues** (`list.bullet`), **Activity** (`clock.arrow.circlepath`) and **Settings** (`slider.horizontal.3`). On the right are **+ New queue** (`plus`), a **Start all / Stop all** menu (`play.circle`) and the Settings button.
+- **Queues tab.** One list of every queue with its schedule summary: repeat and times, conditions, next run, and counts. Each row has an enabled switch, and Start/Stop on hover. Clicking a row pushes the queue's detail view, with a back button. The detail view has the queue's downloads, the editable name, and its Schedule and Options sections inline, plus the save bar, as already built.
+- **Activity tab.**
+  - **Running now:** queues with running jobs, with live progress.
+  - **Upcoming:** the next runs of all enabled scheduled queues, sorted by time.
+  - **History:** past runs, newest first, capped at the last 200. Each entry shows the queue, its start and end, files finished, bytes, and the outcome: finished, stopped at the window end, stopped by the user, or Rays quit.
+- **Settings tab (app-wide).** The wake permission (status, Set Up, Remove). Defaults for new queues: Simultaneous, Speed limit and When finished.
+- **Engine.** Persist queue runs in a `queue_runs` table: id, queue_id, started_at, ended_at (null while running), files_done, bytes_done, outcome. Expose `Engine::queue_runs(limit) -> Vec<QueueRun>` and emit `JobEvent::RunChanged { run }`. A run starts and ends using the existing run-tracking rules. Runs still open when Rays starts are closed with the outcome "Rays quit".
