@@ -4,7 +4,7 @@ use crate::hf::{self, HfAdd, HfFile, HfManifest, HfModel, HfRepo, VerifyResult, 
 use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
-use crate::speed::NetworkKind;
+use crate::speed::{BestTime, NetworkKind, SpeedSettings};
 use crate::speedtest::{self, SpeedTestResult};
 use crate::store::Store;
 use crate::queue::QueueConfig;
@@ -19,7 +19,7 @@ pub struct Engine {
     hub: Arc<EventHub>,
     socket_path: PathBuf,
     /// Speed test server and duration in ms; tests point these at a local server.
-    speed_test: Mutex<(String, u64)>,
+    speed_test: Arc<Mutex<(String, u64)>>,
 }
 
 #[uniffi::export]
@@ -55,7 +55,18 @@ impl Engine {
             let listener = ipc::bind(&socket_path)?;
             rt.spawn(ipc::serve(listener, Arc::clone(&sched)));
         }
-        Ok(Arc::new(Engine { rt, sched, hub, socket_path, speed_test: Mutex::new((speedtest::DEFAULT_BASE.into(), speedtest::DEFAULT_MS)) }))
+        let speed_test = Arc::new(Mutex::new((String::from(speedtest::DEFAULT_BASE), speedtest::DEFAULT_MS)));
+        let (weak, cfg) = (Arc::downgrade(&sched), Arc::clone(&speed_test));
+        rt.spawn(async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                tick.tick().await;
+                let Some(sched) = weak.upgrade() else { break };
+                let (base, ms) = cfg.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                speedtest::auto(&sched, &base, ms).await;
+            }
+        });
+        Ok(Arc::new(Engine { rt, sched, hub, socket_path, speed_test }))
     }
 
     pub fn add(&self, urls: Vec<String>) -> Vec<AddResult> {
@@ -114,6 +125,43 @@ impl Engine {
     /// The newest saved test result.
     pub fn last_speed_test(&self) -> Option<SpeedTestResult> {
         speedtest::last(&self.sched)
+    }
+
+    /// The fastest 4 hours of the last 28 days, once there is enough data.
+    pub fn best_time(&self) -> BestTime {
+        self.sched.best_time()
+    }
+
+    /// Typical speed for each local hour of the day over the last 28 days.
+    pub fn hourly_typical(&self) -> Vec<Option<u64>> {
+        self.sched.hourly_typical()
+    }
+
+    /// The Best time queue, created on first use.
+    pub fn best_time_queue(&self) -> Result<u64, EngineError> {
+        self.sched.best_time_queue()
+    }
+
+    pub fn speed_settings(&self) -> SpeedSettings {
+        self.sched.speed_settings()
+    }
+
+    pub fn set_speed_settings(&self, s: SpeedSettings) {
+        self.sched.set_speed_settings(s);
+    }
+
+    /// Automatic night tests for 7 days; also records that the prompt was answered.
+    pub fn start_night_week(&self) {
+        self.sched.start_night_week();
+    }
+
+    pub fn clear_speed_history(&self) {
+        self.sched.clear_speed_history();
+    }
+
+    #[doc(hidden)]
+    pub fn set_auto_test_plan(&self, at: Vec<i64>) {
+        self.sched.set_auto_test_plan(at);
     }
 
     #[doc(hidden)]
@@ -302,4 +350,23 @@ impl Engine {
 
 fn join_error(e: tokio::task::JoinError) -> EngineError {
     EngineError::Io { msg: format!("engine task: {e}") }
+}
+
+impl Engine {
+    #[doc(hidden)]
+    pub fn set_clock(&self, clock: crate::scheduler::Clock) {
+        self.sched.set_clock(clock);
+    }
+
+    #[doc(hidden)]
+    pub fn tick(&self) {
+        self.sched.tick();
+    }
+
+    #[doc(hidden)]
+    pub async fn auto_test_tick(&self) {
+        let (base, ms) = self.speed_test.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let sched = Arc::clone(&self.sched);
+        let _ = self.rt.spawn(async move { speedtest::auto(&sched, &base, ms).await }).await;
+    }
 }

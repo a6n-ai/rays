@@ -6,7 +6,7 @@ use crate::limit::RateLimiter;
 use crate::names;
 use crate::cloud;
 use crate::queue::{self, QueueConfig, Repeat};
-use crate::speed::{NetworkKind, Sampler};
+use crate::speed::{self, BestTime, NetworkKind, Sampler, SpeedSettings};
 use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
 use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, QueueRun, QueueState, QueueView, RunOutcome, now_secs};
@@ -207,7 +207,25 @@ pub struct Scheduler {
     clock: Mutex<Clock>,
     /// One `refresh` at a time, so edges and events are not interleaved.
     refreshing: Mutex<()>,
+    auto_plan: Mutex<AutoPlan>,
 }
+
+/// Unix seconds of the minutes at which automatic speed tests start.
+#[derive(Default)]
+struct AutoPlan {
+    /// What the plan was made for: local date, night week on, automatic tests on.
+    made_for: Option<(String, bool, bool)>,
+    at: Vec<i64>,
+    /// Set by tests; the plan is then left alone.
+    pinned: bool,
+}
+
+const KEY_BEST_QUEUE: &str = "best_time_queue_id";
+const KEY_REFRESHED: &str = "best_time_refreshed";
+const KEY_AUTO: &str = "auto_tests";
+const KEY_NIGHT_UNTIL: &str = "night_until";
+const KEY_NIGHT_ANSWERED: &str = "night_prompt_answered";
+const SAMPLE_DAYS: i64 = 28;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
@@ -328,6 +346,7 @@ impl Scheduler {
             pruned_day: AtomicI64::new(i64::MIN),
             clock: Mutex::new(clock),
             refreshing: Mutex::new(()),
+            auto_plan: Mutex::new(AutoPlan::default()),
         });
         let weak = Arc::downgrade(&sched);
         sched.rt.spawn(async move {
@@ -350,7 +369,7 @@ impl Scheduler {
                 tick.tick().await;
                 match weak.upgrade() {
                     Some(s) => {
-                        let _ = tokio::task::spawn_blocking(move || s.refresh()).await;
+                        let _ = tokio::task::spawn_blocking(move || s.tick()).await;
                     }
                     None => break,
                 }
@@ -1069,6 +1088,7 @@ impl Scheduler {
 
     /// Re-checks every queue now; the 30 s timer calls this.
     pub fn tick(self: &Arc<Self>) {
+        self.follow_best_time();
         self.refresh();
     }
 
@@ -1116,6 +1136,19 @@ impl Scheduler {
 
     pub fn save_queue(self: &Arc<Self>, config: &QueueConfig) -> Result<u64, EngineError> {
         validate_queue(config, self.now())?;
+        let mut config = config.clone();
+        // Editing the schedule of a following queue is the user taking over.
+        if config.follow_best_time {
+            let current = config.id.and_then(|id| lock(&self.queues).get(&id).map(|rt| rt.config.clone()));
+            if current.is_some_and(|c| c.follow_best_time && c.schedule != config.schedule) {
+                config.follow_best_time = false;
+            }
+        }
+        self.write_queue(&config)
+    }
+
+    /// Stores `config` and applies it to the running state, whoever asked for it.
+    fn write_queue(self: &Arc<Self>, config: &QueueConfig) -> Result<u64, EngineError> {
         let id = self.store.save_queue(config)?;
         let (now, config) = (self.now(), QueueConfig { id: Some(id), ..config.clone() });
         {
@@ -1488,6 +1521,125 @@ fn validate_queue(config: &QueueConfig, now: DateTime) -> Result<(), EngineError
 /// R2 rejects a token for a moment after it is created.
 fn token_not_ready(e: &EngineError) -> bool {
     e.to_string().contains("InvalidAccessKeyId") || e.to_string().contains("Unauthorized")
+}
+
+impl Scheduler {
+    fn local_samples(&self) -> Vec<(DateTime, u64)> {
+        let since = self.now_secs() - SAMPLE_DAYS * 86_400;
+        let tz = jiff::tz::TimeZone::system();
+        self.store
+            .samples_since(since)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|s| Some((jiff::Timestamp::from_second(s.at).ok()?.to_zoned_datetime(tz.clone()).datetime(), s.bps)))
+            .collect()
+    }
+
+    pub fn best_time(&self) -> BestTime {
+        speed::best_window(&self.local_samples(), 4)
+    }
+
+    pub fn hourly_typical(&self) -> Vec<Option<u64>> {
+        let local = self.local_samples();
+        (0..24).map(|h| speed::typical_bps_at(&local, h)).collect()
+    }
+
+    pub fn clear_speed_history(&self) {
+        let _ = self.store.clear_samples();
+    }
+
+    /// The queue that follows the best time, made on first use. Found by its stored id, never its name.
+    pub fn best_time_queue(self: &Arc<Self>) -> Result<u64, EngineError> {
+        let stored = self.store.setting(KEY_BEST_QUEUE)?.and_then(|v| v.parse::<u64>().ok());
+        if let Some(id) = stored.filter(|id| lock(&self.queues).contains_key(id)) {
+            return Ok(id);
+        }
+        let schedule = match self.best_time() {
+            BestTime::Window { start_min, end_min, .. } => speed::window_schedule(start_min, end_min),
+            BestTime::NotEnoughData { .. } => speed::window_schedule(60, 360),
+        };
+        let id = self.save_queue(&QueueConfig {
+            id: None,
+            name: "Best time".into(),
+            max_running: 0,
+            speed_limit: 0,
+            enabled: true,
+            schedule: Some(schedule),
+            retry_failed: true,
+            wake: false,
+            when_finished: queue::FinishAction::Nothing,
+            follow_best_time: true,
+        })?;
+        self.store.set_setting(KEY_BEST_QUEUE, Some(&id.to_string()))?;
+        Ok(id)
+    }
+
+    /// Once per local date, moves every following queue to the current best window if it moved by 30 minutes.
+    fn follow_best_time(self: &Arc<Self>) {
+        let today = self.now().date().to_string();
+        if self.store.setting(KEY_REFRESHED).ok().flatten().as_deref() == Some(today.as_str()) {
+            return;
+        }
+        let _ = self.store.set_setting(KEY_REFRESHED, Some(&today));
+        let BestTime::Window { start_min, end_min, .. } = self.best_time() else { return };
+        let following: Vec<QueueConfig> =
+            lock(&self.queues).values().filter(|rt| rt.config.follow_best_time).map(|rt| rt.config.clone()).collect();
+        for config in following {
+            let schedule = match &config.schedule {
+                Some(s) if !speed::window_moved(s, start_min, end_min) => continue,
+                Some(s) => queue::QueueSchedule { start_min, stop_min: Some(end_min), ..s.clone() },
+                None => speed::window_schedule(start_min, end_min),
+            };
+            if let Ok(id) = self.write_queue(&QueueConfig { schedule: Some(schedule), ..config }) {
+                self.hub.queue_changed(id);
+            }
+        }
+    }
+
+    pub fn speed_settings(&self) -> SpeedSettings {
+        let get = |k: &str| self.store.setting(k).ok().flatten();
+        SpeedSettings {
+            auto_tests: get(KEY_AUTO).is_some_and(|v| v == "1"),
+            night_until: get(KEY_NIGHT_UNTIL).and_then(|v| v.parse().ok()),
+            night_prompt_answered: get(KEY_NIGHT_ANSWERED).is_some_and(|v| v == "1"),
+        }
+    }
+
+    pub fn set_speed_settings(&self, s: SpeedSettings) {
+        let flag = |on: bool| on.then_some("1");
+        let _ = self.store.set_setting(KEY_AUTO, flag(s.auto_tests));
+        let _ = self.store.set_setting(KEY_NIGHT_UNTIL, s.night_until.map(|t| t.to_string()).as_deref());
+        let _ = self.store.set_setting(KEY_NIGHT_ANSWERED, flag(s.night_prompt_answered));
+    }
+
+    pub fn start_night_week(&self) {
+        let s = SpeedSettings { night_until: Some(self.now_secs() + 7 * 86_400), night_prompt_answered: true, ..self.speed_settings() };
+        self.set_speed_settings(s);
+    }
+
+    #[doc(hidden)]
+    pub fn set_auto_test_plan(&self, at: Vec<i64>) {
+        *lock(&self.auto_plan) = AutoPlan { made_for: None, at, pinned: true };
+    }
+
+    /// True when this local minute is one a test was planned for. Planned minutes that passed are dropped, not caught up.
+    pub(crate) fn auto_test_due(&self) -> bool {
+        let (now, secs) = (self.now(), self.now_secs());
+        let settings = self.speed_settings();
+        let (night, auto) = (settings.night_until.is_some_and(|t| t > secs), settings.auto_tests);
+        let mut plan = lock(&self.auto_plan);
+        let made_for = (now.date().to_string(), night, auto);
+        if !plan.pinned && plan.made_for.as_ref() != Some(&made_for) {
+            let slots = speed::test_slots(night, auto);
+            let seed = day_key(now) as u64 ^ (u64::from(night) << 40) ^ (u64::from(auto) << 41);
+            plan.at = speed::pick_minutes(seed, &slots).into_iter().map(|m| unix_secs(queue::at(now.date(), m))).collect();
+            plan.made_for = Some(made_for);
+        }
+        let minute = secs.div_euclid(60);
+        let before = plan.at.len();
+        plan.at.retain(|at| at.div_euclid(60) != minute);
+        plan.at.len() != before
+    }
 }
 
 #[cfg(test)]

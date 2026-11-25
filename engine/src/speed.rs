@@ -120,6 +120,52 @@ pub fn typical_bps_at(local: &[(jiff::civil::DateTime, u64)], hour: u8) -> Optio
     (v.len() >= MIN_BUCKET).then(|| median(v))
 }
 
+#[derive(uniffi::Record, Clone, Debug, Default, PartialEq, Eq)]
+pub struct SpeedSettings {
+    pub auto_tests: bool,
+    /// Unix seconds the night-test week ends.
+    pub night_until: Option<i64>,
+    pub night_prompt_answered: bool,
+}
+
+/// True when the window's start or stop differs from the target by 30 minutes or more (on the clock face).
+pub fn window_moved(current: &crate::queue::QueueSchedule, start_min: u16, end_min: u16) -> bool {
+    let apart = |a: u16, b: u16| {
+        let d = a.abs_diff(b);
+        d.min(1440 - d) >= 30
+    };
+    apart(current.start_min, start_min) || current.stop_min.is_none_or(|stop| apart(stop, end_min))
+}
+
+/// Local-minute ranges (start, end) that get one automatic test each: the night slots while the night week
+/// runs, then 3 h slots across the rest of the day when automatic tests are on.
+pub fn test_slots(night: bool, auto: bool) -> Vec<(u16, u16)> {
+    let mut slots = Vec::new();
+    if night {
+        slots.extend([(0, 120), (120, 240), (240, 360)]);
+    }
+    if auto {
+        let from = if night { 360 } else { 0 };
+        slots.extend((from..1440).step_by(180).map(|s| (s, s + 180)));
+    }
+    slots
+}
+
+/// A random minute inside each slot, from a splitmix64 stream seeded with `seed`.
+pub fn pick_minutes(seed: u64, slots: &[(u16, u16)]) -> Vec<u16> {
+    let mut state = seed;
+    slots
+        .iter()
+        .map(|&(start, end)| {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            start + ((z ^ (z >> 31)) % u64::from(end - start)) as u16
+        })
+        .collect()
+}
+
 /// Folds per-tick download rates into one sample per clean wall-clock minute. Pure: the caller supplies time and rates.
 #[derive(Default)]
 pub struct Sampler {
@@ -177,6 +223,29 @@ mod tests {
 
     fn fast_1_to_4(h: i8) -> u64 {
         if (1..=4).contains(&h) { 100_000_000 } else { 20_000_000 }
+    }
+
+    #[test]
+    fn window_moves_by_thirty_minutes() {
+        let w = window_schedule(60, 300);
+        assert!(!window_moved(&w, 60, 300));
+        assert!(!window_moved(&w, 80, 329));
+        assert!(window_moved(&w, 90, 300));
+        assert!(window_moved(&w, 60, 270));
+        assert!(!window_moved(&window_schedule(10, 300), 1430, 300));
+    }
+
+    #[test]
+    fn slots_and_minutes() {
+        assert_eq!(test_slots(true, false).len(), 3);
+        assert_eq!(test_slots(false, true).len(), 8);
+        assert_eq!(test_slots(true, true).len(), 9);
+        assert!(test_slots(false, false).is_empty());
+        let slots = test_slots(true, true);
+        let a = pick_minutes(7, &slots);
+        assert_eq!(a, pick_minutes(7, &slots));
+        assert!(a.iter().zip(&slots).all(|(m, (s, e))| (*s..*e).contains(m)));
+        assert_ne!(a, pick_minutes(8, &slots));
     }
 
     #[test]

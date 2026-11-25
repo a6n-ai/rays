@@ -149,3 +149,10 @@ pub fn last(sched: &Scheduler) -> Option<SpeedTestResult> {
     let latency_ms = store.setting(LATENCY_KEY).ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0);
     Some(SpeedTestResult { bps: sample.bps, latency_ms, at: sample.at, saved: true })
 }
+
+/// One minute of the automatic tests: runs a test if this minute was planned, on Wi-Fi or wired, with no download running.
+pub async fn auto(sched: &Arc<Scheduler>, base: &str, ms: u64) {
+    if sched.auto_test_due() && matches!(sched.network(), NetworkKind::Wifi | NetworkKind::Wired) && !sched.any_running() {
+        let _ = run(sched, base, ms, false).await;
+    }
+}

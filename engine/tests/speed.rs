@@ -175,3 +175,203 @@ fn speed_test_tiny_body_errors() {
     assert!(err.to_string().contains("Couldn't reach the speed test server"), "{err}");
     assert!(stored(dir.path()).is_empty());
 }
+
+mod best_time {
+    use super::*;
+    use dl_engine::queue::{QueueConfig, Repeat};
+    use dl_engine::speed::{BestTime, SpeedSample};
+    use dl_engine::types::JobEvent;
+    use jiff::civil::{date, DateTime};
+    use jiff::tz::TimeZone;
+    use std::sync::Mutex;
+
+    fn unix(dt: DateTime) -> i64 {
+        dt.to_zoned_datetime(TimeZone::system()).unwrap().timestamp().as_second()
+    }
+
+    fn seed(dir: &Path, first_day: i8, days: i8) {
+        let store = Store::open(&dir.join("data")).unwrap();
+        for d in first_day..first_day + days {
+            for h in 0..24 {
+                for k in 0..3 {
+                    let bps = if (1..=4).contains(&h) { 100_000_000 } else { 20_000_000 };
+                    let at = unix(date(2026, 11, d).at(h, k * 10, 0, 0));
+                    store.add_sample(&SpeedSample { at, bps, source: SampleSource::Downloads, network: NetworkKind::Wifi }).unwrap();
+                }
+            }
+        }
+    }
+
+    fn clocked(e: &Engine, start: DateTime) -> Arc<Mutex<DateTime>> {
+        let clock = Arc::new(Mutex::new(start));
+        let shared = Arc::clone(&clock);
+        e.set_clock(Arc::new(move || *shared.lock().unwrap()));
+        clock
+    }
+
+    fn follow_config(e: &Engine, id: u64) -> QueueConfig {
+        e.queues().into_iter().find(|q| q.config.id == Some(id)).unwrap().config
+    }
+
+    fn events(rt: &tokio::runtime::Runtime, e: &Engine, ms: u64) -> Vec<JobEvent> {
+        rt.block_on(async { tokio::time::timeout(Duration::from_millis(ms), e.next_events()).await.unwrap_or_default() })
+    }
+
+    #[test]
+    fn best_time_queue_created_once() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (_dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        clocked(&e, date(2026, 11, 25).at(10, 0, 0, 0));
+        let id = e.best_time_queue().unwrap();
+        let c = follow_config(&e, id);
+        assert_eq!(c.name, "Best time");
+        assert!(c.follow_best_time && c.enabled && c.retry_failed && !c.wake);
+        assert_eq!((c.max_running, c.speed_limit), (0, 0));
+        let s = c.schedule.clone().unwrap();
+        assert_eq!((s.repeat, s.start_min, s.stop_min), (Repeat::Daily, 60, Some(360)));
+        assert_eq!(e.best_time_queue().unwrap(), id);
+        e.save_queue(QueueConfig { name: "Mine".into(), ..c }).unwrap();
+        assert_eq!(e.best_time_queue().unwrap(), id);
+        assert_eq!(e.queues().len(), 2);
+    }
+
+    #[test]
+    fn follower_updates_window() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        let clock = clocked(&e, date(2026, 11, 25).at(10, 0, 0, 0));
+        let id = e.best_time_queue().unwrap();
+        seed(dir.path(), 17, 8);
+        assert!(matches!(e.best_time(), BestTime::Window { start_min: 60, end_min: 300, .. }));
+        *clock.lock().unwrap() = date(2026, 11, 26).at(10, 0, 0, 0);
+        e.tick();
+        let c = follow_config(&e, id);
+        let s = c.schedule.unwrap();
+        assert_eq!((s.start_min, s.stop_min), (60, Some(300)));
+        assert!(c.follow_best_time);
+    }
+
+    #[test]
+    fn follower_ignores_small_moves() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        let clock = clocked(&e, date(2026, 11, 25).at(10, 0, 0, 0));
+        seed(dir.path(), 17, 8);
+        let id = e.best_time_queue().unwrap();
+        assert_eq!(follow_config(&e, id).schedule.unwrap().stop_min, Some(300));
+        *clock.lock().unwrap() = date(2026, 11, 26).at(10, 0, 0, 0);
+        events(&rt, &e, 300);
+        events(&rt, &e, 300);
+        e.tick();
+        assert!(events(&rt, &e, 300).is_empty());
+        assert_eq!(follow_config(&e, id).schedule.unwrap().stop_min, Some(300));
+    }
+
+    #[test]
+    fn manual_edit_stops_following() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        let clock = clocked(&e, date(2026, 11, 25).at(10, 0, 0, 0));
+        let id = e.best_time_queue().unwrap();
+        let mut c = follow_config(&e, id);
+        let mut s = c.schedule.clone().unwrap();
+        s.start_min = 120;
+        s.stop_min = Some(420);
+        c.schedule = Some(s);
+        e.save_queue(c).unwrap();
+        assert!(!follow_config(&e, id).follow_best_time);
+        seed(dir.path(), 17, 8);
+        *clock.lock().unwrap() = date(2026, 11, 26).at(10, 0, 0, 0);
+        e.tick();
+        let s = follow_config(&e, id).schedule.unwrap();
+        assert_eq!((s.start_min, s.stop_min), (120, Some(420)));
+    }
+
+    #[test]
+    fn switching_follow_back_on_keeps_schedule_until_refresh() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        let clock = clocked(&e, date(2026, 11, 25).at(10, 0, 0, 0));
+        let id = e.best_time_queue().unwrap();
+        let mut c = follow_config(&e, id);
+        c.schedule.as_mut().unwrap().start_min = 120;
+        e.save_queue(c.clone()).unwrap();
+        e.save_queue(QueueConfig { follow_best_time: true, ..follow_config(&e, id) }).unwrap();
+        let c = follow_config(&e, id);
+        assert!(c.follow_best_time);
+        assert_eq!(c.schedule.unwrap().start_min, 120);
+        seed(dir.path(), 17, 8);
+        *clock.lock().unwrap() = date(2026, 11, 26).at(10, 0, 0, 0);
+        e.tick();
+        assert_eq!(follow_config(&e, id).schedule.unwrap().start_min, 60);
+    }
+
+    #[test]
+    fn night_week_runs_tests() {
+        for (network, expected) in [(NetworkKind::Wifi, 3), (NetworkKind::Expensive, 0)] {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let (dir, e, _, _) = rig(&rt, network);
+            e.set_speed_test_duration(300);
+            let clock = clocked(&e, date(2026, 11, 25).at(23, 0, 0, 0));
+            e.start_night_week();
+            let s = e.speed_settings();
+            assert!(s.night_prompt_answered && !s.auto_tests);
+            assert_eq!(s.night_until, Some(unix(date(2026, 11, 25).at(23, 0, 0, 0)) + 7 * 86_400));
+            let planned = [date(2026, 11, 26).at(0, 41, 0, 0), date(2026, 11, 26).at(3, 7, 0, 0), date(2026, 11, 26).at(4, 59, 0, 0)];
+            e.set_auto_test_plan(planned.iter().map(|d| unix(*d)).collect());
+            for at in planned {
+                *clock.lock().unwrap() = at;
+                rt.block_on(e.auto_test_tick());
+            }
+            assert_eq!(stored(dir.path()).len(), expected, "{network:?}");
+        }
+    }
+
+    #[test]
+    fn missed_minute_is_skipped() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        e.set_speed_test_duration(300);
+        let clock = clocked(&e, date(2026, 11, 26).at(0, 41, 0, 0));
+        e.set_auto_test_plan(vec![unix(date(2026, 11, 26).at(0, 41, 0, 0))]);
+        *clock.lock().unwrap() = date(2026, 11, 26).at(0, 43, 30, 0);
+        rt.block_on(e.auto_test_tick());
+        assert!(stored(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn planned_night_tests_fall_in_slots() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        e.set_speed_test_duration(300);
+        let clock = clocked(&e, date(2026, 11, 25).at(23, 0, 0, 0));
+        e.start_night_week();
+        let mut ran = 0;
+        for h in 0..6 {
+            for m in 0..60 {
+                *clock.lock().unwrap() = date(2026, 11, 26).at(h, m, 0, 0);
+                let before = stored(dir.path()).len();
+                rt.block_on(e.auto_test_tick());
+                if stored(dir.path()).len() > before {
+                    assert_eq!(h / 2, ran, "one test per two-hour slot, in order");
+                    ran += 1;
+                }
+            }
+        }
+        assert_eq!(ran, 3);
+    }
+
+    #[test]
+    fn history_and_hourly() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        clocked(&e, date(2026, 11, 25).at(10, 0, 0, 0));
+        seed(dir.path(), 17, 8);
+        let h = e.hourly_typical();
+        assert_eq!(h.len(), 24);
+        assert_eq!((h[2], h[10]), (Some(100_000_000), Some(20_000_000)));
+        e.clear_speed_history();
+        assert!(stored(dir.path()).is_empty());
+        assert!(e.hourly_typical().iter().all(Option::is_none));
+    }
+}
