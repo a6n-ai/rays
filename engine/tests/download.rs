@@ -1253,3 +1253,32 @@ fn snapshot_carries_job_dir() {
     assert_eq!(snap[0].dir, Some(dest.to_string_lossy().into_owned()));
 }
 
+#[tokio::test]
+async fn verifying_shows_while_the_hash_runs_and_ignores_pause() {
+    setup();
+    let dir = tempfile::tempdir().unwrap();
+    let big = dir.path().join("big.bin");
+    std::fs::File::create(&big).unwrap().set_len(32 << 20).unwrap();
+    let app = Router::new().route_service("/big", tower_http::services::ServeFile::new(big));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/big", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    let (live, rx) = job(url, dir.path(), "out.bin");
+    live.job.lock().unwrap().sha256 = Some("0".repeat(64));
+    let watched = live.clone();
+    let run_dir = dir.path().to_path_buf();
+    let run = tokio::spawn(async move { run_replacing(live, &run_dir, rx, download::RunOpts::default()).await });
+    let mut seen = false;
+    while !run.is_finished() {
+        if matches!(watched.job.lock().unwrap().state, JobState::Verifying) {
+            seen = true;
+            watched.cancel.lock().unwrap().send_replace(true);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    let out = run.await.unwrap();
+    assert!(seen, "the job never showed Verifying");
+    assert!(matches!(&out, Outcome::Failed(m) if m == "Checksum didn't match"), "{out:?}");
+}

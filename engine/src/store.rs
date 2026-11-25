@@ -275,6 +275,7 @@ fn encode_state(state: &JobState) -> (&'static str, Option<&str>) {
     match state {
         JobState::Queued => ("queued", None),
         JobState::Running => ("running", None),
+        JobState::Verifying => ("verifying", None),
         JobState::Paused => ("paused", None),
         JobState::Retrying { .. } => ("retrying", None),
         JobState::Done { .. } => ("done", None),
@@ -302,6 +303,8 @@ fn job_from_row(row: &Row) -> rusqlite::Result<Job> {
         "queued" => JobState::Queued,
         "running" => JobState::Running,
         "paused" => JobState::Paused,
+        // Reloads as Paused: load_all pauses every unfinished job, and the hash restarts on resume.
+        "verifying" => JobState::Paused,
         // `attempt` is not persisted; reconciliation turns this into Paused anyway.
         "retrying" => JobState::Retrying { attempt: 0 },
         "done" => JobState::Done { path: final_path.clone().unwrap_or_default() },
@@ -470,6 +473,19 @@ mod tests {
             expected.updated_at = got.updated_at;
             assert_eq!(got, &expected, "state {state:?}");
         }
+    }
+
+    #[test]
+    fn load_all_pauses_a_verifying_job() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let part = dir.path().join("a.part");
+        std::fs::write(&part, [0u8; 4]).unwrap();
+        let mut job = sample(&part, JobState::Verifying);
+        store.insert(&mut job).unwrap();
+
+        let jobs = store.load_all().unwrap();
+        assert_eq!(jobs[0].state, JobState::Paused);
     }
 
     #[test]

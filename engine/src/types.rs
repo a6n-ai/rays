@@ -26,6 +26,8 @@ pub enum JobState {
     Running,
     Paused,
     Retrying { attempt: u8 },
+    /// Hashing the finished `.part`. Pause does not apply; a job saved this way loads as Paused.
+    Verifying,
     Done { path: String },
     Failed { reason: String },
 }

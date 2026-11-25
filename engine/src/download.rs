@@ -1247,6 +1247,14 @@ async fn finish(env: &Env) -> Result<Outcome, Stop> {
     }
     tokio::fs::OpenOptions::new().write(true).open(&part).await?.sync_all().await?;
     if let Some(expected) = with_job(&env.live, |j| j.sha256.clone()) {
+        let id = with_job(&env.live, |j| {
+            j.state = JobState::Verifying;
+            if let Some(store) = &env.store {
+                let _ = store.save(j);
+            }
+            j.id
+        });
+        env.hub.state_changed(id);
         let hashed = part.clone();
         let actual = tokio::task::spawn_blocking(move || sha256_hex(&hashed)).await.map_err(io::Error::other)??;
         if actual != expected.to_ascii_lowercase() {

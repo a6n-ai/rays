@@ -408,7 +408,7 @@ enum Links {
 extension JobView {
     var isActive: Bool {
         switch state {
-        case .running, .retrying: true
+        case .running, .retrying, .verifying: true
         default: false
         }
     }

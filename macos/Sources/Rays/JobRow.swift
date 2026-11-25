@@ -85,7 +85,7 @@ struct JobRow: View {
                 .accessibilityLabel("Share \(job.name)")
             }
             moreButton
-            primaryButton
+            if let primary { primaryButton(primary) }
         }
         .frame(height: LayoutMetrics.rowHeight)
         .padding(.horizontal, LayoutMetrics.hoverInset)
@@ -101,7 +101,7 @@ struct JobRow: View {
         })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(([job.name] + statusParts.map(\.text)).joined(separator: ", "))
-        .accessibilityAction(named: primary.title) { perform(primary) }
+        .accessibilityActions { if let primary { Button(primary.title) { perform(primary) } } }
         .confirmationDialog(
             "Stopping loses \(byteText(job.done)) of progress. Stop anyway?",
             isPresented: $confirmStop, titleVisibility: .visible
@@ -151,7 +151,7 @@ struct JobRow: View {
                 SegmentedProgressBar(parts: job.parts, total: total, tint: progressTint)
             } else if let total = job.total, total > 0 {
                 ProgressView(value: Double(min(job.done, total)), total: Double(total))
-            } else if job.state == .running {
+            } else if job.state == .running || job.state == .verifying {
                 ProgressView()
             } else {
                 ProgressView(value: 0, total: 1)
@@ -201,6 +201,8 @@ struct JobRow: View {
             parts = [Part("Paused"), Part(job.sizeText)]
         case .retrying(let attempt):
             parts = [Part("Reconnecting, try \(attempt) of 5")]
+        case .verifying:
+            parts = [Part("Verifying…")]
         case .done:
             // Read so the row redraws when the sorter moves its file.
             _ = model.folderRevision
@@ -261,10 +263,12 @@ struct JobRow: View {
     /// A finished download whose file is neither at its saved path nor under the downloads folder.
     private var isMissing: Bool { job.isDone && model.locate(job) == nil }
 
-    private var primary: Primary {
+    /// Nil while verifying: the hash cannot be paused or stopped.
+    private var primary: Primary? {
         switch job.state {
         case .queued: .pause
         case .running, .retrying: job.resumable ? .pause : .stop
+        case .verifying: nil
         case .paused: .resume
         case .failed: .retry
         case .done: isMissing ? .removeFromList : .reveal
@@ -272,7 +276,7 @@ struct JobRow: View {
     }
 
     /// Plain style with an explicit glass circle, so the 28 pt glass is not padded by the glass button style.
-    private var primaryButton: some View {
+    private func primaryButton(_ primary: Primary) -> some View {
         Button { perform(primary) } label: {
             Image(systemName: primary.symbol)
                 .font(.system(size: 13, weight: .bold))
@@ -318,7 +322,7 @@ struct JobRow: View {
     }
 
     @ViewBuilder private var menu: some View {
-        if !job.isDone {
+        if !job.isDone, let primary {
             Button { perform(primary) } label: { Label(primary.title, systemImage: primary.symbol) }
         } else if let url = model.locate(job) {
             Button { model.reveal(job) } label: { Label("Show in Finder", systemImage: "folder") }

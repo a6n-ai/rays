@@ -372,7 +372,9 @@ private struct MenuBarRow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(job.name).lineLimit(1).truncationMode(.middle)
-                if job.isActive, let total = job.total, total > 0 {
+                if job.state == .verifying {
+                    ProgressView().progressViewStyle(.linear).controlSize(.small)
+                } else if job.isActive, let total = job.total, total > 0 {
                     ProgressView(value: Double(min(job.done, total)), total: Double(total))
                         .progressViewStyle(.linear)
                         .controlSize(.small)
@@ -381,7 +383,7 @@ private struct MenuBarRow: View {
             }
             Spacer(minLength: 4)
             Group {
-                if job.isActive && job.resumable {
+                if job.isActive && job.resumable && job.state != .verifying {
                     Button { model.pause(job.id) } label: { Image(systemName: "pause.fill") }
                         .help("Pause \(job.name)")
                 } else if job.state == .paused {
@@ -417,6 +419,7 @@ private struct MenuBarRow: View {
     private var status: String {
         switch job.state {
         case .running, .retrying: job.bytesPerSec > 0 ? "\(job.sizeText) · \(byteText(job.bytesPerSec))/s" : job.sizeText
+        case .verifying: "Verifying…"
         case .paused: "Paused · \(job.sizeText)"
         case .queued: "Waiting"
         case .done: "Done · \(byteText(job.total ?? job.done))"

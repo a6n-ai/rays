@@ -148,6 +148,7 @@ fn state_name(state: &JobState) -> &'static str {
         JobState::Running => "running",
         JobState::Paused => "paused",
         JobState::Retrying { .. } => "retrying",
+        JobState::Verifying => "verifying",
         JobState::Done { .. } => "done",
         JobState::Failed { .. } => "failed",
     }
