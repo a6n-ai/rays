@@ -372,10 +372,24 @@ impl Store {
 
     /// Oldest first.
     pub fn samples_since(&self, at: i64) -> Result<Vec<SpeedSample>, EngineError> {
+        self.samples("WHERE at >= ?1 ORDER BY at, id", [at])
+    }
+
+    /// Newest first, at most `limit`.
+    pub fn samples_newest(&self, limit: u32) -> Result<Vec<SpeedSample>, EngineError> {
+        self.samples("ORDER BY at DESC, id DESC LIMIT ?1", [limit])
+    }
+
+    /// The newest sample a speed test saved.
+    pub fn last_test(&self) -> Result<Option<SpeedSample>, EngineError> {
+        Ok(self.samples("WHERE source = 'test' ORDER BY at DESC, id DESC LIMIT 1", [])?.pop())
+    }
+
+    fn samples(&self, tail: &str, args: impl rusqlite::Params) -> Result<Vec<SpeedSample>, EngineError> {
         let conn = self.lock()?;
-        let mut stmt = conn.prepare("SELECT at, bps, source, network FROM speed_samples WHERE at >= ?1 ORDER BY at, id")?;
+        let mut stmt = conn.prepare(&format!("SELECT at, bps, source, network FROM speed_samples {tail}"))?;
         let rows = stmt
-            .query_map([at], |r| {
+            .query_map(args, |r| {
                 Ok(SpeedSample {
                     at: r.get(0)?,
                     bps: r.get::<_, i64>(1)? as u64,

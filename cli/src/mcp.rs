@@ -177,7 +177,7 @@ fn tools() -> Value {
             "description": "Measure download speed against the speed test server now and save the result. Refused on a metered link unless force is true.",
             "inputSchema": {
                 "type": "object",
-                "properties": { "force": { "type": "boolean", "default": false, "description": "Also test on a metered link." } }
+                "properties": { "force": { "type": "boolean", "default": false, "description": "Also test on a metered link. Set only when the user asked for it." } }
             }
         },
         {

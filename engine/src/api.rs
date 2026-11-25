@@ -124,9 +124,14 @@ impl Engine {
         let (base, ms) = self.speed_test.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let sched = Arc::clone(&self.sched);
         let cancel = Arc::new(AtomicBool::new(false));
-        *self.cancel_test.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&cancel));
-        let result = self.rt.spawn(async move { speedtest::run(&sched, &base, ms, force, &cancel).await }).await.map_err(join_error)?;
-        *self.cancel_test.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        // A second call is refused by the engine; it must not take over the running test's cancel flag.
+        self.cancel_test.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(|| Arc::clone(&cancel));
+        let flag = Arc::clone(&cancel);
+        let result = self.rt.spawn(async move { speedtest::run(&sched, &base, ms, force, &flag).await }).await.map_err(join_error)?;
+        let mut current = self.cancel_test.lock().unwrap_or_else(|e| e.into_inner());
+        if current.as_ref().is_some_and(|c| Arc::ptr_eq(c, &cancel)) {
+            *current = None;
+        }
         result
     }
 
@@ -139,10 +144,7 @@ impl Engine {
 
     /// Saved speed samples, newest first.
     pub fn speed_history(&self, limit: u32) -> Vec<SpeedSample> {
-        let mut all = self.sched.store().samples_since(0).unwrap_or_default();
-        all.reverse();
-        all.truncate(limit as usize);
-        all
+        self.sched.store().samples_newest(limit).unwrap_or_default()
     }
 
     /// The newest saved test result.

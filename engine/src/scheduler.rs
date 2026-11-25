@@ -198,6 +198,7 @@ pub struct Scheduler {
     doomed_parts: Mutex<HashMap<JobId, PathBuf>>,
     next_position: AtomicI64,
     stopping: AtomicBool,
+    testing: AtomicBool,
     queues: Mutex<std::collections::BTreeMap<u64, QueueRt>>,
     conditions: Mutex<Conditions>,
     network: Mutex<NetworkKind>,
@@ -345,6 +346,7 @@ impl Scheduler {
             doomed_parts: Mutex::new(HashMap::new()),
             next_position: AtomicI64::new(next_position),
             stopping: AtomicBool::new(false),
+            testing: AtomicBool::new(false),
             queues: Mutex::new(queues),
             conditions: Mutex::new((false, false, false)),
             network: Mutex::new(NetworkKind::Unknown),
@@ -1124,6 +1126,11 @@ impl Scheduler {
         &self.store
     }
 
+    /// Set while a speed test runs, so two never share the link.
+    pub(crate) fn testing(&self) -> &AtomicBool {
+        &self.testing
+    }
+
     pub(crate) fn network(&self) -> NetworkKind {
         *lock(&self.network)
     }
@@ -1160,6 +1167,12 @@ impl Scheduler {
         // A following queue always has a Daily window; its conditions stay as the user set them.
         if let Some(s) = config.schedule.as_mut().filter(|_| config.follow_best_time) {
             s.repeat = Repeat::Daily;
+        }
+        // Switching Follow on moves the window now, not at tomorrow's refresh.
+        let was_following = config.id.is_some_and(|id| lock(&self.queues).get(&id).is_some_and(|rt| rt.config.follow_best_time));
+        if config.follow_best_time && config.id.is_some() && !was_following {
+            let (start_min, end_min) = self.target_window();
+            config.schedule = Some(followed_schedule(config.schedule.as_ref(), start_min, end_min));
         }
         self.write_queue(&config)
     }
@@ -1208,7 +1221,12 @@ impl Scheduler {
                 self.hub.state_changed(job);
             }
         }
+        let _one = lock(&self.best_queue);
         self.store.delete_queue(id)?;
+        // Queue ids are reused, so a stale id would hand the next queue the Best time role.
+        if self.store.setting(KEY_BEST_QUEUE)?.is_some_and(|v| v == id.to_string()) {
+            self.store.set_setting(KEY_BEST_QUEUE, None)?;
+        }
         lock(&self.queues).remove(&id);
         self.refresh();
         Ok(())
@@ -1578,10 +1596,8 @@ impl Scheduler {
         if let Some(id) = stored.filter(|id| lock(&self.queues).contains_key(id)) {
             return Ok(id);
         }
-        let schedule = match self.best_time() {
-            BestTime::Window { start_min, end_min, .. } => speed::window_schedule(start_min, end_min),
-            BestTime::NotEnoughData { .. } => speed::window_schedule(60, 360),
-        };
+        let (start_min, end_min) = self.target_window();
+        let schedule = speed::window_schedule(start_min, end_min);
         let id = self.save_queue(&QueueConfig {
             id: None,
             name: "Best time".into(),
@@ -1598,6 +1614,11 @@ impl Scheduler {
         Ok(id)
     }
 
+    /// The best window, or 01:00-06:00 until there is enough data.
+    fn target_window(&self) -> (u16, u16) {
+        window_or_default(self.best_time())
+    }
+
     /// Once per local date, moves every following queue to the current best window if it moved by 30 minutes.
     fn follow_best_time(self: &Arc<Self>) {
         let today = self.now().date().to_string();
@@ -1607,7 +1628,7 @@ impl Scheduler {
         // A database error must not use up the day.
         let Ok(local) = self.local_samples() else { return };
         let _ = self.store.set_setting(KEY_REFRESHED, Some(&today));
-        let BestTime::Window { start_min, end_min, .. } = speed::best_window(&local, 4) else { return };
+        let (start_min, end_min) = window_or_default(speed::best_window(&local, 4));
         let following: Vec<QueueConfig> =
             lock(&self.queues).values().filter(|rt| rt.config.follow_best_time).map(|rt| rt.config.clone()).collect();
         for snapshot in following {
@@ -1627,8 +1648,7 @@ impl Scheduler {
         }
         let schedule = match &current.schedule {
             Some(s) if !speed::window_moved(s, start_min, end_min) => return None,
-            Some(s) => queue::QueueSchedule { repeat: Repeat::Daily, start_min, stop_min: Some(end_min), ..s.clone() },
-            None => speed::window_schedule(start_min, end_min),
+            s => followed_schedule(s.as_ref(), start_min, end_min),
         };
         self.write_queue(&QueueConfig { schedule: Some(schedule), ..current }).ok()
     }
@@ -1682,6 +1702,21 @@ impl Scheduler {
         let due = plan.at.iter().any(|at| (from + 1..=minute).contains(&at.div_euclid(60)));
         plan.at.retain(|at| at.div_euclid(60) > minute);
         due
+    }
+}
+
+fn window_or_default(best: BestTime) -> (u16, u16) {
+    match best {
+        BestTime::Window { start_min, end_min, .. } => (start_min, end_min),
+        BestTime::NotEnoughData { .. } => (60, 360),
+    }
+}
+
+/// The window as a Daily schedule that keeps the other conditions of `current`.
+fn followed_schedule(current: Option<&queue::QueueSchedule>, start_min: u16, end_min: u16) -> queue::QueueSchedule {
+    match current {
+        Some(s) => queue::QueueSchedule { repeat: Repeat::Daily, start_min, stop_min: Some(end_min), ..s.clone() },
+        None => speed::window_schedule(start_min, end_min),
     }
 }
 

@@ -231,6 +231,9 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
             if urls.is_empty() {
                 return Err("add needs at least one URL".into());
             }
+            if best_time && queue.is_some() {
+                return Err("use --queue or --best-time, not both".into());
+            }
             Ok(Request::Add { urls, queue, best_time })
         }
         [c] if c == "speed" => Ok(Request::Speed),
@@ -419,6 +422,8 @@ mod tests {
         assert_eq!(queue_command(&args(&["speed", "test"])).unwrap(), Request::SpeedTest { force: false });
         assert_eq!(queue_command(&args(&["speed", "test", "--force"])).unwrap(), Request::SpeedTest { force: true });
         assert!(queue_command(&args(&["speed", "fast"])).is_err());
+        let both = queue_command(&args(&["add", "--best-time", "--queue", "Night", "https://a/x"])).unwrap_err();
+        assert_eq!(both, "use --queue or --best-time, not both");
     }
 
     #[test]

@@ -66,18 +66,28 @@ async fn fetch(
     Ok(true)
 }
 
-async fn latency_ms(client: &reqwest::Client, base: &str, cancel: &AtomicBool) -> Result<u32, EngineError> {
+async fn cancelled(cancel: &AtomicBool) {
+    while !cancel.load(Ordering::Relaxed) {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn latency_ms(client: &reqwest::Client, base: &str, hub: &EventHub, total: Duration, cancel: &AtomicBool) -> Result<u32, EngineError> {
     let never = AtomicBool::new(false);
     let mut times = Vec::new();
     for _ in 0..5 {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(stopped());
-        }
         let start = Instant::now();
-        if !fetch(client, base, 0, &never, start + Duration::from_secs(2), |_| {}).await? {
+        let probe = fetch(client, base, 0, &never, start + Duration::from_secs(2), |_| {});
+        let done = tokio::select! {
+            done = probe => done?,
+            () = cancelled(cancel) => return Err(stopped()),
+        };
+        if !done {
             return Err(unreachable());
         }
         times.push(start.elapsed().as_millis() as u32);
+        // Each probe is a sign of life, so the app keeps the indicator through a slow phase.
+        progress(hub, SpeedTestPhase::Latency, 0, Duration::ZERO, total);
     }
     times.sort_unstable();
     Ok(times[2])
@@ -172,6 +182,10 @@ async fn throughput(
 
 /// Runs one test and announces how it ended, on every path.
 pub async fn run(sched: &Scheduler, base: &str, ms: u64, force: bool, cancel: &AtomicBool) -> Result<SpeedTestResult, EngineError> {
+    if sched.testing().swap(true, Ordering::SeqCst) {
+        return Err(EngineError::Io { msg: "A speed test is already running.".into() });
+    }
+    let _guard = Testing(sched.testing());
     let result = measure(sched, base, ms, force, cancel).await;
     sched.hub().speed_progress(JobEvent::SpeedTestEnded {
         saved: result.as_ref().is_ok_and(|r| r.saved),
@@ -180,20 +194,34 @@ pub async fn run(sched: &Scheduler, base: &str, ms: u64, force: bool, cancel: &A
     result
 }
 
+struct Testing<'a>(&'a AtomicBool);
+
+impl Drop for Testing<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
 async fn measure(sched: &Scheduler, base: &str, ms: u64, force: bool, cancel: &AtomicBool) -> Result<SpeedTestResult, EngineError> {
     let network = sched.network();
-    if network == NetworkKind::Expensive && !force {
-        return Err(EngineError::Io {
-            msg: "You're on a hotspot or metered connection. A test uses about 50 to 200 MB.".into(),
-        });
+    if !force {
+        let msg = match network {
+            NetworkKind::Expensive => "You're on a hotspot or metered connection. A test uses about 50 to 200 MB.",
+            NetworkKind::Unknown => "Rays can't tell what network this is yet. Try again in a moment.",
+            _ => "",
+        };
+        if !msg.is_empty() {
+            return Err(EngineError::Io { msg: msg.into() });
+        }
     }
     let busy = sched.any_running();
     let (client, base, total) = (sched.client(), base.trim_end_matches('/'), Duration::from_millis(ms));
     progress(sched.hub(), SpeedTestPhase::Latency, 0, Duration::ZERO, total);
-    let latency_ms = latency_ms(client, base, cancel).await?;
+    let latency_ms = latency_ms(client, base, sched.hub(), total, cancel).await?;
     let bps = throughput(client, base, total, sched.hub(), cancel).await?;
     let at = sched.now_secs();
-    let saved = !busy && !sched.any_running();
+    // A metered or unknown link never feeds the history, even when the user forced the test.
+    let saved = matches!(network, NetworkKind::Wifi | NetworkKind::Wired | NetworkKind::Other) && !busy && !sched.any_running();
     if saved {
         sched.store().add_sample(&SpeedSample { at, bps, source: SampleSource::Test, network })?;
         sched.store().set_setting(LATENCY_KEY, Some(&latency_ms.to_string()))?;
@@ -203,7 +231,7 @@ async fn measure(sched: &Scheduler, base: &str, ms: u64, force: bool, cancel: &A
 
 pub fn last(sched: &Scheduler) -> Option<SpeedTestResult> {
     let store = sched.store();
-    let sample = store.samples_since(0).ok()?.into_iter().rev().find(|s| s.source == SampleSource::Test)?;
+    let sample = store.last_test().ok()??;
     let latency_ms = store.setting(LATENCY_KEY).ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0);
     Some(SpeedTestResult { bps: sample.bps, latency_ms, at: sample.at, saved: true })
 }
