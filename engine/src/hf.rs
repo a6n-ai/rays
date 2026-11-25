@@ -111,7 +111,9 @@ pub fn file_url(base: &str, repo: &str, sha: &str, path: &str) -> Option<String>
 /// The parent folder and file name for a repo path under `dest_dir`. None for an absolute path, any `..`, or no name.
 pub fn hf_target(dest_dir: &Path, path: &str) -> Option<(PathBuf, String)> {
     let p = Path::new(path);
-    if p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir)) {
+    // Path would silently drop a trailing or doubled `/` and a `.`, so the target and the URL could disagree.
+    let unclean = path.ends_with('/') || path.split('/').any(|s| s.is_empty() || s == ".");
+    if unclean || p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir)) {
         return None;
     }
     let name = p.file_name()?.to_str()?.to_owned();
@@ -529,6 +531,15 @@ mod tests {
         let mut got = hf_recommended(files);
         got.sort();
         assert_eq!(got, vec!["consolidated.safetensors", "model.safetensors"]);
+    }
+
+    #[test]
+    fn target_rejects_unclean_paths() {
+        let dir = Path::new("/d");
+        for bad in ["a/", "a//b", "a/./b", "./a", "/a"] {
+            assert_eq!(hf_target(dir, bad), None, "{bad:?}");
+        }
+        assert_eq!(hf_target(dir, "a/b.bin"), Some((PathBuf::from("/d/a"), "b.bin".into())));
     }
 
     #[test]
