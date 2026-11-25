@@ -5,12 +5,17 @@ use dl_engine::types::JobState;
 use dl_engine::{Engine, EngineConfig};
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-async fn server(blocked: Arc<AtomicBool>) -> String {
+const NORMAL: u8 = 0;
+const BLOCKED: u8 = 1;
+const STALL: u8 = 2;
+const TINY: u8 = 3;
+
+async fn server(blocked: Arc<AtomicU8>) -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
@@ -31,10 +36,10 @@ async fn read_head(sock: &mut TcpStream) -> Option<String> {
     Some(String::from_utf8_lossy(&buf).into_owned())
 }
 
-async fn serve(mut sock: TcpStream, blocked: Arc<AtomicBool>) {
+async fn serve(mut sock: TcpStream, blocked: Arc<AtomicU8>) {
     let Some(head) = read_head(&mut sock).await else { return };
     let path = head.split_whitespace().nth(1).unwrap_or("/").to_owned();
-    if path.starts_with("/__down") && blocked.load(Ordering::Relaxed) {
+    if path.starts_with("/__down") && blocked.load(Ordering::Relaxed) == BLOCKED {
         let html = "<html>blocked</html>";
         let reply = format!(
             "HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}",
@@ -44,14 +49,22 @@ async fn serve(mut sock: TcpStream, blocked: Arc<AtomicBool>) {
         return;
     }
     let slow = path.starts_with("/slow");
-    let len: usize = if slow { 20 << 20 } else { path.split("bytes=").nth(1).and_then(|s| s.parse().ok()).unwrap_or(0) };
+    let asked: usize = path.split("bytes=").nth(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let mode = blocked.load(Ordering::Relaxed);
+    let len: usize = if slow { 20 << 20 } else if mode == TINY { 100 << 10 } else { asked };
     let head = format!("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {len}\r\nConnection: close\r\n\r\n");
     if sock.write_all(head.as_bytes()).await.is_err() {
         return;
     }
     let chunk = vec![0u8; 8 * 1024];
     let mut left = len;
+    let mut sent = 0;
     while left > 0 {
+        if mode == STALL && asked > 0 && sent >= 2 << 20 {
+            tokio::time::sleep(Duration::from_secs(120)).await;
+            return;
+        }
+        sent += chunk.len().min(left);
         let n = left.min(chunk.len());
         if sock.write_all(&chunk[..n]).await.is_err() {
             return;
@@ -79,8 +92,8 @@ fn engine(root: &Path) -> Arc<Engine> {
 }
 
 /// The engine owns a runtime, so it must be created and dropped outside the test's own.
-fn rig(rt: &tokio::runtime::Runtime, network: NetworkKind) -> (tempfile::TempDir, Arc<Engine>, Arc<AtomicBool>, String) {
-    let blocked = Arc::new(AtomicBool::new(false));
+fn rig(rt: &tokio::runtime::Runtime, network: NetworkKind) -> (tempfile::TempDir, Arc<Engine>, Arc<AtomicU8>, String) {
+    let blocked = Arc::new(AtomicU8::new(NORMAL));
     let base = rt.block_on(server(Arc::clone(&blocked)));
     let dir = tempfile::tempdir().unwrap();
     let e = engine(dir.path());
@@ -119,7 +132,7 @@ fn speed_test_refuses_expensive() {
 fn speed_test_proxy_error_saves_nothing() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let (dir, e, blocked, _) = rig(&rt, NetworkKind::Wifi);
-    blocked.store(true, Ordering::Relaxed);
+    blocked.store(BLOCKED, Ordering::Relaxed);
     let err = rt.block_on(e.run_speed_test(false)).unwrap_err();
     assert!(err.to_string().contains("Couldn't reach the speed test server"), "{err}");
     assert!(stored(dir.path()).is_empty());
@@ -138,5 +151,27 @@ fn speed_test_during_download_not_saved() {
     }
     let r = rt.block_on(e.run_speed_test(false)).unwrap();
     assert!(r.bps > 0 && !r.saved);
+    assert!(stored(dir.path()).is_empty());
+}
+
+#[test]
+fn speed_test_stalled_connection_finishes_on_time() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (_dir, e, mode, _) = rig(&rt, NetworkKind::Wifi);
+    e.set_speed_test_duration(1500);
+    mode.store(STALL, Ordering::Relaxed);
+    let start = Instant::now();
+    let r = rt.block_on(e.run_speed_test(false));
+    assert!(r.is_ok(), "{r:?}");
+    assert!(start.elapsed() < Duration::from_secs(4), "{:?}", start.elapsed());
+}
+
+#[test]
+fn speed_test_tiny_body_errors() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (dir, e, mode, _) = rig(&rt, NetworkKind::Wifi);
+    mode.store(TINY, Ordering::Relaxed);
+    let err = rt.block_on(e.run_speed_test(false)).unwrap_err();
+    assert!(err.to_string().contains("Couldn't reach the speed test server"), "{err}");
     assert!(stored(dir.path()).is_empty());
 }

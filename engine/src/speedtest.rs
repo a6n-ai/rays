@@ -28,25 +28,38 @@ fn unreachable() -> EngineError {
 }
 
 /// Fetches `bytes` from the server and feeds each chunk length to `on_bytes` until `stop` is set.
+/// Returns false when `deadline` passed first; a stalled server must not outlast it.
 async fn fetch(
     client: &reqwest::Client,
     base: &str,
     bytes: u64,
     stop: &AtomicBool,
+    deadline: Instant,
     mut on_bytes: impl FnMut(u64),
-) -> Result<(), EngineError> {
-    let mut resp = client.get(format!("{base}/__down?bytes={bytes}")).send().await.map_err(|_| unreachable())?;
+) -> Result<bool, EngineError> {
+    let left = || deadline.saturating_duration_since(Instant::now());
+    let Ok(sent) = tokio::time::timeout(left(), client.get(format!("{base}/__down?bytes={bytes}")).send()).await else {
+        return Ok(false);
+    };
+    let mut resp = sent.map_err(|_| unreachable())?;
     let html = resp.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.contains("text/html"));
     if !resp.status().is_success() || html {
         return Err(unreachable());
     }
+    let mut got = 0;
     while !stop.load(Ordering::Relaxed) {
-        match resp.chunk().await.map_err(|_| unreachable())? {
-            Some(chunk) => on_bytes(chunk.len() as u64),
+        let Ok(next) = tokio::time::timeout(left(), resp.chunk()).await else { return Ok(false) };
+        match next.map_err(|_| unreachable())? {
+            Some(chunk) => {
+                got += chunk.len() as u64;
+                on_bytes(chunk.len() as u64);
+            }
+            // A server that ends the body early is not the speed test server.
+            None if got < bytes => return Err(unreachable()),
             None => break,
         }
     }
-    Ok(())
+    Ok(true)
 }
 
 async fn latency_ms(client: &reqwest::Client, base: &str) -> Result<u32, EngineError> {
@@ -54,7 +67,9 @@ async fn latency_ms(client: &reqwest::Client, base: &str) -> Result<u32, EngineE
     let mut times = Vec::new();
     for _ in 0..5 {
         let start = Instant::now();
-        fetch(client, base, 0, &never, |_| {}).await?;
+        if !fetch(client, base, 0, &never, start + Duration::from_secs(2), |_| {}).await? {
+            return Err(unreachable());
+        }
         times.push(start.elapsed().as_millis() as u32);
     }
     times.sort_unstable();
@@ -65,25 +80,38 @@ async fn latency_ms(client: &reqwest::Client, base: &str) -> Result<u32, EngineE
 async fn throughput(client: &reqwest::Client, base: &str, total: Duration) -> Result<u64, EngineError> {
     let bytes = Arc::new(AtomicU64::new(0));
     let stop = Arc::new(AtomicBool::new(false));
+    let deadline = Instant::now() + total;
     let tasks: Vec<_> = (0..CONNECTIONS)
         .map(|_| {
             let (client, base, bytes, stop) = (client.clone(), base.to_owned(), Arc::clone(&bytes), Arc::clone(&stop));
             tokio::spawn(async move {
                 let mut size = START_BYTES;
-                while !stop.load(Ordering::Relaxed) {
-                    fetch(&client, &base, size, &stop, |n| {
+                while !stop.load(Ordering::Relaxed) && Instant::now() < deadline {
+                    let done = fetch(&client, &base, size, &stop, deadline, |n| {
                         bytes.fetch_add(n, Ordering::Relaxed);
                     })
-                    .await?;
+                    .await;
+                    if done.is_err() {
+                        stop.store(true, Ordering::Relaxed);
+                    }
+                    done?;
                     size = (size * 2).min(MAX_BYTES);
                 }
                 Ok::<(), EngineError>(())
             })
         })
         .collect();
-    tokio::time::sleep(total / 10).await;
+    let wait = |until: Instant| {
+        let stop = Arc::clone(&stop);
+        async move {
+            while Instant::now() < until && !stop.load(Ordering::Relaxed) {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        }
+    };
+    wait(Instant::now() + total / 10).await;
     let (from_bytes, from) = (bytes.load(Ordering::Relaxed), Instant::now());
-    tokio::time::sleep(total - total / 10).await;
+    wait(deadline).await;
     let (to_bytes, secs) = (bytes.load(Ordering::Relaxed), from.elapsed().as_secs_f64());
     stop.store(true, Ordering::Relaxed);
     for task in tasks {
