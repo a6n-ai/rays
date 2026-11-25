@@ -116,11 +116,20 @@ fn main() -> ExitCode {
     }
 
     if args.iter().any(|a| a == "--json") && args[0] == "queues" {
-        println!("{}", serde_json::to_string_pretty(&reply.queues).unwrap_or_default());
+        let rows: Vec<Value> = reply
+            .queues
+            .iter()
+            .map(|q| {
+                let mut row = serde_json::to_value(q).unwrap_or_default();
+                row["next_run_local"] = q.next_run.and_then(local_time).map_or(Value::Null, Value::from);
+                row
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&rows).unwrap_or_default());
         return ExitCode::SUCCESS;
     }
     for q in &reply.queues {
-        let next = q.next_run.map_or(String::new(), |t| format!("\tnext {t}"));
+        let next = q.next_run.map_or(String::new(), |t| local_time(t).map_or(String::new(), |t| format!("\tnext {t}")));
         println!("{}\t{}\t{}\t{} queued, {} running{next}", q.id, q.name, q.state, q.queued, q.running);
     }
     for v in &reply.verified {
@@ -142,6 +151,12 @@ fn main() -> ExitCode {
     }
     let unverified = reply.verified.iter().any(|v| !matches!(v.status.as_str(), "ok" | "size-checked"));
     if reply.rejected.is_empty() && !unverified { ExitCode::SUCCESS } else { ExitCode::from(1) }
+}
+
+/// Unix seconds as local time, like `Wed 26 Nov 02:00`.
+fn local_time(secs: i64) -> Option<String> {
+    let at = jiff::Timestamp::from_second(secs).ok()?.to_zoned(jiff::tz::TimeZone::system());
+    Some(at.strftime("%a %d %b %H:%M").to_string())
 }
 
 /// `add`, `queues`, `queue start|stop|run` and `verify`; `args[0]` is the command.
@@ -322,6 +337,12 @@ mod tests {
         assert_eq!(queue_command(&args(&["add", "https://a/x"])).unwrap(), Request::Add { urls: vec!["https://a/x".into()], queue: None });
         assert!(queue_command(&args(&["add", "--queue"])).is_err());
         assert!(queue_command(&args(&["add", "--queue", "Night"])).is_err());
+    }
+
+    #[test]
+    fn local_time_formats_weekday_day_month_time() {
+        let t = local_time(1_795_638_600).unwrap();
+        assert!(t.len() == 16 && t.as_bytes()[3] == b' ' && t.as_bytes()[13] == b':', "{t}");
     }
 
     #[test]

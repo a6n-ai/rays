@@ -153,20 +153,31 @@ fn queue_op(sched: &Arc<Scheduler>, queue: &QueueRef, op: fn(&Arc<Scheduler>, u6
 }
 
 fn find_queue(sched: &Scheduler, queue: &QueueRef) -> Result<u64, String> {
-    let queues = sched.queues();
-    let ids: Vec<u64> = match queue {
-        QueueRef::Id(id) => queues.iter().filter_map(|q| q.config.id).filter(|i| i == id).collect(),
-        QueueRef::Name(name) => queues.iter().filter(|q| q.config.name.eq_ignore_ascii_case(name)).filter_map(|q| q.config.id).collect(),
+    let queues: Vec<(u64, String)> = sched.queues().into_iter().filter_map(|q| Some((q.config.id?, q.config.name))).collect();
+    resolve_queue(&queues, queue)
+}
+
+/// An id; else a name matched case-insensitively exactly, then `main` for the Main queue (id 1), then as a unique prefix.
+fn resolve_queue(queues: &[(u64, String)], queue: &QueueRef) -> Result<u64, String> {
+    let name = match queue {
+        QueueRef::Id(id) => return queues.iter().find(|(i, _)| i == id).map(|(i, _)| *i).ok_or_else(|| format!("no queue \"{id}\"")),
+        QueueRef::Name(name) => name,
     };
-    let label = match queue {
-        QueueRef::Id(id) => id.to_string(),
-        QueueRef::Name(name) => name.clone(),
+    let lower = name.to_lowercase();
+    let pick = |hits: Vec<u64>, how: &str| match hits.as_slice() {
+        [] => Ok(None),
+        [id] => Ok(Some(*id)),
+        _ => Err(format!("several queues {how} \"{name}\"; use the id")),
     };
-    match ids.as_slice() {
-        [id] => Ok(*id),
-        [] => Err(format!("no queue \"{label}\"")),
-        _ => Err(format!("several queues are named \"{label}\"; use the id")),
+    let exact = queues.iter().filter(|(_, n)| n.to_lowercase() == lower).map(|(i, _)| *i).collect();
+    if let Some(id) = pick(exact, "are named")? {
+        return Ok(id);
     }
+    if lower == "main" && queues.iter().any(|(i, _)| *i == 1) {
+        return Ok(1);
+    }
+    let prefix = queues.iter().filter(|(_, n)| n.to_lowercase().starts_with(&lower)).map(|(i, _)| *i).collect();
+    pick(prefix, "start with")?.ok_or_else(|| format!("no queue \"{name}\""))
 }
 
 fn queue_line(q: QueueView) -> Option<QueueLine> {
@@ -243,6 +254,20 @@ mod tests {
         let dir = tempfile::Builder::new().tempdir_in("/tmp").unwrap();
         let path = dir.path().join("dl.sock");
         (dir, path)
+    }
+
+    #[test]
+    fn queue_names_resolve_exact_then_main_then_prefix() {
+        let qs: Vec<(u64, String)> = [(1, "Main queue"), (2, "Night Shift"), (3, "Night"), (4, "Nightly")].iter().map(|(i, n)| (*i, n.to_string())).collect();
+        let by = |n: &str| resolve_queue(&qs, &QueueRef::Name(n.into()));
+        assert_eq!(by("MAIN"), Ok(1));
+        assert_eq!(by("main queue"), Ok(1));
+        assert_eq!(by("night"), Ok(3), "exact beats prefix");
+        assert_eq!(by("night s"), Ok(2));
+        assert!(by("nigh").unwrap_err().contains("use the id"));
+        assert!(by("zzz").unwrap_err().contains("no queue"));
+        assert_eq!(resolve_queue(&qs, &QueueRef::Id(4)), Ok(4));
+        assert!(resolve_queue(&qs, &QueueRef::Id(9)).is_err());
     }
 
     #[tokio::test]
