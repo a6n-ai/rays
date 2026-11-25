@@ -14,6 +14,9 @@ final class EngineModel {
     private(set) var buckets: [BucketConfig] = []
     private(set) var hasHFToken = false
     private(set) var queues: [QueueView] = []
+    /// Queue runs, newest first, at most `runLimit`.
+    private(set) var runs: [QueueRun] = []
+    static let runLimit = 200
     var onQueueFinished: ((UInt64) -> Void)?
     @ObservationIgnored private var engine: Engine?
     @ObservationIgnored private var conditions: ConditionsMonitor?
@@ -78,6 +81,7 @@ final class EngineModel {
             jobs.forEach(track)
             buckets = engine.buckets()
             queues = engine.queues()
+            runs = engine.queueRuns(limit: UInt32(Self.runLimit))
             queues.forEach(syncWake)
             conditions = ConditionsMonitor { wifi, onPower, idle in
                 engine.setConditions(wifi: wifi, onPower: onPower, idle: idle)
@@ -95,6 +99,7 @@ final class EngineModel {
         engine = nil
         jobs = []
         queues = []
+        runs = []
         startError = nil
         generation += 1
         start()
@@ -419,8 +424,13 @@ final class EngineModel {
             syncWake(queue)
         case .queueFinished(let id):
             onQueueFinished?(id)
-        case .runChanged:
-            break
+        case .runChanged(let run):
+            if let index = runs.firstIndex(where: { $0.id == run.id }) {
+                runs[index] = run
+            } else {
+                runs.insert(run, at: 0)
+                if runs.count > Self.runLimit { runs.removeLast() }
+            }
         }
     }
 }
@@ -434,6 +444,9 @@ enum SettingsKey {
     static let sorterPath = "sorterPath"
     static let menuBar = "showsMenuBar"
     static let clipboard = "offersCopiedLinks"
+    static let queueDefaultMaxRunning = "queueDefaultMaxRunning"
+    static let queueDefaultSpeed = "queueDefaultSpeed"
+    static let queueDefaultFinish = "queueDefaultFinish"
 }
 
 struct SpeedPreset: Identifiable {

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The top of a queue's page, above every tab: an editable name, totals, the state when not open, and the enabled switch.
+/// The top of a queue's page, above its sections: an editable name, totals, the state when not open, and the enabled switch.
 struct QueueHeader: View {
     let queue: QueueView
     let items: Int
@@ -8,21 +8,6 @@ struct QueueHeader: View {
     let showsRunNow: Bool
     let isDirty: Bool
     @Environment(EngineModel.self) private var model
-
-    private var pill: (symbol: String, text: String, tint: Color)? {
-        switch queue.state {
-        case .open:
-            nil
-        case .waitingForTime(let next):
-            ("clock", "Starts " + Date(timeIntervalSince1970: TimeInterval(next)).formatted(Date.FormatStyle().hour().minute()), .orange)
-        case .waitingForCondition(let missing):
-            (Self.conditionSymbol(missing), "Waiting for " + missing.joined(separator: ", "), .yellow)
-        case .stopped:
-            ("pause.circle", "Stopped", .secondary)
-        case .off:
-            ("minus.circle", "Off", Color(nsColor: .tertiaryLabelColor))
-        }
-    }
 
     var body: some View {
         HStack(alignment: .top, spacing: LayoutMetrics.gap) {
@@ -34,14 +19,7 @@ struct QueueHeader: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                if let pill {
-                    Label(pill.text, systemImage: pill.symbol)
-                        .font(.callout)
-                        .foregroundStyle(pill.tint)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(pill.tint.opacity(0.15), in: Capsule())
-                }
+                if queue.state != .open, let badge = queue.badge { QueueBadgePill(badge: badge) }
             }
             Spacer()
             if showsRunNow {
@@ -51,7 +29,14 @@ struct QueueHeader: View {
                     .disabled(isDirty)
                     .help(isDirty ? "Save your changes first" : "Run this queue now")
             }
-            Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: setEnabled))
+            Button {
+                if queue.isStopped { model.startQueue(queue.id) } else { model.stopQueue(queue.id) }
+            } label: {
+                Label(queue.isStopped ? "Start queue" : "Stop queue", systemImage: queue.isStopped ? "play.circle" : "stop.circle")
+            }
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .help("Enabled")
@@ -59,19 +44,18 @@ struct QueueHeader: View {
         .padding(.horizontal, LayoutMetrics.margin)
         .padding(.vertical, 10)
     }
+}
 
-    /// Saves at once against the saved config, so name edits still waiting in the draft are not saved with it. A failure leaves the switch where it was.
-    private func setEnabled(_ on: Bool) {
-        var config = queue.config
-        config.enabled = on
-        do { _ = try model.saveQueue(config) } catch { model.queueFailed("change the queue", error) }
-    }
+/// A queue's state as a capsule tinted with its semantic colour.
+struct QueueBadgePill: View {
+    let badge: QueueBadge
 
-    private static func conditionSymbol(_ missing: [String]) -> String {
-        switch missing.first {
-        case "charger"?: "bolt"
-        case "idle"?: "moon"
-        default: "wifi"
-        }
+    var body: some View {
+        Label(badge.text, systemImage: badge.symbol)
+            .font(.callout)
+            .foregroundStyle(badge.tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(badge.tint.opacity(0.15), in: Capsule())
     }
 }

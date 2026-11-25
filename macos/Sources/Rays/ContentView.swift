@@ -9,7 +9,6 @@ struct ContentView: View {
     @AppStorage("lastFolder") private var lastFolder = ""
     @State private var isDropTargeted = false
     @State private var drafts = QueueDrafts()
-    @AppStorage("queueSection") private var queueSection = QueueSection.downloads
     /// Links taken from the current drag. A browser drop can carry both a URL and a String for the same link.
     @State private var droppedLinks = Set<String>()
     @State private var query = ""
@@ -18,8 +17,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(selection: $destination, onNewQueue: newQueue, onSchedule: { openSchedule($0) },
-                        isDirty: { drafts.isDirty($0) }, onDeleted: { drafts.items[$0] = nil })
+            SidebarView(selection: $destination)
                 // On the sidebar column (not the split view) so the field doesn't take toolbar space.
                 .searchable(text: $query, placement: .sidebar, prompt: "Search")
                 .onAppear {
@@ -28,6 +26,8 @@ struct ContentView: View {
                         destination = .sorter
                     } else if path == "cloud" {
                         destination = .cloud
+                    } else if path == "queues" {
+                        destination = .queues
                     } else if path == "models" {
                         destination = .models
                     } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
@@ -40,6 +40,7 @@ struct ContentView: View {
                     case .sorter?: lastFolder = "sorter"
                     case .cloud?: lastFolder = "cloud"
                     case .models?: lastFolder = "models"
+                    case .queues?: lastFolder = "queues"
                     default: lastFolder = ""
                     }
                 }
@@ -89,8 +90,8 @@ struct ContentView: View {
                     CloudView()
                 case .models?:
                     ModelsView()
-                case .queue(let id)?:
-                    QueuePage(queueId: id, isDropTargeted: isDropTargeted, drafts: drafts, onDeleted: { destination = .downloads })
+                case .queues?:
+                    QueuesPage(isDropTargeted: isDropTargeted, drafts: drafts)
                 default:
                     DownloadsView(isDropTargeted: isDropTargeted)
                 }
@@ -99,15 +100,6 @@ struct ContentView: View {
             .transition(.opacity)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: destination)
         }
-    }
-
-    private func openSchedule(_ id: UInt64) {
-        queueSection = .schedule
-        destination = .queue(id)
-    }
-
-    private func newQueue() {
-        if let id = model.newQueue() { openSchedule(id) }
     }
 
     private func setTargeted(_ targeted: Bool) {

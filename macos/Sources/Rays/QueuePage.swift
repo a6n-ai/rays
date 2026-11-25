@@ -26,9 +26,13 @@ import SwiftUI
     }
 }
 
-enum QueueSection: String { case downloads, schedule, options }
+enum QueueSection: String, CaseIterable {
+    case downloads, schedule, options
+    var title: String { rawValue.capitalized }
+}
 
-/// One queue's page: header, then Downloads, Schedule or Options, with a floating save bar while the draft is unsaved.
+/// One queue's detail, pushed from the Queues list: the header, a segmented Picker, then Downloads, Schedule or Options,
+/// with a floating save bar while the draft is unsaved. The toolbar belongs to QueuesPage.
 struct QueuePage: View {
     let queueId: UInt64
     let isDropTargeted: Bool
@@ -48,6 +52,14 @@ struct QueuePage: View {
             VStack(spacing: 0) {
                 QueueHeader(queue: queue, items: model.jobs.filter { $0.queueId == queueId }.count, draft: draft,
                             showsRunNow: section == .downloads, isDirty: dirty)
+                Picker("Section", selection: $section) {
+                    ForEach(QueueSection.allCases, id: \.self) { Text($0.title) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 320)
+                .padding(.horizontal, LayoutMetrics.margin)
+                .padding(.bottom, 10)
                 switch section {
                 case .downloads:
                     DownloadsView(isDropTargeted: isDropTargeted, queue: queueId)
@@ -60,7 +72,7 @@ struct QueuePage: View {
             .safeAreaInset(edge: .bottom) {
                 if dirty || problem != nil { saveBar(queue, problem: problem) }
             }
-            .toolbar { toolbar(queue) }
+            .navigationTitle(queue.config.name)
         } else {
             EmptyState(symbol: "clock", title: "This queue no longer exists")
         }
@@ -118,37 +130,5 @@ struct QueuePage: View {
         } catch {
             model.queueFailed("delete the queue", error)
         }
-    }
-
-    @ToolbarContentBuilder private func toolbar(_ queue: QueueView) -> some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            ToolbarIconGroup {
-                ForEach([(QueueSection.downloads, "list.bullet", "Downloads"),
-                         (QueueSection.schedule, "calendar.badge.clock", "Schedule"),
-                         (QueueSection.options, "slider.horizontal.3", "Options")], id: \.0) { item in
-                    Button { section = item.0 } label: {
-                        ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
-                    }
-                    .buttonStyle(.plain)
-                    .help(item.2)
-                    .accessibilityAddTraits(section == item.0 ? .isSelected : [])
-                }
-            }
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) {
-            ToolbarIconGroup {
-                Button {
-                    if queue.isStopped { model.startQueue(queue.id) } else { model.stopQueue(queue.id) }
-                } label: {
-                    ToolbarIcon(symbol: queue.isStopped ? "play.circle" : "stop.circle",
-                                title: queue.isStopped ? "Start queue" : "Stop queue")
-                }
-                .buttonStyle(.plain)
-                .help(queue.isStopped ? "Start queue" : "Stop queue")
-            }
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
     }
 }

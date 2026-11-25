@@ -6,7 +6,7 @@ enum Destination: Hashable {
     case models
     case folder(URL)
     case cloud
-    case queue(UInt64)
+    case queues
 }
 
 struct SidebarFolder: Identifiable {
@@ -41,12 +41,7 @@ enum FolderListing {
 struct SidebarView: View {
     @Environment(EngineModel.self) private var model
     @Binding var selection: Destination?
-    let onNewQueue: () -> Void
-    let onSchedule: (UInt64) -> Void
-    let isDirty: (UInt64) -> Bool
-    let onDeleted: (UInt64) -> Void
     @State private var folders: [SidebarFolder] = []
-    @State private var deleting: QueueView?
     @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = false
     @State private var denied = false
     @State private var activations = 0
@@ -62,26 +57,14 @@ struct SidebarView: View {
                 Label("Models", systemImage: "cube")
                     .padding(.leading, 18)
                     .tag(Destination.models)
+                Label("Queues", systemImage: "list.bullet.rectangle")
+                    .tag(Destination.queues)
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
                 Label("Cloud", systemImage: "cloud")
                     .tag(Destination.cloud)
             } header: {
                 Text("Rays")
-            }
-            Section {
-                ForEach(model.sortedQueues) { queue in
-                    queueRow(queue)
-                }
-            } header: {
-                HStack {
-                    Text("Queues")
-                    Spacer()
-                    Button(action: onNewQueue) { Image(systemName: "plus") }
-                        .buttonStyle(.plain)
-                        .help("New queue")
-                        .accessibilityLabel("New queue")
-                }
             }
             Section("Folders", isExpanded: $foldersExpanded) {
                 if denied {
@@ -105,27 +88,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .confirmationDialog(
-            "Delete \(deleting?.config.name ?? "queue")?",
-            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                if let id = deleting?.id {
-                    do {
-                        try model.deleteQueue(id)
-                        onDeleted(id)
-                        if selection == .queue(id) { selection = .downloads }
-                    } catch {
-                        model.queueFailed("delete the queue", error)
-                    }
-                }
-                deleting = nil
-            }
-            Button("Cancel", role: .cancel) { deleting = nil }
-        } message: {
-            Text("Its downloads move to Main.")
-        }
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .task(id: "\(EngineModel.downloadsURL.path(percentEncoded: false))|\(model.jobs.filter(\.isDone).count)|\(model.folderRevision)|\(activations)") {
@@ -144,58 +106,6 @@ struct SidebarView: View {
     }
 }
 
-
-extension SidebarView {
-    private func queueRow(_ queue: QueueView) -> some View {
-        Label {
-            HStack {
-                Text(queue.config.name)
-                Spacer()
-                if isDirty(queue.id) {
-                    Circle().fill(.secondary).frame(width: 6, height: 6).accessibilityLabel("Unsaved changes")
-                }
-                queueBadge(queue)
-            }
-        } icon: {
-            Image(systemName: queue.config.schedule == nil ? "list.bullet" : "clock")
-        }
-        .tag(Destination.queue(queue.id))
-        .contextMenu {
-            Button("Schedule…") { onSchedule(queue.id) }
-            if queue.isStopped {
-                Button("Start queue") { model.startQueue(queue.id) }
-            } else {
-                Button("Stop queue") { model.stopQueue(queue.id) }
-            }
-            Button("Run now") { model.runQueueNow(queue.id) }
-                .disabled(isDirty(queue.id))
-            // Main (id 1) holds the jobs that other queues hand back, so it cannot go.
-            if queue.id != 1 {
-                Divider()
-                Button("Delete queue…", role: .destructive) { deleting = queue }
-            }
-        }
-    }
-
-    @ViewBuilder private func queueBadge(_ queue: QueueView) -> some View {
-        if queue.running > 0 {
-            HStack(spacing: 4) {
-                Circle().fill(.blue).frame(width: 7, height: 7)
-                Text("\(queue.running)")
-            }
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-            .accessibilityLabel("\(queue.running) downloading")
-        } else if case .waitingForTime(let next) = queue.state {
-            Text(Date(timeIntervalSince1970: TimeInterval(next)).formatted(Date.FormatStyle().hour().minute()))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        } else if queue.state == .stopped {
-            Image(systemName: "pause.circle")
-                .foregroundStyle(.tertiary)
-        }
-    }
-}
 
 /// A sidebar folder that can expand to show its own subfolders, read only when first opened.
 private struct FolderNode: View {

@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum FinishKind: CaseIterable {
+enum FinishKind: String, CaseIterable {
     case nothing, sound, quit, sleep, lock, shutDown, command
 
     var title: String {
