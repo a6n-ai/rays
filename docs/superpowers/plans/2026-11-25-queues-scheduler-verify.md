@@ -6,7 +6,7 @@
 
 **Architecture:** The Rust engine owns queues: a SQLite table, per-queue concurrency and rate limits, a schedule evaluator, and queue events. The Swift app reports conditions and performs OS actions: wake, sleep, shut down, lock, sound, quit, run command. Verification uses a `.rays-model.json` manifest that the engine writes in `add_hf`, and an engine `verify_files` call.
 
-**Tech Stack:** Rust (tokio, rusqlite, UniFFI, sha2, new `chrono` with `clock` for local-time windows), SwiftUI on macOS 26 (Network.framework `NWPathMonitor`, IOKit power sources, CGEventSource idle, AppleScript for admin and shut down).
+**Tech Stack:** Rust (tokio, rusqlite, UniFFI, sha2, `jiff` 1.x (already in Cargo.lock) for local-time windows), SwiftUI on macOS 26 (Network.framework `NWPathMonitor`, IOKit power sources, CGEventSource idle, AppleScript for admin and shut down).
 
 **Spec:** `docs/superpowers/specs/2026-11-25-queues-scheduler-verify-design.md`. Read its **Design** and **Answers to the builder check** sections; they are binding.
 
@@ -52,7 +52,7 @@
 
 **Files:**
 - Modify:
-  - `engine/Cargo.toml`: add `chrono = { version = "0.4", default-features = false, features = ["clock"], optional = true }` under `full`
+  - `engine/Cargo.toml`: add `jiff = { version = "1", optional = true }` under `full` (`"dep:jiff"`)
   - `engine/src/types.rs`
   - `engine/src/store.rs`
 - Create: `engine/src/queue.rs` (types, and later schedule logic); declare it in `lib.rs` behind `full`
@@ -85,10 +85,10 @@
 **Files:** Modify `engine/src/queue.rs`. Unit tests go in the same file.
 
 **Interfaces (Produces):**
-- `pub fn window_open(s: &QueueSchedule, now: chrono::NaiveDateTime) -> bool`
-- `pub fn next_start(s: &QueueSchedule, now: chrono::NaiveDateTime) -> Option<chrono::NaiveDateTime>`: the next window opening strictly after `now`. It is `None` for `Once` in the past.
-- `pub fn window_end(s: &QueueSchedule, opened: chrono::NaiveDateTime) -> Option<chrono::NaiveDateTime>`
-- Callers convert to and from `chrono::Local` and unix seconds. When converting a `NaiveDateTime` that falls in a DST gap, use `Local.from_local_datetime(..).earliest()`, else `latest()`, else add one hour.
+- `pub fn window_open(s: &QueueSchedule, now: jiff::civil::DateTime) -> bool`
+- `pub fn next_start(s: &QueueSchedule, now: jiff::civil::DateTime) -> Option<jiff::civil::DateTime>`: the next window opening strictly after `now`. It is `None` for `Once` in the past.
+- `pub fn window_end(s: &QueueSchedule, opened: jiff::civil::DateTime) -> Option<jiff::civil::DateTime>`
+- Callers convert with `dt.to_zoned(jiff::tz::TimeZone::system())`, which uses compatible disambiguation, so a time in a DST gap moves forward and a repeated time takes the earlier instant. They use `Zoned::now().datetime()` for now, and `.timestamp().as_second()` for the unix seconds in `QueueView.next_run`.
 
 - [ ] **Step 1: Failing tests**
   - `daily_window`: 02:00–07:30 is open at 03:00, closed at 08:00, and closed at 01:59.
@@ -96,7 +96,7 @@
   - `cross_midnight_days`: Fri 22:00–06:00 is open Sat 03:00, closed Sat 22:00, and closed Thu 23:00.
   - `once_date`: `Once{"2026-12-01"}` 01:00–02:00 opens only on that date. `next_start` after it is `None`.
   - `next_start_days`: from Fri 08:00, a Mo–Fr 02:00 schedule's next start is Mon 02:00.
-  - `dst_gap_does_not_panic`: `next_start` across 2027-03-14 02:30 (US spring forward), converted with the documented helper, returns a valid instant.
+  - `dst_gap_does_not_panic`: `next_start` across 2027-03-14 02:30 (US spring forward), converted with `to_zoned(TimeZone::get("America/New_York"))`, returns 03:30 local.
 - [ ] **Step 2:** `cargo test -q -p dl-engine --lib queue::` fails.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** The tests pass.
@@ -149,7 +149,7 @@
   - `per_queue_speed_limit`: a queue limited to 200 KB/s takes at least about 0.9 s for 256 KB. Use generous bounds.
   - `ipc_add_with_queue`: the CLI request JSON with `"queue": 2` lands in queue 2. Old JSON without the field lands in 1.
   
-  Time-window behaviour is covered by Task 2. For an integration check, inject a clock: give `Scheduler` a `now: Arc<dyn Fn() -> NaiveDateTime + Send + Sync>`, with `chrono::Local::now().naive_local()` as the default and a test setter, and add a test `window_close_holds_running` that moves the clock past the stop time and ticks.
+  Time-window behaviour is covered by Task 2. For an integration check, inject a clock: give `Scheduler` a `now: Arc<dyn Fn() -> jiff::civil::DateTime + Send + Sync>`, with `jiff::Zoned::now().datetime()` as the default and a test setter, and add a test `window_close_holds_running` that moves the clock past the stop time and ticks.
 - [ ] **Step 2:** The tests fail.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:**
