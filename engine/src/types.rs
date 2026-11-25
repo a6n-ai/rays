@@ -108,6 +108,14 @@ pub enum JobEvent {
     QueueFinished { id: u64 },
     /// A queue run opened, closed, or (while running) has new counts; at most every 5 s while running.
     RunChanged { run: QueueRun },
+    /// The speed test is running; `bps` is 0 until warm-up ends. About every 250 ms while it downloads.
+    SpeedTestProgress { phase: SpeedTestPhase, bps: u64, elapsed_ms: u32, total_ms: u32 },
+}
+
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpeedTestPhase {
+    Latency,
+    Download,
 }
 
 #[derive(uniffi::Enum, Clone, Debug, PartialEq, Eq)]

@@ -1,5 +1,7 @@
 //! On-demand speed test: latency, then parallel downloads from a Cloudflare-style `/__down?bytes=N` endpoint.
 use crate::scheduler::Scheduler;
+use crate::events::EventHub;
+use crate::types::{JobEvent, SpeedTestPhase};
 use crate::speed::{NetworkKind, SampleSource, SpeedSample};
 use crate::types::EngineError;
 use std::sync::Arc;
@@ -64,10 +66,13 @@ async fn fetch(
     Ok(true)
 }
 
-async fn latency_ms(client: &reqwest::Client, base: &str) -> Result<u32, EngineError> {
+async fn latency_ms(client: &reqwest::Client, base: &str, cancel: &AtomicBool) -> Result<u32, EngineError> {
     let never = AtomicBool::new(false);
     let mut times = Vec::new();
     for _ in 0..5 {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(stopped());
+        }
         let start = Instant::now();
         if !fetch(client, base, 0, &never, start + Duration::from_secs(2), |_| {}).await? {
             return Err(unreachable());
@@ -78,11 +83,31 @@ async fn latency_ms(client: &reqwest::Client, base: &str) -> Result<u32, EngineE
     Ok(times[2])
 }
 
+fn stopped() -> EngineError {
+    EngineError::Io { msg: "Speed test stopped".into() }
+}
+
+fn progress(hub: &EventHub, phase: SpeedTestPhase, bps: u64, elapsed: Duration, total: Duration) {
+    hub.speed_progress(JobEvent::SpeedTestProgress {
+        phase,
+        bps,
+        elapsed_ms: elapsed.as_millis() as u32,
+        total_ms: total.as_millis() as u32,
+    });
+}
+
 /// Bytes per second over the run, skipping the first tenth (1 s of the default 10 s) for TCP slow start.
-async fn throughput(client: &reqwest::Client, base: &str, total: Duration) -> Result<u64, EngineError> {
+async fn throughput(
+    client: &reqwest::Client,
+    base: &str,
+    total: Duration,
+    hub: &EventHub,
+    cancel: &AtomicBool,
+) -> Result<u64, EngineError> {
     let bytes = Arc::new(AtomicU64::new(0));
     let stop = Arc::new(AtomicBool::new(false));
-    let deadline = Instant::now() + total;
+    let (started, skip) = (Instant::now(), total / 10);
+    let deadline = started + total;
     let tasks: Vec<_> = (0..CONNECTIONS)
         .map(|_| {
             let (client, base, bytes, stop) = (client.clone(), base.to_owned(), Arc::clone(&bytes), Arc::clone(&stop));
@@ -106,29 +131,46 @@ async fn throughput(client: &reqwest::Client, base: &str, total: Duration) -> Re
             })
         })
         .collect();
-    let wait = |until: Instant| {
-        let stop = Arc::clone(&stop);
-        async move {
-            while Instant::now() < until && !stop.load(Ordering::Relaxed) {
-                tokio::time::sleep(Duration::from_millis(20)).await;
-            }
-        }
+    let mut warm: Option<(u64, Instant)> = None;
+    let mut last_tick = started;
+    let rate = |warm: Option<(u64, Instant)>, now: Instant| match warm {
+        Some((b0, t0)) if now > t0 => (bytes.load(Ordering::Relaxed).saturating_sub(b0) as f64 / (now - t0).as_secs_f64()) as u64,
+        _ => 0,
     };
-    wait(Instant::now() + total / 10).await;
-    let (from_bytes, from) = (bytes.load(Ordering::Relaxed), Instant::now());
-    wait(deadline).await;
-    let (to_bytes, secs) = (bytes.load(Ordering::Relaxed), from.elapsed().as_secs_f64());
+    loop {
+        let now = Instant::now();
+        if cancel.load(Ordering::Relaxed) {
+            tasks.iter().for_each(|t| t.abort());
+            return Err(stopped());
+        }
+        if stop.load(Ordering::Relaxed) || now >= deadline {
+            break;
+        }
+        if warm.is_none() && now - started >= skip {
+            warm = Some((bytes.load(Ordering::Relaxed), now));
+        }
+        if now - last_tick >= Duration::from_millis(250) {
+            last_tick = now;
+            progress(hub, SpeedTestPhase::Download, rate(warm, now), now - started, total);
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let bps = rate(warm.or(Some((0, started))), Instant::now());
     stop.store(true, Ordering::Relaxed);
     for task in tasks {
         task.await.map_err(|_| unreachable())??;
     }
-    if to_bytes < START_BYTES {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(stopped());
+    }
+    if bytes.load(Ordering::Relaxed) < START_BYTES {
         return Err(unreachable());
     }
-    Ok((to_bytes.saturating_sub(from_bytes) as f64 / secs) as u64)
+    progress(hub, SpeedTestPhase::Download, bps, total, total);
+    Ok(bps)
 }
 
-pub async fn run(sched: &Scheduler, base: &str, ms: u64, force: bool) -> Result<SpeedTestResult, EngineError> {
+pub async fn run(sched: &Scheduler, base: &str, ms: u64, force: bool, cancel: &AtomicBool) -> Result<SpeedTestResult, EngineError> {
     let network = sched.network();
     if network == NetworkKind::Expensive && !force {
         return Err(EngineError::Io {
@@ -136,9 +178,10 @@ pub async fn run(sched: &Scheduler, base: &str, ms: u64, force: bool) -> Result<
         });
     }
     let busy = sched.any_running();
-    let (client, base) = (sched.client(), base.trim_end_matches('/'));
-    let latency_ms = latency_ms(client, base).await?;
-    let bps = throughput(client, base, Duration::from_millis(ms)).await?;
+    let (client, base, total) = (sched.client(), base.trim_end_matches('/'), Duration::from_millis(ms));
+    progress(sched.hub(), SpeedTestPhase::Latency, 0, Duration::ZERO, total);
+    let latency_ms = latency_ms(client, base, cancel).await?;
+    let bps = throughput(client, base, total, sched.hub(), cancel).await?;
     let at = sched.now_secs();
     let saved = !busy && !sched.any_running();
     if saved {
@@ -158,6 +201,6 @@ pub fn last(sched: &Scheduler) -> Option<SpeedTestResult> {
 /// One minute of the automatic tests: runs a test if this minute was planned, on Wi-Fi or wired, with no download running.
 pub async fn auto(sched: &Arc<Scheduler>, base: &str, ms: u64) {
     if sched.auto_test_due() && matches!(sched.network(), NetworkKind::Wifi | NetworkKind::Wired) && !sched.any_running() {
-        let _ = run(sched, base, ms, false).await;
+        let _ = run(sched, base, ms, false, &AtomicBool::new(false)).await;
     }
 }

@@ -1112,6 +1112,10 @@ impl Scheduler {
         clock()
     }
 
+    pub(crate) fn hub(&self) -> &EventHub {
+        &self.hub
+    }
+
     pub(crate) fn client(&self) -> &reqwest::Client {
         &self.client
     }

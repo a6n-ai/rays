@@ -5,7 +5,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use tokio::sync::Notify;
 use tokio::time::Instant;
 
-use crate::types::JobId;
+use crate::types::{JobEvent, JobId};
 
 pub const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
 
@@ -20,6 +20,8 @@ pub struct Changes {
     pub finished: Vec<u64>,
     /// Queue runs opened, closed or counted.
     pub runs: Vec<u64>,
+    /// The newest speed test progress.
+    pub speed: Option<JobEvent>,
 }
 
 #[derive(Default)]
@@ -29,6 +31,7 @@ struct State {
     queues: BTreeSet<u64>,
     finished: Vec<u64>,
     runs: BTreeSet<u64>,
+    speed: Option<JobEvent>,
     urgent: bool,
     last_delivery: Option<Instant>,
 }
@@ -104,12 +107,21 @@ impl EventHub {
         }
         self.notify.notify_one();
     }
+    /// A speed test update: only the newest is kept, delivered at once.
+    pub fn speed_progress(&self, event: JobEvent) {
+        {
+            let mut s = self.lock();
+            s.speed = Some(event);
+            s.urgent = true;
+        }
+        self.notify.notify_one();
+    }
     /// Waits until something is pending, then drains it. Ids are sorted and de-duplicated.
     pub async fn wait(&self) -> Changes {
         loop {
             let hold_until = {
                 let mut s = self.lock();
-                let pending = !s.changed.is_empty() || !s.removed.is_empty() || !s.queues.is_empty() || !s.finished.is_empty() || !s.runs.is_empty();
+                let pending = !s.changed.is_empty() || !s.removed.is_empty() || !s.queues.is_empty() || !s.finished.is_empty() || !s.runs.is_empty() || s.speed.is_some();
                 if !pending {
                     None
                 } else {
@@ -140,6 +152,7 @@ impl EventHub {
             queues: std::mem::take(&mut s.queues).into_iter().collect(),
             finished: std::mem::take(&mut s.finished),
             runs: std::mem::take(&mut s.runs).into_iter().collect(),
+            speed: s.speed.take(),
         }
     }
 }

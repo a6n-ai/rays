@@ -115,7 +115,7 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             }),
             ..Default::default()
         },
-        Ok(Request::SpeedTest { force }) => match speedtest::run(sched, speedtest::DEFAULT_BASE, speedtest::DEFAULT_MS, force).await {
+        Ok(Request::SpeedTest { force }) => match speedtest::run(sched, speedtest::DEFAULT_BASE, speedtest::DEFAULT_MS, force, &std::sync::atomic::AtomicBool::new(false)).await {
             Ok(result) => Response { ok: true, speed_test: Some(speed_test_line(result)), ..Default::default() },
             Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
         },

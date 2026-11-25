@@ -4,12 +4,13 @@ use crate::hf::{self, HfAdd, HfFile, HfManifest, HfModel, HfRepo, VerifyResult, 
 use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
-use crate::speed::{BestTime, NetworkKind, SpeedSettings};
+use crate::speed::{BestTime, NetworkKind, SpeedSample, SpeedSettings};
 use crate::speedtest::{self, SpeedTestResult};
 use crate::store::Store;
 use crate::queue::QueueConfig;
 use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView, QueueRun, QueueView};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[derive(uniffi::Object)]
@@ -20,6 +21,7 @@ pub struct Engine {
     socket_path: PathBuf,
     /// Speed test server and duration in ms; tests point these at a local server.
     speed_test: Arc<Mutex<(String, u64)>>,
+    cancel_test: Arc<AtomicBool>,
 }
 
 #[uniffi::export]
@@ -67,7 +69,7 @@ impl Engine {
                 speedtest::auto(&sched, &base, ms).await;
             }
         });
-        Ok(Arc::new(Engine { rt, sched, hub, socket_path, speed_test }))
+        Ok(Arc::new(Engine { rt, sched, hub, socket_path, speed_test, cancel_test: Arc::default() }))
     }
 
     pub fn add(&self, urls: Vec<String>) -> Vec<AddResult> {
@@ -120,7 +122,22 @@ impl Engine {
     pub async fn run_speed_test(&self, force: bool) -> Result<SpeedTestResult, EngineError> {
         let (base, ms) = self.speed_test.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let sched = Arc::clone(&self.sched);
-        self.rt.spawn(async move { speedtest::run(&sched, &base, ms, force).await }).await.map_err(join_error)?
+        let cancel = Arc::clone(&self.cancel_test);
+        cancel.store(false, Ordering::Relaxed);
+        self.rt.spawn(async move { speedtest::run(&sched, &base, ms, force, &cancel).await }).await.map_err(join_error)?
+    }
+
+    /// Stops a running speed test; it returns "Speed test stopped" and saves nothing.
+    pub fn cancel_speed_test(&self) {
+        self.cancel_test.store(true, Ordering::Relaxed);
+    }
+
+    /// Saved speed samples, newest first.
+    pub fn speed_history(&self, limit: u32) -> Vec<SpeedSample> {
+        let mut all = self.sched.store().samples_since(0).unwrap_or_default();
+        all.reverse();
+        all.truncate(limit as usize);
+        all
     }
 
     /// The newest saved test result.
@@ -250,6 +267,7 @@ impl Engine {
         events.extend(changes.queues.into_iter().filter_map(|id| self.sched.queue_view(id)).map(|queue| JobEvent::QueueChanged { queue }));
         events.extend(changes.finished.into_iter().map(|id| JobEvent::QueueFinished { id }));
         events.extend(changes.runs.into_iter().filter_map(|id| self.sched.run(id)).map(|run| JobEvent::RunChanged { run }));
+        events.extend(changes.speed);
         events
     }
 

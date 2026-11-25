@@ -456,3 +456,66 @@ fn speed_test_avoids_sizes_the_server_blocks() {
     let r = rt.block_on(e.run_speed_test(false));
     assert!(r.as_ref().is_ok_and(|r| r.saved), "{r:?}");
 }
+
+fn progress(events: Vec<dl_engine::JobEvent>) -> Vec<(dl_engine::SpeedTestPhase, u64, u32, u32)> {
+    events
+        .into_iter()
+        .filter_map(|ev| match ev {
+            dl_engine::JobEvent::SpeedTestProgress { phase, bps, elapsed_ms, total_ms } => Some((phase, bps, elapsed_ms, total_ms)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn speed_test_emits_progress() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (_dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+    e.set_speed_test_duration(1500);
+    let runner = Arc::clone(&e);
+    let task = rt.spawn(async move { runner.run_speed_test(false).await });
+    let mut seen = Vec::new();
+    while !task.is_finished() {
+        let batch = rt.block_on(async { tokio::time::timeout(Duration::from_millis(400), e.next_events()).await.unwrap_or_default() });
+        seen.extend(progress(batch));
+    }
+    rt.block_on(task).unwrap().unwrap();
+    seen.extend(progress(rt.block_on(async { tokio::time::timeout(Duration::from_millis(400), e.next_events()).await.unwrap_or_default() })));
+    assert_eq!(seen[0].0, dl_engine::SpeedTestPhase::Latency);
+    let downloads: Vec<_> = seen.iter().filter(|p| p.0 == dl_engine::SpeedTestPhase::Download).collect();
+    assert!(downloads.len() >= 3, "{seen:?}");
+    assert!(downloads.windows(2).all(|w| w[0].2 < w[1].2), "{seen:?}");
+    assert!(downloads.iter().all(|p| p.3 == 1500));
+    assert!(downloads.last().unwrap().1 > 0, "{seen:?}");
+}
+
+#[test]
+fn speed_history_newest_first_with_limit() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+    let store = Store::open(&dir.path().join("data")).unwrap();
+    for at in [200, 100, 300] {
+        let sample = dl_engine::speed::SpeedSample { at, bps: at as u64, source: SampleSource::Test, network: NetworkKind::Wifi };
+        store.add_sample(&sample).unwrap();
+    }
+    let all: Vec<i64> = e.speed_history(10).iter().map(|s| s.at).collect();
+    assert_eq!(all, vec![300, 200, 100]);
+    let two: Vec<i64> = e.speed_history(2).iter().map(|s| s.at).collect();
+    assert_eq!(two, vec![300, 200]);
+}
+
+#[test]
+fn speed_test_cancel_stops_fast_and_saves_nothing() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+    e.set_speed_test_duration(10_000);
+    let runner = Arc::clone(&e);
+    let task = rt.spawn(async move { runner.run_speed_test(false).await });
+    std::thread::sleep(Duration::from_millis(600));
+    let cancelled = Instant::now();
+    e.cancel_speed_test();
+    let err = rt.block_on(task).unwrap().unwrap_err();
+    assert!(cancelled.elapsed() < Duration::from_secs(1), "{:?}", cancelled.elapsed());
+    assert!(err.to_string().contains("Speed test stopped"), "{err}");
+    assert!(stored(dir.path()).is_empty());
+}

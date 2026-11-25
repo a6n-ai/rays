@@ -465,6 +465,8 @@ final class EngineModel {
                 runs.insert(run, at: 0)
                 if runs.count > Self.runLimit { runs.removeLast() }
             }
+        case .speedTestProgress:
+            break
         }
     }
 }
