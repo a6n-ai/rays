@@ -5,9 +5,11 @@ use crate::hf;
 use crate::limit::RateLimiter;
 use crate::names;
 use crate::cloud;
+use crate::queue::{self, QueueConfig, Repeat};
 use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
-use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, now_secs};
+use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, QueueState, QueueView, now_secs};
+use jiff::civil::DateTime;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -17,10 +19,98 @@ use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(2);
+/// How often queues re-check their windows.
+const QUEUE_TICK: Duration = Duration::from_secs(30);
 const SPEED_WINDOW: Duration = Duration::from_millis(500);
 
 /// More than this many connections to one server tends to get an IP throttled or blocked.
 pub const MAX_CONNECTIONS: u32 = 16;
+
+/// Local wall-clock time; tests replace it.
+pub type Clock = Arc<dyn Fn() -> DateTime + Send + Sync>;
+
+/// Wi-Fi, on power, idle: what the app last reported. All false until it reports.
+type Conditions = (bool, bool, bool);
+
+/// A queue's config and what the engine tracks about its current run, in memory.
+struct QueueRt {
+    config: QueueConfig,
+    /// Stop queue: persisted in the store.
+    held: bool,
+    /// The queue's own bucket, chained under the global one.
+    limiter: Arc<RateLimiter>,
+    /// Run now: the queue stays open until its run finishes.
+    run_now: bool,
+    /// A job started since the last finish; a run that started nothing never finishes.
+    started_any: bool,
+    /// The pure window was open at the last evaluation.
+    was_open: bool,
+    /// A window without a stop stays open until its run finishes, even past midnight.
+    latched: bool,
+    /// A window without a stop whose run finished stays closed until it opens again.
+    spent: bool,
+    /// Inside the run window (or run now) at the last evaluation, for Once to disable itself.
+    was_in_window: bool,
+    last_view: Option<QueueView>,
+}
+
+impl QueueRt {
+    /// A queue loaded or created at `now`: a window that is already open counts as opened before now, so
+    /// loading is not an opening (it neither lifts a hold nor retries failed jobs).
+    fn new(config: QueueConfig, held: bool, global: &Arc<RateLimiter>, now: DateTime) -> QueueRt {
+        let was_open = config.schedule.as_ref().is_some_and(|s| queue::window_open(s, now));
+        QueueRt {
+            limiter: Arc::new(RateLimiter::with_parent(config.speed_limit, Arc::clone(global))),
+            config,
+            held,
+            run_now: false,
+            started_any: false,
+            was_open,
+            latched: false,
+            spent: false,
+            was_in_window: was_open,
+            last_view: None,
+        }
+    }
+
+    fn in_window(&self, s: &queue::QueueSchedule, now: DateTime) -> bool {
+        (queue::window_open(s, now) && !self.spent) || self.latched
+    }
+
+    fn gate(&self, cond: Conditions, now: DateTime) -> QueueState {
+        if !self.config.enabled {
+            return QueueState::Off;
+        }
+        if self.run_now {
+            return QueueState::Open;
+        }
+        if self.held {
+            return QueueState::Stopped;
+        }
+        let Some(s) = &self.config.schedule else { return QueueState::Open };
+        if !self.in_window(s, now) {
+            return QueueState::WaitingForTime { next: queue::next_start(s, now).map_or(0, unix_secs) };
+        }
+        let missing: Vec<String> = [(s.wifi && !cond.0, "Wi-Fi"), (s.power && !cond.1, "charger"), (s.idle && !cond.2, "idle")]
+            .into_iter()
+            .filter(|(unmet, _)| *unmet)
+            .map(|(_, name)| name.to_owned())
+            .collect();
+        if missing.is_empty() { QueueState::Open } else { QueueState::WaitingForCondition { missing } }
+    }
+}
+
+fn unix_secs(dt: DateTime) -> i64 {
+    dt.to_zoned_datetime(jiff::tz::TimeZone::system()).map_or(0, |z| z.timestamp().as_second())
+}
+
+#[derive(Default)]
+struct Counts {
+    queued: u32,
+    running: u32,
+    paused: u32,
+    total_bytes: u64,
+}
 
 pub struct Scheduler {
     rt: tokio::runtime::Handle,
@@ -55,6 +145,11 @@ pub struct Scheduler {
     doomed_parts: Mutex<HashMap<JobId, PathBuf>>,
     next_position: AtomicI64,
     stopping: AtomicBool,
+    queues: Mutex<std::collections::BTreeMap<u64, QueueRt>>,
+    conditions: Mutex<Conditions>,
+    clock: Mutex<Clock>,
+    /// One `refresh` at a time, so edges and events are not interleaved.
+    refreshing: Mutex<()>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -117,6 +212,14 @@ impl Scheduler {
             .read_timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| EngineError::Io { msg: e.to_string() })?;
+        let limiter = Arc::new(RateLimiter::new(speed_limit));
+        let clock: Clock = Arc::new(|| jiff::ZonedDateTime::now().datetime());
+        let now = clock();
+        let queues = store
+            .queues()?
+            .into_iter()
+            .filter_map(|(config, held)| Some((config.id?, QueueRt::new(config, held, &limiter, now))))
+            .collect();
         let sched = Arc::new(Scheduler {
             rt,
             store,
@@ -126,7 +229,7 @@ impl Scheduler {
             connections: AtomicU32::new(connections.clamp(1, MAX_CONNECTIONS)),
             replace_existing: AtomicBool::new(false),
             trash: Mutex::new(download::trash_file),
-            limiter: Arc::new(RateLimiter::new(speed_limit)),
+            limiter,
             client,
             secrets,
             hf_secrets,
@@ -138,6 +241,10 @@ impl Scheduler {
             doomed_parts: Mutex::new(HashMap::new()),
             next_position: AtomicI64::new(next_position),
             stopping: AtomicBool::new(false),
+            queues: Mutex::new(queues),
+            conditions: Mutex::new((false, false, false)),
+            clock: Mutex::new(clock),
+            refreshing: Mutex::new(()),
         });
         let weak = Arc::downgrade(&sched);
         sched.rt.spawn(async move {
@@ -148,6 +255,19 @@ impl Scheduler {
                     // It fsyncs, so it runs on the blocking pool, not on one of the two runtime threads.
                     Some(s) => {
                         let _ = tokio::task::spawn_blocking(move || s.flush_progress()).await;
+                    }
+                    None => break,
+                }
+            }
+        });
+        let weak = Arc::downgrade(&sched);
+        sched.rt.spawn(async move {
+            let mut tick = tokio::time::interval(QUEUE_TICK);
+            loop {
+                tick.tick().await;
+                match weak.upgrade() {
+                    Some(s) => {
+                        let _ = tokio::task::spawn_blocking(move || s.refresh()).await;
                     }
                     None => break,
                 }
@@ -165,7 +285,7 @@ impl Scheduler {
     /// Applies at once: lowering it lets running jobs finish; raising it starts queued ones.
     pub fn set_max_running(self: &Arc<Self>, n: u32) {
         self.max_running.store((n as usize).clamp(1, 10), Ordering::Relaxed);
-        self.pump();
+        self.refresh();
     }
 
     /// New downloads (and the final rename of jobs started after this call) use `dir`.
@@ -197,12 +317,22 @@ impl Scheduler {
     /// Validates http/https, creates Queued jobs, starts as many as the limit allows.
     pub fn add(self: &Arc<Self>, urls: Vec<String>) -> Vec<AddResult> {
         let n = urls.len();
-        self.add_to(urls, None, vec![None; n])
+        self.add_to(urls, None, vec![None; n], None)
     }
 
     /// Like `add`, saving into `dir` (None: the downloads dir). `fixed_names[i]` names job `i` and keeps the
     /// server's Content-Disposition from renaming it.
-    pub fn add_to(self: &Arc<Self>, urls: Vec<String>, dir: Option<PathBuf>, fixed_names: Vec<Option<String>>) -> Vec<AddResult> {
+    pub fn add_to(
+        self: &Arc<Self>,
+        urls: Vec<String>,
+        dir: Option<PathBuf>,
+        fixed_names: Vec<Option<String>>,
+        queue: Option<u64>,
+    ) -> Vec<AddResult> {
+        let queue_id = queue.unwrap_or(1);
+        if !lock(&self.queues).contains_key(&queue_id) {
+            return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("no such queue".to_owned()) }).collect();
+        }
         if dir.as_ref().is_some_and(|d| !is_plain_abs(d)) {
             return urls
                 .into_iter()
@@ -213,22 +343,28 @@ impl Scheduler {
             return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("names must match urls".to_owned()) }).collect();
         }
         let mut fixed = fixed_names.into_iter();
-        let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten(), None)).collect();
-        self.pump();
+        let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten(), None, queue_id)).collect();
+        self.refresh();
         results
     }
 
     /// Queues each file of a Hugging Face commit as `dest_dir/<its repo path>`, with its SHA-256 when one is
     /// published. A file already there with the same size is skipped; the rest follow the same-name setting.
-    pub fn add_hf(self: &Arc<Self>, repo: &str, sha: &str, files: Vec<hf::HfFile>, dest_dir: &Path) -> Vec<hf::HfAdd> {
+    pub fn add_hf(self: &Arc<Self>, repo: &str, sha: &str, files: Vec<hf::HfFile>, dest_dir: &Path, queue: Option<u64>) -> Vec<hf::HfAdd> {
+        let queue_id = queue.unwrap_or(1);
+        let known = lock(&self.queues).contains_key(&queue_id);
         let results = files
             .into_iter()
             .map(|file| {
-                let status = self.add_hf_file(repo, sha, dest_dir, &file);
+                let status = if known {
+                    self.add_hf_file(repo, sha, dest_dir, &file, queue_id)
+                } else {
+                    hf::HfAddStatus::Rejected { error: "no such queue".to_owned() }
+                };
                 hf::HfAdd { path: file.path, status }
             })
             .collect();
-        self.pump();
+        self.refresh();
         results
     }
 
@@ -242,7 +378,7 @@ impl Scheduler {
         })
     }
 
-    fn add_hf_file(self: &Arc<Self>, repo: &str, sha: &str, dest_dir: &Path, file: &hf::HfFile) -> hf::HfAddStatus {
+    fn add_hf_file(self: &Arc<Self>, repo: &str, sha: &str, dest_dir: &Path, file: &hf::HfFile, queue_id: u64) -> hf::HfAddStatus {
         let rejected = |error: &str| hf::HfAddStatus::Rejected { error: error.to_owned() };
         if !is_plain_abs(dest_dir) {
             return rejected("destination must be an absolute path with no ..");
@@ -274,7 +410,7 @@ impl Scheduler {
             // Another revision or checksum, or another URL: the old job must not finish under the new add.
             self.remove(id, true);
         }
-        let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone());
+        let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone(), queue_id);
         match (res.id, res.error) {
             (Some(id), _) => hf::HfAddStatus::Added { id },
             (None, error) => rejected(&error.unwrap_or_default()),
@@ -298,6 +434,7 @@ impl Scheduler {
         };
         if changed {
             self.hub.state_changed(id);
+            self.refresh();
         }
     }
 
@@ -314,7 +451,7 @@ impl Scheduler {
         };
         if changed {
             self.hub.state_changed(id);
-            self.pump();
+            self.refresh();
         }
     }
 
@@ -338,7 +475,7 @@ impl Scheduler {
             }
         }
         self.hub.removed(id);
-        self.pump();
+        self.refresh();
     }
 
     /// All jobs in queue order.
@@ -367,14 +504,14 @@ impl Scheduler {
         }
     }
 
-    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>) -> AddResult {
+    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, queue_id: u64) -> AddResult {
         if let Err(error) = self.check_url(&url) {
             return AddResult { url, id: None, error: Some(error) };
         }
         if fixed_name.as_deref().is_some_and(|n| !valid_file_name(n)) {
             return AddResult { url, id: None, error: Some("file name must be one path component".to_owned()) };
         }
-        match self.insert_job(&url, dir, fixed_name, sha256) {
+        match self.insert_job(&url, dir, fixed_name, sha256, queue_id) {
             Ok(id) => AddResult { url, id: Some(id), error: None },
             Err(e) => AddResult { url, id: None, error: Some(e.to_string()) },
         }
@@ -394,7 +531,7 @@ impl Scheduler {
         }
     }
 
-    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>) -> Result<JobId, EngineError> {
+    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, queue_id: u64) -> Result<JobId, EngineError> {
         let now = now_secs();
         let position = self.next_position.fetch_add(1, Ordering::Relaxed);
         let folder = dir.clone().unwrap_or_else(|| lock(&self.dir).clone());
@@ -417,7 +554,7 @@ impl Scheduler {
             position,
             created_at: now,
             updated_at: now,
-            queue_id: 1,
+            queue_id,
         };
         let id = self.store.insert(&mut job)?;
         job.part_path = names::part_path(&folder, &job.name, id);
@@ -625,7 +762,7 @@ impl Scheduler {
             let hf = download::HfAccess { host, token };
             let trash = *lock(&self.trash);
             let opts = download::RunOpts { replace_existing: self.replace_existing.load(Ordering::Relaxed), trash, hf };
-            let limiter = Arc::clone(&self.limiter);
+            let limiter = self.queue_limiter(lock(&live.job).queue_id);
             let store = Arc::clone(&self.store);
             let sign = self.sign_for(&url);
             self.rt.spawn(async move {
@@ -640,20 +777,35 @@ impl Scheduler {
 
     /// Picks the first Queued job and claims a slot for it, all under the locks so two pumps cannot pick the same job.
     fn start_next(&self) -> Option<(Arc<Live>, JobId, watch::Receiver<bool>)> {
+        // Taken before the job locks: queue state is never read while a job lock is held across it.
+        let gates = self.queue_gates();
         let jobs = lock(&self.jobs);
         let mut inflight = lock(&self.inflight);
         if inflight.len() >= self.max_running.load(Ordering::Relaxed) {
             return None;
         }
+        // Verifying and held jobs still own their task, so they count against both caps.
+        let mut running: HashMap<u64, usize> = HashMap::new();
+        for l in jobs.iter() {
+            let job = lock(&l.job);
+            if inflight.contains(&job.id) {
+                *running.entry(job.queue_id).or_default() += 1;
+            }
+        }
         let live = Arc::clone(jobs.iter().find(|l| {
             let job = lock(&l.job);
-            job.state == JobState::Queued && !inflight.contains(&job.id)
+            job.state == JobState::Queued
+                && !inflight.contains(&job.id)
+                && gates.get(&job.queue_id).is_none_or(|&(open, cap)| open && running.get(&job.queue_id).copied().unwrap_or(0) < cap)
         })?);
-        let id = {
+        let (id, queue_id) = {
             let mut job = lock(&live.job);
             job.state = JobState::Running;
-            job.id
+            (job.id, job.queue_id)
         };
+        if let Some(rt) = lock(&self.queues).get_mut(&queue_id) {
+            rt.started_any = true;
+        }
         let (tx, rx) = watch::channel(false);
         *lock(&live.cancel) = tx;
         inflight.insert(id);
@@ -685,7 +837,7 @@ impl Scheduler {
             }
             self.hub.state_changed(id);
         }
-        self.pump();
+        self.refresh();
     }
 
     /// Copies the live byte counters into the jobs that are transferring and saves them.
@@ -737,6 +889,8 @@ impl Scheduler {
                 parts
             },
             dir: job.dir.as_ref().map(|d| d.to_string_lossy().into_owned()),
+            queue_id: job.queue_id,
+            waiting: if job.state == JobState::Queued { self.waiting_reason(job.queue_id) } else { None },
         }
     }
 
@@ -761,6 +915,354 @@ impl Scheduler {
                 0
             }
         }
+    }
+}
+
+
+impl Scheduler {
+    /// Replaces the clock that windows are read from, and re-checks every queue.
+    pub fn set_clock(self: &Arc<Self>, clock: Clock) {
+        *lock(&self.clock) = clock;
+        self.refresh();
+    }
+
+    /// Re-checks every queue now; the 30 s timer calls this.
+    pub fn tick(self: &Arc<Self>) {
+        self.refresh();
+    }
+
+    /// What the app last measured. Queues that need a condition hold until it is true.
+    pub fn set_conditions(self: &Arc<Self>, wifi: bool, on_power: bool, idle: bool) {
+        *lock(&self.conditions) = (wifi, on_power, idle);
+        self.refresh();
+    }
+
+    fn now(&self) -> DateTime {
+        let clock = lock(&self.clock).clone();
+        clock()
+    }
+
+    pub fn queues(&self) -> Vec<QueueView> {
+        let (now, cond, counts) = (self.now(), *lock(&self.conditions), self.counts());
+        lock(&self.queues).values().map(|rt| view_of_queue(rt, &counts, cond, now)).collect()
+    }
+
+    pub fn queue_view(&self, id: u64) -> Option<QueueView> {
+        let (now, cond, counts) = (self.now(), *lock(&self.conditions), self.counts());
+        lock(&self.queues).get(&id).map(|rt| view_of_queue(rt, &counts, cond, now))
+    }
+
+    pub fn save_queue(self: &Arc<Self>, config: &QueueConfig) -> Result<u64, EngineError> {
+        validate_queue(config, self.max_running.load(Ordering::Relaxed))?;
+        let id = self.store.save_queue(config)?;
+        let (now, config) = (self.now(), QueueConfig { id: Some(id), ..config.clone() });
+        {
+            let mut queues = lock(&self.queues);
+            match queues.get_mut(&id) {
+                Some(rt) => {
+                    rt.limiter.set_rate(config.speed_limit);
+                    if rt.config.schedule != config.schedule {
+                        let fresh = QueueRt::new(config.clone(), rt.held, &self.limiter, now);
+                        (rt.was_open, rt.was_in_window, rt.latched, rt.spent) = (fresh.was_open, fresh.was_open, false, false);
+                    }
+                    rt.config = config;
+                }
+                None => {
+                    queues.insert(id, QueueRt::new(config, false, &self.limiter, now));
+                }
+            }
+        }
+        self.refresh();
+        Ok(id)
+    }
+
+    /// Its jobs move to the Main queue (id 1), which cannot be deleted.
+    pub fn delete_queue(self: &Arc<Self>, id: u64) -> Result<(), EngineError> {
+        self.store.delete_queue(id)?;
+        lock(&self.queues).remove(&id);
+        let lives = lock(&self.jobs).to_vec();
+        for live in lives {
+            let moved = {
+                let mut job = lock(&live.job);
+                let moved = job.queue_id == id;
+                job.queue_id = 1;
+                moved.then_some(job.id)
+            };
+            if let Some(job) = moved {
+                self.hub.state_changed(job);
+            }
+        }
+        self.refresh();
+        Ok(())
+    }
+
+    /// A running job moved into a closed queue goes back to Queued at once.
+    pub fn move_to_queue(self: &Arc<Self>, id: JobId, queue: u64) {
+        if !lock(&self.queues).contains_key(&queue) {
+            return;
+        }
+        let Some(live) = self.find(id) else { return };
+        {
+            let mut job = lock(&live.job);
+            job.queue_id = queue;
+            let _ = self.store.save(&job);
+        }
+        self.hub.state_changed(id);
+        self.refresh();
+    }
+
+    /// Holds the queue's jobs until Start queue, Run now or (on a scheduled queue) its next window.
+    pub fn stop_queue(self: &Arc<Self>, id: u64) {
+        {
+            let mut queues = lock(&self.queues);
+            let Some(rt) = queues.get_mut(&id) else { return };
+            rt.held = true;
+            rt.run_now = false;
+            rt.latched = false;
+            let _ = self.store.set_held(id, true);
+        }
+        self.refresh();
+    }
+
+    /// On an unscheduled queue: lifts the hold. On a scheduled one it is the same as Run now.
+    pub fn start_queue(self: &Arc<Self>, id: u64) {
+        let scheduled = lock(&self.queues).get(&id).map(|rt| rt.config.schedule.is_some());
+        match scheduled {
+            Some(true) => self.run_queue_now(id),
+            Some(false) => self.open_queue(id, false),
+            None => {}
+        }
+    }
+
+    /// Opens the queue until its run finishes, whatever its window and conditions say.
+    pub fn run_queue_now(self: &Arc<Self>, id: u64) {
+        self.open_queue(id, true);
+    }
+
+    fn open_queue(self: &Arc<Self>, id: u64, run_now: bool) {
+        let retry = {
+            let mut queues = lock(&self.queues);
+            let Some(rt) = queues.get_mut(&id) else { return };
+            rt.held = false;
+            rt.run_now = run_now;
+            let _ = self.store.set_held(id, false);
+            rt.config.retry_failed
+        };
+        if retry {
+            self.retry_failed(id);
+        }
+        self.refresh();
+    }
+
+    fn retry_failed(&self, queue: u64) {
+        let lives = lock(&self.jobs).to_vec();
+        for live in lives {
+            let id = {
+                let mut job = lock(&live.job);
+                if job.queue_id != queue || !matches!(job.state, JobState::Failed { .. }) {
+                    continue;
+                }
+                job.state = JobState::Queued;
+                let _ = self.store.save(&job);
+                job.id
+            };
+            self.hub.state_changed(id);
+        }
+    }
+
+    fn waiting_reason(&self, queue: u64) -> Option<String> {
+        let (now, cond) = (self.now(), *lock(&self.conditions));
+        let state = lock(&self.queues).get(&queue)?.gate(cond, now);
+        match state {
+            QueueState::Open => None,
+            QueueState::WaitingForTime { .. } => Some("Waiting for schedule".to_owned()),
+            QueueState::WaitingForCondition { missing } => Some(format!("Waiting for {}", missing.first().map_or("conditions", String::as_str))),
+            QueueState::Stopped | QueueState::Off => Some("Queue stopped".to_owned()),
+        }
+    }
+
+    /// Per queue: open now, and how many jobs it may run at once.
+    fn queue_gates(&self) -> HashMap<u64, (bool, usize)> {
+        let (now, cond, global) = (self.now(), *lock(&self.conditions), self.max_running.load(Ordering::Relaxed));
+        let queues = lock(&self.queues);
+        queues
+            .iter()
+            .map(|(id, rt)| {
+                let cap = if rt.config.max_running == 0 { global } else { (rt.config.max_running as usize).min(global) };
+                (*id, (rt.gate(cond, now) == QueueState::Open, cap))
+            })
+            .collect()
+    }
+
+    fn queue_limiter(&self, queue: u64) -> Arc<RateLimiter> {
+        lock(&self.queues).get(&queue).map_or_else(|| Arc::clone(&self.limiter), |rt| Arc::clone(&rt.limiter))
+    }
+
+    fn counts(&self) -> HashMap<u64, Counts> {
+        let lives = lock(&self.jobs).to_vec();
+        let mut counts: HashMap<u64, Counts> = HashMap::new();
+        for live in &lives {
+            let job = lock(&live.job);
+            let c = counts.entry(job.queue_id).or_default();
+            match job.state {
+                JobState::Queued => c.queued += 1,
+                JobState::Running | JobState::Retrying { .. } | JobState::Verifying => c.running += 1,
+                JobState::Paused => c.paused += 1,
+                JobState::Done { .. } | JobState::Failed { .. } => {}
+            }
+            if !matches!(job.state, JobState::Done { .. }) {
+                c.total_bytes += job.total.unwrap_or(0);
+            }
+        }
+        counts
+    }
+
+    /// Applies window openings and closings, holds what a closed queue was running, starts what may start,
+    /// ends finished runs and announces changed queues.
+    fn refresh(self: &Arc<Self>) {
+        if self.stopping.load(Ordering::Relaxed) {
+            return;
+        }
+        let _one = lock(&self.refreshing);
+        let (now, cond) = (self.now(), *lock(&self.conditions));
+        let mut retry = Vec::new();
+        {
+            let counts = self.counts();
+            let mut queues = lock(&self.queues);
+            for (id, rt) in queues.iter_mut() {
+                self.advance(*id, rt, now, &counts, &mut retry);
+            }
+        }
+        for id in retry {
+            self.retry_failed(id);
+        }
+        self.hold_closed(cond, now);
+        self.pump();
+        let counts = self.counts();
+        let finished = self.end_runs(&counts);
+        let mut changed = Vec::new();
+        {
+            let mut queues = lock(&self.queues);
+            for (id, rt) in queues.iter_mut() {
+                let view = view_of_queue(rt, &counts, cond, now);
+                if rt.last_view.as_ref() != Some(&view) {
+                    rt.last_view = Some(view);
+                    changed.push(*id);
+                }
+            }
+        }
+        for id in changed {
+            self.hub.queue_changed(id);
+        }
+        for id in finished {
+            self.hub.queue_finished(id);
+        }
+    }
+
+    /// Window edges. A window opening lifts Stop queue and retries failed jobs; a closing Once queue turns itself off.
+    fn advance(&self, id: u64, rt: &mut QueueRt, now: DateTime, counts: &HashMap<u64, Counts>, retry: &mut Vec<u64>) {
+        let Some(s) = rt.config.schedule.clone() else { return };
+        let raw = queue::window_open(&s, now);
+        if raw && !rt.was_open {
+            rt.latched = s.stop_min.is_none();
+            rt.spent = false;
+            if rt.held {
+                rt.held = false;
+                let _ = self.store.set_held(id, false);
+            }
+            if rt.config.retry_failed && rt.config.enabled {
+                retry.push(id);
+            }
+        } else if !raw {
+            rt.spent = false;
+            // A window without a stop outlives midnight only while there is work left.
+            if rt.latched && counts.get(&id).is_none_or(|c| c.queued + c.running == 0) {
+                rt.latched = false;
+            }
+        }
+        rt.was_open = raw;
+        let in_window = rt.in_window(&s, now) || rt.run_now;
+        if matches!(s.repeat, Repeat::Once { .. }) && rt.was_in_window && !in_window && rt.config.enabled {
+            self.disable(rt);
+        }
+        rt.was_in_window = in_window;
+    }
+
+    fn disable(&self, rt: &mut QueueRt) {
+        rt.config.enabled = false;
+        let _ = self.store.save_queue(&rt.config);
+    }
+
+    /// Sends running jobs of queues that are no longer open back to Queued, keeping their progress.
+    /// Verifying jobs finish: they cannot be cancelled.
+    fn hold_closed(&self, cond: Conditions, now: DateTime) {
+        let open: HashMap<u64, bool> = lock(&self.queues).iter().map(|(id, rt)| (*id, rt.gate(cond, now) == QueueState::Open)).collect();
+        let lives = lock(&self.jobs).to_vec();
+        for live in &lives {
+            let held = {
+                let mut job = lock(&live.job);
+                if !is_active(&job.state) || open.get(&job.queue_id).copied().unwrap_or(true) {
+                    continue;
+                }
+                lock(&live.cancel).send_replace(true);
+                job.state = JobState::Queued;
+                job.done = live.done.load(Ordering::Relaxed);
+                let _ = self.store.save(&job);
+                job.id
+            };
+            self.hub.state_changed(held);
+        }
+    }
+
+    /// A queue whose run started a job and has nothing queued, running or paused left is finished.
+    fn end_runs(&self, counts: &HashMap<u64, Counts>) -> Vec<u64> {
+        let mut finished = Vec::new();
+        let mut queues = lock(&self.queues);
+        for (id, rt) in queues.iter_mut() {
+            let left = counts.get(id).is_some_and(|c| c.queued + c.running + c.paused > 0);
+            if !rt.started_any || left {
+                continue;
+            }
+            rt.started_any = false;
+            rt.run_now = false;
+            rt.latched = false;
+            if rt.config.schedule.as_ref().is_some_and(|s| s.stop_min.is_none()) {
+                rt.spent = rt.was_open;
+            }
+            if matches!(rt.config.schedule.as_ref().map(|s| &s.repeat), Some(Repeat::Once { .. })) {
+                self.disable(rt);
+            }
+            finished.push(*id);
+        }
+        finished
+    }
+}
+
+fn view_of_queue(rt: &QueueRt, counts: &HashMap<u64, Counts>, cond: Conditions, now: DateTime) -> QueueView {
+    let c = counts.get(&rt.config.id.unwrap_or(0));
+    QueueView {
+        config: rt.config.clone(),
+        state: rt.gate(cond, now),
+        queued: c.map_or(0, |c| c.queued),
+        running: c.map_or(0, |c| c.running),
+        total_bytes: c.map_or(0, |c| c.total_bytes),
+        next_run: rt.config.schedule.as_ref().filter(|_| rt.config.enabled).and_then(|s| queue::next_start(s, now)).map(unix_secs),
+    }
+}
+
+fn validate_queue(config: &QueueConfig, global: usize) -> Result<(), EngineError> {
+    let bad = |msg: &str| Err(EngineError::InvalidQueue { msg: msg.to_owned() });
+    if config.max_running as usize > global {
+        return bad("simultaneous downloads is above the overall limit");
+    }
+    let Some(s) = &config.schedule else { return Ok(()) };
+    if s.start_min >= 1440 || s.stop_min.is_some_and(|m| m >= 1440) {
+        return bad("a start or stop time is not within a day");
+    }
+    match &s.repeat {
+        Repeat::Days { mask } if mask & 0x7f == 0 => bad("pick at least one day"),
+        Repeat::Once { date } if date.parse::<jiff::civil::Date>().is_err() => bad("the date is not a valid day"),
+        _ => Ok(()),
     }
 }
 

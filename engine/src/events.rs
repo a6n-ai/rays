@@ -14,12 +14,18 @@ pub const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_mil
 pub struct Changes {
     pub changed: Vec<JobId>,
     pub removed: Vec<JobId>,
+    /// Queues whose view changed.
+    pub queues: Vec<u64>,
+    /// Queues whose run ended, once per run.
+    pub finished: Vec<u64>,
 }
 
 #[derive(Default)]
 struct State {
     changed: BTreeSet<JobId>,
     removed: BTreeSet<JobId>,
+    queues: BTreeSet<u64>,
+    finished: Vec<u64>,
     urgent: bool,
     last_delivery: Option<Instant>,
 }
@@ -71,12 +77,28 @@ impl EventHub {
         }
         self.notify.notify_one();
     }
+    pub fn queue_changed(&self, id: u64) {
+        {
+            let mut s = self.lock();
+            s.queues.insert(id);
+            s.urgent = true;
+        }
+        self.notify.notify_one();
+    }
+    pub fn queue_finished(&self, id: u64) {
+        {
+            let mut s = self.lock();
+            s.finished.push(id);
+            s.urgent = true;
+        }
+        self.notify.notify_one();
+    }
     /// Waits until something is pending, then drains it. Ids are sorted and de-duplicated.
     pub async fn wait(&self) -> Changes {
         loop {
             let hold_until = {
                 let mut s = self.lock();
-                let pending = !s.changed.is_empty() || !s.removed.is_empty();
+                let pending = !s.changed.is_empty() || !s.removed.is_empty() || !s.queues.is_empty() || !s.finished.is_empty();
                 if !pending {
                     None
                 } else {
@@ -104,6 +126,8 @@ impl EventHub {
         Changes {
             changed: std::mem::take(&mut s.changed).into_iter().collect(),
             removed: std::mem::take(&mut s.removed).into_iter().collect(),
+            queues: std::mem::take(&mut s.queues).into_iter().collect(),
+            finished: std::mem::take(&mut s.finished),
         }
     }
 }

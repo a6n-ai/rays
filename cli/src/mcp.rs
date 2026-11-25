@@ -122,7 +122,7 @@ fn tools() -> Value {
 /// None means no such tool. Errors are tool errors the model can read, not protocol errors.
 fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Result<String, String>> {
     Some(match name {
-        "add_downloads" => urls(args).and_then(|urls| reply_text(ask(&Request::Add { urls }))),
+        "add_downloads" => urls(args).and_then(|urls| reply_text(ask(&Request::Add { urls, queue: None }))),
         "list_downloads" => reply_text(ask(&Request::List)),
         "list_buckets" => reply_text(ask(&Request::Buckets)),
         "browse_bucket" => browse(args).and_then(|req| reply_text(ask(&req))),
@@ -179,7 +179,7 @@ mod tests {
 
     fn fake(req: &Request) -> Result<Response, String> {
         Ok(match req {
-            Request::Add { urls } => Response {
+            Request::Add { urls, .. } => Response {
                 ok: true,
                 added: urls.iter().enumerate().map(|(i, u)| Added { url: u.clone(), id: i as u64 + 1 }).collect(),
                 ..Default::default()

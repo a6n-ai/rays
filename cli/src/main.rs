@@ -85,7 +85,7 @@ fn main() -> ExitCode {
         [cmd, rest @ ..] if cmd == "status" => return sorter::status(rest),
         [cmd, ..] if ["watch", "unwatch", "config"].contains(&cmd.as_str()) => return sorter::run(&args),
         [a, ..] if a.starts_with('-') => return usage(),
-        urls => Request::Add { urls: urls.to_vec() },
+        urls => Request::Add { urls: urls.to_vec(), queue: None },
     };
 
     let reply = match ask_rays(&req) {
@@ -222,7 +222,7 @@ fn host_add(msg: &Value) -> Result<Value, String> {
         return Ok(json!({"ok": true, "added": 0, "rejected": []}));
     }
 
-    let resp = ask_rays(&Request::Add { urls })?;
+    let resp = ask_rays(&Request::Add { urls, queue: None })?;
     if !resp.ok {
         return Err(resp.error.unwrap_or_else(|| "Rays rejected the request".into()));
     }

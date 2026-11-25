@@ -1,4 +1,5 @@
 //! Types shared by every engine module. Records/enums are exported to Swift via UniFFI.
+use crate::queue::QueueConfig;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, AtomicU64};
@@ -48,6 +49,10 @@ pub struct JobView {
     pub parts: Vec<PartView>,
     /// The folder the file goes into; None for the downloads folder.
     pub dir: Option<String>,
+    pub queue_id: u64,
+    /// Why a Queued job is not starting: its queue is closed ("Waiting for schedule", "Waiting for Wi-Fi",
+    /// "Waiting for charger", "Waiting for idle" or "Queue stopped"). None for other jobs.
+    pub waiting: Option<String>,
 }
 
 /// One range of a split download, for drawing a segmented progress bar.
@@ -67,10 +72,40 @@ pub struct HostView {
     pub updated_at: i64,
 }
 
+/// Whether a queue lets its jobs start right now.
+#[derive(uniffi::Enum, Clone, Debug, PartialEq, Eq)]
+pub enum QueueState {
+    Open,
+    /// Outside its run window; `next` is the next opening, in unix seconds.
+    WaitingForTime { next: i64 },
+    /// In its window, but a condition is unmet: "Wi-Fi", "charger" or "idle".
+    WaitingForCondition { missing: Vec<String> },
+    /// Held by Stop queue.
+    Stopped,
+    Off,
+}
+
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct QueueView {
+    pub config: QueueConfig,
+    pub state: QueueState,
+    /// Jobs waiting to start, held ones included.
+    pub queued: u32,
+    /// Jobs transferring, retrying or verifying.
+    pub running: u32,
+    /// Sum of the known sizes of the jobs that are not done.
+    pub total_bytes: u64,
+    /// Next scheduled start in unix seconds; None for a queue without a schedule or a disabled one.
+    pub next_run: Option<i64>,
+}
+
 #[derive(uniffi::Enum, Clone, Debug, PartialEq)]
 pub enum JobEvent {
     Upsert { job: JobView },
     Removed { id: JobId },
+    QueueChanged { queue: QueueView },
+    /// A run of the queue ended: nothing is left queued, running or paused in it.
+    QueueFinished { id: u64 },
 }
 
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]
@@ -86,6 +121,7 @@ pub enum EngineError {
     Db { msg: String },
     SocketInUse,
     InvalidUrl { msg: String },
+    InvalidQueue { msg: String },
 }
 
 impl std::fmt::Display for EngineError {
@@ -95,6 +131,7 @@ impl std::fmt::Display for EngineError {
             EngineError::Db { msg } => write!(f, "database: {msg}"),
             EngineError::SocketInUse => f.write_str("another dl engine is already listening on the socket"),
             EngineError::InvalidUrl { msg } => write!(f, "invalid url: {msg}"),
+            EngineError::InvalidQueue { msg } => write!(f, "invalid queue: {msg}"),
         }
     }
 }

@@ -220,7 +220,7 @@ impl Secrets for Counting {
 }
 
 fn add(sched: &Arc<Scheduler>, dir: &FsPath, url: String) -> JobId {
-    sched.add_to(vec![url], Some(PathBuf::from(dir)), vec![Some("w.gguf".into())])[0].id.expect("queued")
+    sched.add_to(vec![url], Some(PathBuf::from(dir)), vec![Some("w.gguf".into())], None)[0].id.expect("queued")
 }
 
 async fn wait_for(sched: &Scheduler, id: JobId, done: impl Fn(&JobView) -> bool) -> JobView {
@@ -425,7 +425,7 @@ async fn hf_job_reads_token_once() {
     sched.set_hf_token(Some("t")).unwrap();
     for name in ["a.gguf", "b.gguf"] {
         let url = format!("http://127.0.0.1:{}/open/m/resolve/abc/{name}", hf.port());
-        let id = sched.add_to(vec![url], Some(dir.path().to_path_buf()), vec![None])[0].id.unwrap();
+        let id = sched.add_to(vec![url], Some(dir.path().to_path_buf()), vec![None], None)[0].id.unwrap();
         wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
     }
     assert_eq!(secrets.gets.load(Ordering::SeqCst), 0, "set_hf_token fills the cache");
@@ -460,7 +460,7 @@ async fn adds_into_repo_paths() {
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("tmp/AI Models/open/m");
     let files = vec![file("w.gguf", SIZE as u64, None), file("onnx/m.onnx", SIZE as u64, None)];
-    let res = sched.add_hf("open/m", "abc", files, &dest);
+    let res = sched.add_hf("open/m", "abc", files, &dest, None);
     assert_eq!(res.len(), 2);
     for r in &res {
         let HfAddStatus::Added { id } = r.status else { panic!("{r:?}") };
@@ -478,7 +478,7 @@ async fn rejects_unsafe_paths() {
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("tmp/AI Models/open/m");
     let files = vec![file("../x", 1, None), file("/etc/x", 1, None), file("a/../../x", 1, None)];
-    let res = sched.add_hf("open/m", "abc", files, &dest);
+    let res = sched.add_hf("open/m", "abc", files, &dest, None);
     assert_eq!(res.len(), 3);
     for r in &res {
         assert!(matches!(r.status, HfAddStatus::Rejected { .. }), "{r:?}");
@@ -497,7 +497,7 @@ async fn already_there_by_size() {
     std::fs::write(dest.join("w.gguf"), vec![0u8; SIZE]).unwrap();
     std::fs::write(dest.join("onnx/m.onnx"), b"old").unwrap();
     let files = vec![file("w.gguf", SIZE as u64, None), file("onnx/m.onnx", SIZE as u64, None)];
-    let res = sched.add_hf("open/m", "abc", files, &dest);
+    let res = sched.add_hf("open/m", "abc", files, &dest, None);
     assert_eq!(res[0].status, HfAddStatus::AlreadyThere);
     let HfAddStatus::Added { id } = res[1].status else { panic!("{:?}", res[1]) };
     assert_eq!(sched.views().len(), 1, "the file already there made no job");
@@ -514,14 +514,14 @@ async fn sha_checked_on_finish() {
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
 
     let good = dir.path().join("good");
-    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &good);
+    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &good, None);
     let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
     let done = wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
     let JobState::Done { path } = done.state else { unreachable!() };
     assert!(std::fs::read(path).unwrap() == data());
 
     let bad = dir.path().join("bad");
-    let res = sched.add_hf("flip/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &bad);
+    let res = sched.add_hf("flip/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha()))], &bad, None);
     let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
     let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
     assert!(matches!(&v.state, JobState::Failed { reason } if reason == "Checksum didn't match"), "{:?}", v.state);
@@ -539,7 +539,7 @@ async fn sha_checked_on_finish() {
 /// Starts a download that stalls at DROP_AT, pauses it, shuts the engine down and reopens it on the same data dir.
 async fn stall_pause_and_reopen(root: &FsPath, base: String, dest: &FsPath, sha: String) -> (Arc<Scheduler>, JobId) {
     let (sched, _) = scheduler(root, base.clone());
-    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, Some(sha))], dest);
+    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, Some(sha))], dest, None);
     let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
     wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
     sched.pause(id);
@@ -584,11 +584,11 @@ async fn add_again_while_queued_is_not_a_second_job() {
     let dir = tempfile::tempdir().unwrap();
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("models");
-    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let res = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest, None);
     let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
     wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
 
-    let again = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let again = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest, None);
     assert_eq!(again[0].status, HfAddStatus::AlreadyQueued { id });
     assert_eq!(sched.views().len(), 1, "the second add made a job");
     sched.shutdown();
@@ -602,7 +602,7 @@ async fn invalid_checksum_is_rejected_at_add() {
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("models");
     for bad in ["abc".to_string(), "g".repeat(64), "0".repeat(65)] {
-        let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(bad.clone()))], &dest);
+        let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(bad.clone()))], &dest, None);
         assert_eq!(
             res[0].status,
             HfAddStatus::Rejected { error: "Hugging Face gave an invalid checksum for this file".into() },
@@ -619,7 +619,7 @@ async fn uppercase_checksum_still_verifies() {
     let dir = tempfile::tempdir().unwrap();
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("models");
-    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha().to_uppercase()))], &dest);
+    let res = sched.add_hf("open/m", "abc", vec![file("w.gguf", SIZE as u64, Some(data_sha().to_uppercase()))], &dest, None);
     let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
     wait_for(&sched, id, |v| matches!(v.state, JobState::Done { .. })).await;
 }
@@ -630,11 +630,11 @@ async fn same_name_in_another_folder_is_a_new_job() {
     let (hf, _) = fake_hf(cdn).await;
     let dir = tempfile::tempdir().unwrap();
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
-    let first = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dir.path().join("a"));
+    let first = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dir.path().join("a"), None);
     let HfAddStatus::Added { id } = first[0].status else { panic!("{:?}", first[0]) };
     wait_for(&sched, id, |v| v.done >= DROP_AT as u64).await;
 
-    let second = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dir.path().join("b"));
+    let second = sched.add_hf("org/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dir.path().join("b"), None);
     let HfAddStatus::Added { id: other } = second[0].status else { panic!("{:?}", second[0]) };
     assert_ne!(other, id);
     assert_eq!(sched.views().len(), 2);
@@ -648,11 +648,11 @@ async fn failed_twin_is_resumed_not_duplicated() {
     let dir = tempfile::tempdir().unwrap();
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("models");
-    let first = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let first = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest, None);
     let HfAddStatus::Added { id } = first[0].status else { panic!("{:?}", first[0]) };
     wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
 
-    let again = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let again = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest, None);
     assert_eq!(again[0].status, HfAddStatus::Added { id });
     assert_eq!(sched.views().len(), 1, "the failed twin was duplicated");
 }
@@ -664,14 +664,14 @@ async fn failed_twin_with_other_checksum_is_replaced() {
     let dir = tempfile::tempdir().unwrap();
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("models");
-    let first = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let first = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest, None);
     let HfAddStatus::Added { id: old } = first[0].status else { panic!("{:?}", first[0]) };
     wait_for(&sched, old, |v| matches!(v.state, JobState::Failed { .. })).await;
     let part = dl_engine::names::part_path(&dest, "w.gguf", old);
     std::fs::write(&part, b"partial").unwrap();
 
     let new_sha = "ab".repeat(32);
-    let again = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, Some(new_sha))], &dest);
+    let again = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, Some(new_sha))], &dest, None);
     let HfAddStatus::Added { id } = again[0].status else { panic!("{:?}", again[0]) };
     assert!(!part.exists(), "the old job's .part was left behind");
     assert_eq!(sched.views().iter().map(|v| v.id).collect::<Vec<_>>(), vec![id]);
@@ -685,11 +685,11 @@ async fn failed_twin_from_another_url_is_replaced() {
     let dir = tempfile::tempdir().unwrap();
     let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
     let dest = dir.path().join("models");
-    let other = sched.add_to(vec![format!("http://127.0.0.1:{}/nowhere/w.gguf", hf.port())], Some(dest.clone()), vec![Some("w.gguf".into())]);
+    let other = sched.add_to(vec![format!("http://127.0.0.1:{}/nowhere/w.gguf", hf.port())], Some(dest.clone()), vec![Some("w.gguf".into())], None);
     let old = other[0].id.expect("queued");
     wait_for(&sched, old, |v| matches!(v.state, JobState::Failed { .. })).await;
 
-    let res = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let res = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest, None);
     let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
     let views = sched.views();
     assert_eq!(views.iter().map(|v| v.id).collect::<Vec<_>>(), vec![id]);

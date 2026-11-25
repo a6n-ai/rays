@@ -5,7 +5,8 @@ use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
 use crate::store::Store;
-use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView};
+use crate::queue::QueueConfig;
+use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView, QueueView};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -57,8 +58,41 @@ impl Engine {
         self.sched.add(urls)
     }
 
-    pub fn add_to(&self, urls: Vec<String>, dir: Option<String>, names: Vec<Option<String>>) -> Vec<AddResult> {
-        self.sched.add_to(urls, dir.map(PathBuf::from), names)
+    pub fn add_to(&self, urls: Vec<String>, dir: Option<String>, names: Vec<Option<String>>, queue: Option<u64>) -> Vec<AddResult> {
+        self.sched.add_to(urls, dir.map(PathBuf::from), names, queue)
+    }
+
+    pub fn queues(&self) -> Vec<QueueView> {
+        self.sched.queues()
+    }
+
+    pub fn save_queue(&self, config: QueueConfig) -> Result<u64, EngineError> {
+        self.sched.save_queue(&config)
+    }
+
+    pub fn delete_queue(&self, id: u64) -> Result<(), EngineError> {
+        self.sched.delete_queue(id)
+    }
+
+    pub fn move_to_queue(&self, job: JobId, queue: u64) {
+        self.sched.move_to_queue(job, queue);
+    }
+
+    pub fn stop_queue(&self, id: u64) {
+        self.sched.stop_queue(id);
+    }
+
+    pub fn start_queue(&self, id: u64) {
+        self.sched.start_queue(id);
+    }
+
+    pub fn run_queue_now(&self, id: u64) {
+        self.sched.run_queue_now(id);
+    }
+
+    /// What the app measured: connected over Wi-Fi, on power, idle for a while.
+    pub fn set_conditions(&self, wifi: bool, on_power: bool, idle: bool) {
+        self.sched.set_conditions(wifi, on_power, idle);
     }
 
     pub fn pause(&self, id: JobId) {
@@ -128,6 +162,8 @@ impl Engine {
             .map(|job| JobEvent::Upsert { job })
             .collect();
         events.extend(changes.removed.into_iter().map(|id| JobEvent::Removed { id }));
+        events.extend(changes.queues.into_iter().filter_map(|id| self.sched.queue_view(id)).map(|queue| JobEvent::QueueChanged { queue }));
+        events.extend(changes.finished.into_iter().map(|id| JobEvent::QueueFinished { id }));
         events
     }
 
@@ -203,8 +239,8 @@ impl Engine {
     }
 
     /// Queues a Hugging Face commit's files under `dest_dir`, one result per file, in order.
-    pub fn add_hf(&self, repo: String, sha: String, files: Vec<HfFile>, dest_dir: String) -> Vec<HfAdd> {
-        self.sched.add_hf(&repo, &sha, files, Path::new(&dest_dir))
+    pub fn add_hf(&self, repo: String, sha: String, files: Vec<HfFile>, dest_dir: String, queue: Option<u64>) -> Vec<HfAdd> {
+        self.sched.add_hf(&repo, &sha, files, Path::new(&dest_dir), queue)
     }
 
     /// Saves the Hugging Face token in the Keychain; `None` deletes it.

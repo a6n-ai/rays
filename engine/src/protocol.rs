@@ -7,7 +7,8 @@ pub const MAX_LINE: usize = 1 << 20;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Request {
-    Add { urls: Vec<String> },
+    /// `queue` is the queue's id; absent means the Main queue.
+    Add { urls: Vec<String>, #[serde(default)] queue: Option<u64> },
     List,
     Providers,
     Buckets,

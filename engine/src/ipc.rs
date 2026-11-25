@@ -71,9 +71,10 @@ async fn handle(stream: UnixStream, sched: Arc<Scheduler>) {
 
 async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
     match serde_json::from_slice::<Request>(line) {
-        Ok(Request::Add { urls }) => {
+        Ok(Request::Add { urls, queue }) => {
             let mut reply = Response { ok: true, ..Default::default() };
-            for result in sched.add(urls) {
+            let none = vec![None; urls.len()];
+            for result in sched.add_to(urls, None, none, queue) {
                 match result.id {
                     Some(id) => reply.added.push(Added { url: result.url, id }),
                     None => reply.rejected.push(Rejected {
