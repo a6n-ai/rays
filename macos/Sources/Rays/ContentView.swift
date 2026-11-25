@@ -51,7 +51,7 @@ struct ContentView: View {
         }
         .containerBackground(.thinMaterial, for: .window)
         .sheet(isPresented: Binding(get: { scheduling != nil }, set: { if !$0 { scheduling = nil } })) {
-            Text("Scheduler coming next").padding(40)
+            if let scheduling { SchedulerSheet(queueId: scheduling) }
         }
         .frame(minWidth: 640, idealWidth: 760, minHeight: 440, idealHeight: 520)
         .overlay {
