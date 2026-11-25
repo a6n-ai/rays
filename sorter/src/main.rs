@@ -97,7 +97,7 @@ fn normalize_sub(cat_dir: &Path, cat: &str, sub: &str) -> String {
     fs::read_dir(cat_dir).into_iter().flatten().flatten()
         .filter(|e| e.path().is_dir())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .find(|existing| key(existing) == key(sub))
+        .find(|existing| offerable(cat, existing) && key(existing) == key(sub))
         .unwrap_or_else(|| clean(sub))
 }
 
@@ -111,6 +111,11 @@ fn is_project(dir: &Path) -> bool {
 
 const MODEL_EXT: &[(&str, &str)] = &[("gguf", "GGUF"), ("safetensors", "Safetensors"), ("onnx", "ONNX"), ("mlmodel", "Core ML"),
     ("tflite", "TFLite"), ("ckpt", "PyTorch"), ("pt", "PyTorch"), ("pth", "PyTorch")];
+
+/// AI Models holds only the format folders; download-source folders such as org names are never offered.
+fn offerable(cat: &str, sub: &str) -> bool {
+    cat != "AI Models" || MODEL_EXT.iter().any(|(_, f)| *f == sub)
+}
 
 fn model_sub(p: &Path) -> Option<&'static str> {
     let e = ext(p);
@@ -161,7 +166,7 @@ impl Index {
         for cat in existing_folders(root) {
             for e in fs::read_dir(root.join(&cat)).into_iter().flatten().flatten() {
                 let q = e.path();
-                if q.is_file() && !e.file_name().to_string_lossy().starts_with('.') && let Ok(m) = e.metadata() {
+                if q.is_file() && model_sub(&q).is_none() && !e.file_name().to_string_lossy().starts_with('.') && let Ok(m) = e.metadata() {
                     files.push((q, m.len(), m.modified().map(secs).unwrap_or(0.0) as u64));
                 }
             }
@@ -190,6 +195,7 @@ impl Index {
     }
 
     fn add(&mut self, p: &Path) {
+        if model_sub(p).is_some() { return; }
         if let Ok(m) = fs::metadata(p) {
             self.files.push((p.to_path_buf(), m.len(), m.modified().map(secs).unwrap_or(0.0) as u64));
         }
@@ -357,7 +363,7 @@ fn existing_folders(root: &Path) -> Vec<String> {
     // Only folders this tool created (marked) count, so user folders in Downloads are never offered or scanned.
     dirs(root).into_iter().filter(|c| c != ARCHIVE && root.join(c).join(MARKER).exists()).flat_map(|cat| {
         let subs = dirs(&root.join(&cat));
-        if subs.is_empty() { vec![cat] } else { subs.into_iter().map(|s| format!("{cat}/{s}")).collect() }
+        if subs.is_empty() { vec![cat] } else { subs.into_iter().filter(|s| offerable(&cat, s)).map(|s| format!("{cat}/{s}")).collect() }
     }).collect()
 }
 
@@ -771,6 +777,62 @@ mod tests {
         assert_eq!(dir, root.join("AI Models/GGUF"));
         assert_eq!(stem, "a");
         assert_eq!(why, "AI Models/GGUF rule");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn non_model_duplicate_is_still_detected() {
+        let base = std::env::temp_dir().join(format!("sorter-dup-control-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("Downloads");
+        fs::create_dir_all(root.join("Work")).unwrap();
+        fs::write(root.join("Work").join(MARKER), "").unwrap();
+        fs::write(root.join("Work/a.txt"), "weights").unwrap();
+        fs::write(root.join("a.txt"), "weights").unwrap();
+        let mut index = Index::load(&root, base.join("hash.json"));
+        let layout = config::Layout::new(&root, &json!({}));
+        let (dir, _, _, why, _) = plan(&root.join("a.txt"), &mut index, &root, true, &layout, |_| Err("classified".into())).unwrap();
+        assert_eq!(dir, root.join("Duplicates/Work"));
+        assert!(why.starts_with("duplicate of "), "{why}");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn model_files_never_enter_duplicate_index() {
+        let base = std::env::temp_dir().join(format!("sorter-dup-index-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("Downloads");
+        fs::create_dir_all(root.join("Work")).unwrap();
+        fs::write(root.join("Work").join(MARKER), "").unwrap();
+        fs::write(root.join("Work/a.gguf"), "weights").unwrap();
+        fs::write(root.join("Work/b.txt"), "other!!").unwrap();
+        let mut index = Index::load(&root, base.join("hash.json"));
+        assert!(index.files.iter().all(|f| model_sub(&f.0).is_none()), "{:?}", index.files);
+        fs::write(root.join("c.txt"), "other!!").unwrap();
+        assert_eq!(index.find_duplicate(&root.join("c.txt")), Some(root.join("Work/b.txt")));
+        assert!(index.cache.keys().all(|k| !k.ends_with(".gguf")), "{:?}", index.cache.keys());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn screenshot_gguf_goes_to_ai_models() {
+        assert_eq!(rule(Path::new("screenshot.gguf")), Some(("AI Models", "GGUF")));
+    }
+
+    #[test]
+    fn ai_models_offers_only_format_folders() {
+        let base = std::env::temp_dir().join(format!("sorter-ai-subs-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("Downloads");
+        for sub in ["GGUF", "TheBloke"] {
+            fs::create_dir_all(root.join("AI Models").join(sub)).unwrap();
+        }
+        fs::write(root.join("AI Models").join(MARKER), "").unwrap();
+        let cat_dir = root.join("AI Models");
+        assert!(existing_folders(&root).contains(&"AI Models/GGUF".to_string()));
+        assert!(!existing_folders(&root).iter().any(|f| f.contains("TheBloke")), "{:?}", existing_folders(&root));
+        assert_eq!(normalize_sub(&cat_dir, "AI Models", "gguf"), "GGUF");
+        assert_eq!(normalize_sub(&cat_dir, "AI Models", "thebloke"), "thebloke");
         let _ = fs::remove_dir_all(&base);
     }
 
