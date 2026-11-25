@@ -11,8 +11,9 @@ pub enum Repeat {
     Days { mask: u8 },
 }
 
-#[derive(uniffi::Enum, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(uniffi::Enum, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FinishAction {
+    #[default]
     Nothing,
     Sound,
     Quit,
@@ -73,12 +74,14 @@ pub fn window_end(s: &QueueSchedule, opened: DateTime) -> Option<DateTime> {
     })
 }
 
-pub fn window_open(s: &QueueSchedule, now: DateTime) -> bool {
+/// The start of the window that is open at `now`.
+pub(crate) fn open_start(s: &QueueSchedule, now: DateTime) -> Option<DateTime> {
     let today = now.date();
-    [today - 1.day(), today].into_iter().any(|day| {
-        let opened = at(day, s.start_min);
-        window_end(s, opened).is_some_and(|end| opened <= now && now < end)
-    })
+    [today - 1.day(), today].into_iter().map(|day| at(day, s.start_min)).find(|opened| window_end(s, *opened).is_some_and(|end| *opened <= now && now < end))
+}
+
+pub fn window_open(s: &QueueSchedule, now: DateTime) -> bool {
+    open_start(s, now).is_some()
 }
 
 pub fn next_start(s: &QueueSchedule, now: DateTime) -> Option<DateTime> {

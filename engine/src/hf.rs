@@ -155,6 +155,11 @@ pub struct VerifyResult {
 /// Larger than any manifest this app writes; a bigger file is not read at all.
 const MANIFEST_MAX_BYTES: u64 = 16 << 20;
 
+/// A top-level repo path that is the manifest or its temp file, which on a case-insensitive volume includes other cases.
+pub fn is_manifest_name(path: &str) -> bool {
+    !path.contains('/') && path.get(..MANIFEST_NAME.len()).is_some_and(|p| p.eq_ignore_ascii_case(MANIFEST_NAME))
+}
+
 pub fn read_manifest(dir: &Path) -> Option<HfManifest> {
     let path = dir.join(MANIFEST_NAME);
     if std::fs::metadata(&path).ok()?.len() > MANIFEST_MAX_BYTES {
@@ -182,7 +187,7 @@ pub fn merge_manifest(dir: &Path, repo: &str, sha: &str, added: Vec<HfFile>) -> 
     }
     let json = serde_json::to_vec_pretty(&manifest).map_err(io::Error::other)?;
     std::fs::create_dir_all(dir)?;
-    let tmp = dir.join(format!("{MANIFEST_NAME}.tmp"));
+    let tmp = dir.join(format!("{MANIFEST_NAME}.{}.tmp", std::process::id()));
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, dir.join(MANIFEST_NAME)).inspect_err(|_| {
         let _ = std::fs::remove_file(&tmp);
@@ -529,6 +534,16 @@ fn is_quant(u: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn manifest_names_are_reserved_in_any_case() {
+        for p in [".rays-model.json", ".RAYS-MODEL.JSON", ".rays-model.json.tmp", ".rays-model.json.42.tmp"] {
+            assert!(is_manifest_name(p), "{p}");
+        }
+        for p in ["model.gguf", "sub/.rays-model.json", ".rays-model"] {
+            assert!(!is_manifest_name(p), "{p}");
+        }
+    }
+
     #[test]
     fn empty_query_lists_trending() {
         let url = search_url("https://hf.test", "  ").unwrap();

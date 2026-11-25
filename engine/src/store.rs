@@ -292,16 +292,17 @@ impl Store {
         )?;
         let rows = stmt
             .query_map([], |r| {
+                let id = r.get::<_, i64>(0)? as u64;
                 let config = QueueConfig {
-                    id: Some(r.get::<_, i64>(0)? as u64),
+                    id: Some(id),
                     name: r.get(1)?,
                     max_running: r.get::<_, i64>(2)? as u32,
                     speed_limit: r.get::<_, i64>(3)? as u64,
                     enabled: r.get(4)?,
-                    schedule: json_column(&r.get::<_, String>(5)?, 5)?,
+                    schedule: json_or_default(&r.get::<_, String>(5)?, id, "schedule"),
                     retry_failed: r.get(6)?,
                     wake: r.get(7)?,
-                    when_finished: json_column(&r.get::<_, String>(8)?, 8)?,
+                    when_finished: json_or_default(&r.get::<_, String>(8)?, id, "finish action"),
                 };
                 Ok((config, r.get(9)?))
             })?
@@ -384,6 +385,12 @@ impl Store {
     pub fn close_open_runs(&self, at: i64) -> Result<(), EngineError> {
         self.lock()?.execute("UPDATE queue_runs SET ended_at = ?1, outcome = 'app_quit' WHERE outcome = 'running'", [at])?;
         Ok(())
+    }
+
+    /// When the queue's latest run finished, if any.
+    pub fn last_finished_at(&self, queue_id: u64) -> Result<Option<i64>, EngineError> {
+        let conn = self.lock()?;
+        Ok(conn.query_row("SELECT max(ended_at) FROM queue_runs WHERE queue_id = ?1 AND outcome = 'finished'", [queue_id as i64], |r| r.get(0))?)
     }
 
     pub fn run(&self, id: u64) -> Result<Option<QueueRun>, EngineError> {
@@ -508,12 +515,25 @@ fn job_from_row(row: &Row) -> rusqlite::Result<Job> {
     })
 }
 
-fn json_column<T: serde::de::DeserializeOwned>(text: &str, idx: usize) -> rusqlite::Result<T> {
-    serde_json::from_str(text).map_err(|e| rusqlite::Error::FromSqlConversionFailure(idx, rusqlite::types::Type::Text, Box::new(e)))
+/// One bad value must not stop the engine from starting, so a queue falls back to the default for it.
+fn json_or_default<T: serde::de::DeserializeOwned + Default>(text: &str, queue: u64, what: &str) -> T {
+    serde_json::from_str(text).unwrap_or_else(|e| {
+        eprintln!("warn: queue {queue} has an unreadable {what}, using the default: {e}");
+        T::default()
+    })
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_bad_queue_column_falls_back_instead_of_failing_the_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        store.lock().unwrap().execute("UPDATE queues SET schedule = 'garbage', when_finished = '{' WHERE id = 1", []).unwrap();
+        let queues = store.queues().unwrap();
+        assert_eq!((queues[0].0.schedule.clone(), queues[0].0.when_finished.clone()), (None, FinishAction::Nothing));
+    }
+
     #[test]
     fn buckets_save_replace_list_and_remove() {
         let dir = tempfile::tempdir().unwrap();

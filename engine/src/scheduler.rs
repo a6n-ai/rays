@@ -60,6 +60,8 @@ struct QueueRt {
     run: Option<RunRt>,
     /// The pure window was open at the last evaluation.
     was_open: bool,
+    /// The start of the window that last opened, so the repeated hour when clocks go back is not a second opening.
+    opened_at: Option<DateTime>,
     /// A window without a stop stays open until its run finishes, even past midnight.
     latched: bool,
     /// A window without a stop whose run finished stays closed until it opens again.
@@ -73,7 +75,8 @@ impl QueueRt {
     /// A queue loaded or created at `now`: a window that is already open counts as opened before now, so
     /// loading is not an opening (it neither lifts a hold nor retries failed jobs).
     fn new(config: QueueConfig, held: bool, global: &Arc<RateLimiter>, now: DateTime) -> QueueRt {
-        let was_open = config.schedule.as_ref().is_some_and(|s| queue::window_open(s, now));
+        let opened_at = config.schedule.as_ref().and_then(|s| queue::open_start(s, now));
+        let was_open = opened_at.is_some();
         // A window without a stop that opened before now (today, or yesterday on an active day) runs until done.
         let latched = config.schedule.as_ref().is_some_and(|s| {
             s.stop_min.is_none()
@@ -87,10 +90,25 @@ impl QueueRt {
             started_any: false,
             run: None,
             was_open,
+            opened_at,
             latched,
             spent: false,
             was_in_window: was_open,
             last_view: None,
+        }
+    }
+
+    /// A no-stop window whose run finished at `at` (unix seconds), at or after the latest start, stays closed until it opens again.
+    fn restore_spent(&mut self, at: i64, now: DateTime) {
+        let Some(s) = self.config.schedule.as_ref().filter(|s| s.stop_min.is_none()) else { return };
+        let latest = [now.date() - 1.day(), now.date()]
+            .into_iter()
+            .filter(|d| queue::is_active(&s.repeat, *d) && queue::at(*d, s.start_min) <= now)
+            .map(|d| unix_secs(queue::at(d, s.start_min)))
+            .max();
+        if latest.is_some_and(|start| at >= start) {
+            self.latched = false;
+            self.spent = self.was_open;
         }
     }
 
@@ -210,8 +228,13 @@ impl Scheduler {
         let mut loaded = Vec::new();
         {
             // Jobs of a scheduled queue that were waiting or running stay Queued, so its window decides; the rest reload Paused.
-            let scheduled: HashSet<u64> = store.queues()?.into_iter().filter(|(q, _)| q.schedule.is_some()).filter_map(|(q, _)| q.id).collect();
+            let all = store.queues()?;
+            let scheduled: HashSet<u64> = all.iter().filter(|(q, _)| q.schedule.is_some()).filter_map(|(q, _)| q.id).collect();
+            let known: HashSet<u64> = all.iter().filter_map(|(q, _)| q.id).collect();
             for (mut job, saved) in store.load_with_saved_state()? {
+                if !known.contains(&job.queue_id) {
+                    job.queue_id = 1;
+                }
                 if scheduled.contains(&job.queue_id) && matches!(saved, JobState::Queued | JobState::Running | JobState::Retrying { .. }) {
                     job.state = JobState::Queued;
                 }
@@ -250,7 +273,14 @@ impl Scheduler {
         let queues = store
             .queues()?
             .into_iter()
-            .filter_map(|(config, held)| Some((config.id?, QueueRt::new(config, held, &limiter, now))))
+            .filter_map(|(config, held)| {
+                let id = config.id?;
+                let mut rt = QueueRt::new(config, held, &limiter, now);
+                if let Ok(Some(at)) = store.last_finished_at(id) {
+                    rt.restore_spent(at, now);
+                }
+                Some((id, rt))
+            })
             .collect();
         let sched = Arc::new(Scheduler {
             rt,
@@ -426,7 +456,7 @@ impl Scheduler {
             return rejected("destination must be an absolute path with no ..");
         }
         // The manifest lives at the folder's root under this name, so a repo file must not take it.
-        let Some((parent, name)) = hf::hf_target(dest_dir, &file.path).filter(|_| file.path != hf::MANIFEST_NAME) else {
+        let Some((parent, name)) = hf::hf_target(dest_dir, &file.path).filter(|_| !hf::is_manifest_name(&file.path)) else {
             return rejected("unsafe file path");
         };
         if !file.sha256.as_deref().is_none_or(|h| h.len() == 64 && h.bytes().all(|c| c.is_ascii_hexdigit())) {
@@ -1016,7 +1046,7 @@ impl Scheduler {
     }
 
     pub fn save_queue(self: &Arc<Self>, config: &QueueConfig) -> Result<u64, EngineError> {
-        validate_queue(config, self.max_running.load(Ordering::Relaxed))?;
+        validate_queue(config, self.now())?;
         let id = self.store.save_queue(config)?;
         let (now, config) = (self.now(), QueueConfig { id: Some(id), ..config.clone() });
         {
@@ -1026,7 +1056,7 @@ impl Scheduler {
                     rt.limiter.set_rate(config.speed_limit);
                     if rt.config.schedule != config.schedule {
                         let fresh = QueueRt::new(config.clone(), rt.held, &self.limiter, now);
-                        (rt.was_open, rt.was_in_window, rt.latched, rt.spent) = (fresh.was_open, fresh.was_open, fresh.latched, false);
+                        (rt.was_open, rt.opened_at, rt.was_in_window, rt.latched, rt.spent) = (fresh.was_open, fresh.opened_at, fresh.was_open, fresh.latched, false);
                     }
                     rt.config = config;
                 }
@@ -1041,8 +1071,10 @@ impl Scheduler {
 
     /// Its jobs move to the Main queue (id 1), which cannot be deleted.
     pub fn delete_queue(self: &Arc<Self>, id: u64) -> Result<(), EngineError> {
-        self.store.delete_queue(id)?;
-        lock(&self.queues).remove(&id);
+        if id == 1 {
+            return self.store.delete_queue(id);
+        }
+        // Jobs move in memory first, so a progress flush in between cannot write the deleted id back.
         let lives = lock(&self.jobs).to_vec();
         for live in lives {
             let moved = {
@@ -1057,6 +1089,8 @@ impl Scheduler {
                 self.hub.state_changed(job);
             }
         }
+        self.store.delete_queue(id)?;
+        lock(&self.queues).remove(&id);
         self.refresh();
         Ok(())
     }
@@ -1230,8 +1264,10 @@ impl Scheduler {
     /// Window edges. A window opening lifts Stop queue and retries failed jobs; a closing Once queue turns itself off.
     fn advance(&self, id: u64, rt: &mut QueueRt, now: DateTime, counts: &HashMap<u64, Counts>, retry: &mut Vec<u64>) {
         let Some(s) = rt.config.schedule.clone() else { return };
-        let raw = queue::window_open(&s, now);
-        if raw && !rt.was_open {
+        let start = queue::open_start(&s, now);
+        let raw = start.is_some();
+        if raw && !rt.was_open && start != rt.opened_at {
+            rt.opened_at = start;
             rt.latched = s.stop_min.is_none();
             rt.spent = false;
             if rt.held {
@@ -1361,18 +1397,21 @@ fn view_of_queue(rt: &QueueRt, counts: &HashMap<u64, Counts>, cond: Conditions, 
     }
 }
 
-fn validate_queue(config: &QueueConfig, global: usize) -> Result<(), EngineError> {
+/// The overall limit is not checked: `queue_gates` caps each queue at it, so lowering it never blocks a save.
+fn validate_queue(config: &QueueConfig, now: DateTime) -> Result<(), EngineError> {
     let bad = |msg: &str| Err(EngineError::InvalidQueue { msg: msg.to_owned() });
-    if config.max_running as usize > global {
-        return bad("simultaneous downloads is above the overall limit");
-    }
     let Some(s) = &config.schedule else { return Ok(()) };
     if s.start_min >= 1440 || s.stop_min.is_some_and(|m| m >= 1440) {
         return bad("a start or stop time is not within a day");
     }
     match &s.repeat {
         Repeat::Days { mask } if mask & 0x7f == 0 => bad("pick at least one day"),
-        Repeat::Once { date } if date.parse::<jiff::civil::Date>().is_err() => bad("the date is not a valid day"),
+        Repeat::Once { date } => match date.parse::<jiff::civil::Date>() {
+            Err(_) => bad("the date is not a valid day"),
+            // A Once queue that is off may still be edited; an enabled one must have a window left.
+            Ok(day) if config.enabled && queue::window_end(s, queue::at(day, s.start_min)).is_some_and(|end| end <= now) => bad("that time has already passed"),
+            Ok(_) => Ok(()),
+        },
         _ => Ok(()),
     }
 }

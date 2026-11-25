@@ -610,3 +610,72 @@ async fn disabling_mid_run_records_stopped_by_user() {
     let all = runs(&r.sched);
     assert_eq!((all.len(), all[0].outcome.clone()), (1, RunOutcome::StoppedByUser));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn finished_no_stop_window_stays_closed_after_reload() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let first = rig(dir.path(), 2);
+    let mut cfg = queue("Overnight", 0, 0);
+    cfg.schedule = Some(all_day(false));
+    let q = first.sched.save_queue(&cfg).unwrap();
+    let id = add(&first.sched, &base, "a", 64, Some(q));
+    wait_for(&first.sched, id, is_done).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(*first.finished.lock().unwrap(), vec![q]);
+    first.sched.shutdown();
+    drop(first);
+
+    let second = rig(dir.path(), 2);
+    let late = add(&second.sched, &base, "b", 64, Some(q));
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let v = second.sched.view(late).unwrap();
+    assert_eq!((v.state, v.waiting.as_deref()), (JobState::Queued, Some("Waiting for schedule")));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn repeated_dst_hour_does_not_reopen_the_window() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let clock = Arc::new(Mutex::new(date(2026, 11, 1).at(1, 10, 0, 0)));
+    let shared = clock.clone();
+    r.sched.set_clock(Arc::new(move || -> DateTime { *shared.lock().unwrap() }));
+    let mut cfg = queue("Fall back", 0, 0);
+    cfg.schedule = Some(QueueSchedule { repeat: Repeat::Daily, start_min: 60, stop_min: Some(105), wifi: false, power: false, idle: false });
+    let q = r.sched.save_queue(&cfg).unwrap();
+    let id = add(&r.sched, &base, "dst", 4096, Some(q));
+    wait_for(&r.sched, id, |v| busy(v) && v.done > 0).await;
+    r.sched.stop_queue(q);
+    wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
+
+    *clock.lock().unwrap() = date(2026, 11, 1).at(1, 50, 0, 0);
+    r.sched.tick();
+    *clock.lock().unwrap() = date(2026, 11, 1).at(1, 10, 0, 0);
+    r.sched.tick();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let v = r.sched.view(id).unwrap();
+    assert_eq!((v.state, v.waiting.as_deref()), (JobState::Queued, Some("Queue stopped")), "the repeated hour is not a new opening");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn once_in_the_past_is_rejected_and_a_lowered_global_cap_is_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    r.sched.set_clock(Arc::new(|| date(2026, 11, 25).at(10, 0, 0, 0)));
+    let once = |start_min: u16, stop_min| {
+        let mut cfg = queue("Once", 0, 0);
+        cfg.schedule = Some(QueueSchedule { repeat: Repeat::Once { date: "2026-11-25".into() }, start_min, stop_min, wifi: false, power: false, idle: false });
+        cfg
+    };
+    assert!(r.sched.save_queue(&once(540, Some(570))).is_err(), "ended at 09:30");
+    assert!(r.sched.save_queue(&once(540, None)).is_ok(), "no stop: open until midnight");
+    assert!(r.sched.save_queue(&once(660, None)).is_ok(), "starts later today");
+    let mut off = once(540, Some(570));
+    off.enabled = false;
+    assert!(r.sched.save_queue(&off).is_ok(), "a disabled queue can still be edited");
+
+    let mut cfg = queue("Wide", 5, 0);
+    cfg.max_running = 5;
+    assert!(r.sched.save_queue(&cfg).is_ok(), "the global cap applies at run time, not on save");
+}

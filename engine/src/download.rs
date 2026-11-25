@@ -83,17 +83,25 @@ pub fn host_port(url: &str) -> Option<String> {
 
 /// The failure text for a status. `answered` is the URL that answered, after redirects, so a CDN's 401 keeps its status;
 /// `job_url` is the URL the job asked for, which names the model.
-fn http_failure(hf: &HfAccess, job_url: &str, answered: &str, status: u16) -> String {
+/// `error_code` is Hugging Face's `X-Error-Code` header: it separates a gated repo from one that does not exist, both of which answer 401 without a token.
+fn http_failure(hf: &HfAccess, job_url: &str, answered: &str, status: u16, error_code: Option<&str>) -> String {
     let sent_token = hf.token.is_some() && hf.covers(job_url);
     match status {
         401 if hf.covers(answered) && sent_token => "Hugging Face rejected the saved token. Check it in Settings".into(),
-        401 if hf.covers(answered) => "This model is gated: add your Hugging Face token in Settings".into(),
+        401 if hf.covers(answered) && error_code == Some("GatedRepo") => "This model is gated: add your Hugging Face token in Settings".into(),
+        401 | 404 if hf.covers(answered) && hf.token.is_none() => {
+            "Couldn't find this model on Hugging Face. If it's private or gated, add your Hugging Face token in Settings.".into()
+        }
         403 if hf.covers(answered) => match model_page(job_url) {
             Some(page) => format!("Accept this model's license at {page}"),
             None => "Accept this model's license on huggingface.co".into(),
         },
         _ => format!("HTTP {status}"),
     }
+}
+
+fn error_code(resp: &reqwest::Response) -> Option<&str> {
+    resp.headers().get("x-error-code").and_then(|v| v.to_str().ok())
 }
 
 /// `<origin>/<org>/<repo>` for a `.../<org>/<repo>/resolve/...` URL.
@@ -349,7 +357,7 @@ async fn run_attempt(
             env.note_retry_after(&resp);
             return Err(Stop::Retry(format!("HTTP {status}")));
         }
-        _ => return Err(Stop::Failed(http_failure(&env.hf, &url, resp.url().as_str(), status))),
+        _ => return Err(Stop::Failed(http_failure(&env.hf, &url, resp.url().as_str(), status, error_code(&resp)))),
     }
 
     let ranged = status == 206;
@@ -1178,7 +1186,7 @@ async fn segment_attempt(
                     shared.env.note_retry_after(&resp);
                     return Err(Stop::Retry(format!("HTTP {status}")));
                 }
-                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, resp.url().as_str(), status))),
+                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, resp.url().as_str(), status, error_code(&resp)))),
             }
             resp
         }
@@ -1416,9 +1424,9 @@ mod tests {
     fn license_text_falls_back_without_a_repo() {
         let hf = HfAccess { host: "huggingface.co:443".into(), token: None };
         let url = "https://huggingface.co/resolve/abc/w.gguf";
-        assert_eq!(http_failure(&hf, url, url, 403), "Accept this model's license on huggingface.co");
+        assert_eq!(http_failure(&hf, url, url, 403, None), "Accept this model's license on huggingface.co");
         let url = "https://huggingface.co/org/repo/x/resolve/abc/w.gguf";
-        assert_eq!(http_failure(&hf, url, url, 403), "Accept this model's license on huggingface.co");
+        assert_eq!(http_failure(&hf, url, url, 403, None), "Accept this model's license on huggingface.co");
     }
 
     /// Drives `Grow` on a synthetic link: `speed(n)` bytes/s with `n` connections. Returns the count held most

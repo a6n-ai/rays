@@ -25,6 +25,7 @@ use tokio::net::TcpStream;
 const SIZE: usize = 2 * 1024 * 1024;
 const DROP_AT: usize = 512 * 1024;
 const GATED_MSG: &str = "This model is gated: add your Hugging Face token in Settings";
+const MISSING_MSG: &str = "Couldn't find this model on Hugging Face. If it's private or gated, add your Hugging Face token in Settings.";
 const REJECTED_MSG: &str = "Hugging Face rejected the saved token. Check it in Settings";
 
 type Auths = Arc<Mutex<Vec<Option<String>>>>;
@@ -77,7 +78,11 @@ async fn model(State(st): State<Hf>, headers: HeaderMap, Path((org, name)): Path
 async fn resolve(State(st): State<Hf>, headers: HeaderMap, Path((org, _name, _sha, file)): Path<(String, String, String, String)>) -> Response {
     st.auths.lock().unwrap().push(auth_of(&headers));
     let status = match org.as_str() {
-        "gated" => StatusCode::UNAUTHORIZED,
+        "gated" => {
+            return Response::builder().status(StatusCode::UNAUTHORIZED).header("x-error-code", "GatedRepo").body(Body::empty()).unwrap();
+        }
+        "ghost" => StatusCode::UNAUTHORIZED,
+        "gone" => StatusCode::NOT_FOUND,
         "lic" => StatusCode::FORBIDDEN,
         "open" => return Response::new(Body::from(st.data.to_vec())),
         // The first answer has a flipped first byte, so the first download fails its hash; later ones are right.
@@ -326,6 +331,12 @@ async fn gated_401_message() {
     let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/gated/m/resolve/abc/w.gguf", hf.port()));
     let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
     assert!(matches!(&v.state, JobState::Failed { reason } if reason == GATED_MSG), "{:?}", v.state);
+
+    for org in ["ghost", "gone"] {
+        let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/{org}/m/resolve/abc/w.gguf", hf.port()));
+        let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
+        assert!(matches!(&v.state, JobState::Failed { reason } if reason == MISSING_MSG), "{org}: {:?}", v.state);
+    }
 
     let id = add(&sched, dir.path(), format!("http://127.0.0.1:{}/lic/m/resolve/abc/w.gguf", hf.port()));
     let v = wait_for(&sched, id, |v| matches!(v.state, JobState::Failed { .. })).await;
