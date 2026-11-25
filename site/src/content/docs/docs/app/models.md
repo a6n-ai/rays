@@ -3,15 +3,15 @@ title: "Download Hugging Face models"
 description: "Search Hugging Face in Rays, pick the quantization or weights you need, and download them to your Mac or straight into LM Studio's models folder."
 ---
 
-**Models** in the sidebar downloads model files from Hugging Face. Each file downloads as a normal Rays download, with pause, resume and the speed limit.
+**Models** downloads model files from Hugging Face. Each file downloads as a normal Rays download, with pause, resume and the speed limit. In the sidebar, **Models** sits between **Sorter** and **Cloud**.
 
 ## Find a model
 
 Type in the search box. It takes:
 
 - **A name**, like `llama`.
-- **A repo**, like `org/repo`.
-- **A link**, like `https://huggingface.co/org/repo`. Rays opens that model directly.
+- **A repo**, like `org/repo`. Typing it searches for that repo.
+- **A link**, like `https://huggingface.co/org/repo`. Paste it and Rays opens that model directly.
 
 Results show downloads and likes. A lock means the model is gated and you have no token saved.
 
@@ -34,7 +34,9 @@ Files that already exist with the same name follow the **If a file with the same
 
 ## Checks
 
+- **Verifying.** A file being checked shows **Verifying…** until the check finishes.
 - **Checksum.** Each file is checked against the SHA-256 that Hugging Face publishes. A mismatch fails with "Checksum didn't match". Click **Resume** to download it again.
+- **Failed files.** Adding a model again resumes a file that failed earlier, if it is the same file and revision. Otherwise the download starts fresh.
 - **Already there.** A file that is already in the folder with the right size is skipped ("Already downloaded"). A file that is already downloading shows "Already in Downloads".
 
 ## Gated and private models
@@ -42,4 +44,5 @@ Files that already exist with the same name follow the **If a file with the same
 Some models need a Hugging Face access token. Add it under **Settings > Downloads > Hugging Face > Access token**. It is stored in the macOS Keychain and sent only to huggingface.co.
 
 - **Gated, no token:** "This model is gated: add your Hugging Face token in Settings".
-- **License not accepted:** "Accept this model's license on huggingface.co".
+- **License not accepted:** "Accept this model's license at https://huggingface.co/<org>/<repo>". The link opens the model page.
+- **Wrong token:** "Hugging Face rejected the saved token. Check it in Settings".
