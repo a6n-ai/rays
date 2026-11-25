@@ -155,7 +155,7 @@ fn main() -> ExitCode {
 
 /// Unix seconds as local time, like `Wed 26 Nov 02:00`.
 fn local_time(secs: i64) -> Option<String> {
-    let at = jiff::Timestamp::from_second(secs).ok()?.to_zoned(jiff::tz::TimeZone::system());
+    let at = jiff::tz::TimeZone::system().to_datetime(jiff::Timestamp::from_second(secs).ok()?);
     Some(at.strftime("%a %d %b %H:%M").to_string())
 }
 
