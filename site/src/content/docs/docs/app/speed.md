@@ -17,7 +17,7 @@ The header shows the last result, for example "84.5 Mb/s · 161 ms latency · Wi
 
 While a test runs, a progress bar and a live chart of the speed over the 10 seconds show here.
 
-**Best time** sits below the header. It reads "Usually fastest 01:00–05:00 · 14 days" and shows a chart of the typical speed for each hour. Until Rays has enough data, it reads "Not enough data yet: 3 of 7 days. Rays learns from your downloads and speed tests."
+**Best time** sits below the header. It reads "Usually fastest 01:00–05:00 · 14 days" and shows a chart of the typical speed for each hour. Until Rays has enough data, it shows "Not enough data yet" with "3 of 7 days. Rays learns from your downloads and speed tests."
 
 ### History
 
@@ -26,7 +26,7 @@ While a test runs, a progress bar and a live chart of the speed over the 10 seco
 ### Settings
 
 - **Test automatically every 3 hours.** Off by default. Each test uses about 50 to 200 MB. Rays runs it only on Wi-Fi or Ethernet, and only when nothing is downloading.
-- **Test at night.** Shows "On until <date>", or **Test at night for a week** to start it. See [Best time queue](/docs/app/queues/#best-time-queue) for the first-time question.
+- **Night tests.** Shows "On until <date>" with **Stop night tests**, which ends the week at once, or **Test at night for a week** to start it. See [Best time queue](/docs/app/queues/#best-time-queue) for the first-time question.
 - **Clear speed history…** removes every speed test and sample. The best time starts again from nothing.
 
 The page says "Speed data stays on this Mac." Nothing about your speed is uploaded.
@@ -36,8 +36,9 @@ The page says "Speed data stays on this Mac." Nothing about your speed is upload
 A test takes about 10 seconds and uses Cloudflare's speed test server.
 
 - On a hotspot or a metered connection, Rays asks before it starts.
+- On a hotspot, a metered link or a network Rays can't identify yet, a test is not saved, and without your go-ahead it does not run.
 - If downloads were running during the test, Rays shows the result but does not save it, because other traffic would skew it.
-- Tests that start on their own are listed as "Automatic test" in History.
+- While an automatic test runs, the Overview header says "Automatic test". It can't be stopped.
 
 ## How Rays learns the best time
 

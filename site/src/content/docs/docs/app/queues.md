@@ -51,12 +51,14 @@ If a condition stops being true, the queue waits. It picks up again when the con
 
 ## Best time queue
 
-The **Best time** queue runs downloads in the window when your connection is usually fastest, 01:00–05:00 at first. Rays creates it the first time you add downloads with **At best time (01:00–05:00)** from the **Download** button's menu.
+The **Best time** queue runs downloads in the window when your connection is usually fastest, 01:00–06:00 until Rays has 7 days of speed data. Rays creates it the first time you add downloads with **At best time (01:00–06:00, default)** from the **Download** button's menu.
 
 The first time, Rays asks: "Let Rays test your speed a few times each night for a week? About 1 GB in total."
 
-- **Allow** runs one speed test in each of 00–02, 02–04 and 04–06 for 7 nights, so Rays learns the window quickly.
-- **Not Now** uses 01:00–06:00 until Rays has data.
+- **Allow** runs one speed test in each of 00–02, 02–04 and 04–06 for 7 nights, so Rays learns the window quickly. **Stop night tests** in the Speed page's **Settings** ends it early.
+- **Not Now** runs no night tests.
+
+Either way the queue uses 01:00–06:00 until Rays has data.
 
 The queue follows the best window once a day. **Follow best time** in its **Schedule** tab keeps it on. If you edit its schedule, **Follow best time** turns off. Turn it back on in the **Schedule** tab.
 

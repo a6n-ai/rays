@@ -80,7 +80,7 @@ export const GROUPS: Group[] = [
 			{ icon: 'power', title: 'When finished', text: 'Play a sound, quit, sleep, lock, shut down, or run a command.' },
 			{ icon: 'moon', title: 'Wake the Mac', text: 'Optionally wake a sleeping Mac for a scheduled queue. It asks for your admin password once.' },
 			{ icon: 'speed', title: 'Speed test', text: 'Measure your download speed in about 10 seconds, with the last result in the sidebar.', href: '/docs/app/speed/' },
-			{ icon: 'chart', title: 'Best time', text: 'Learns the fastest hours of the night from your downloads, and sends a queue there.', href: '/docs/app/speed/' },
+			{ icon: 'chart', title: 'Best time', text: 'Learns the fastest hours of the day from your downloads, and sends a queue there.', href: '/docs/app/speed/' },
 		],
 	},
 	{
