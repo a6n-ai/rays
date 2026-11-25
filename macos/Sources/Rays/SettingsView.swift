@@ -234,6 +234,8 @@ struct DownloadsTab: View {
                 }
             }
 
+            Section { WakePermissionRow() }
+
             HuggingFaceTokenSection()
 
             SavedNote()
@@ -284,4 +286,26 @@ struct ErrorLine: View {
 
 extension URL {
     var tildePath: String { (path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath }
+}
+
+private struct WakePermissionRow: View {
+    @State private var installed: Bool?
+
+    var body: some View {
+        SettingRow(symbol: "alarm.fill", color: .red, title: "Wake permission",
+                   hint: "Lets a queue wake your Mac to start on time.") {
+            HStack(spacing: 10) {
+                Text(installed == true ? "Installed" : "Not set up").foregroundStyle(.secondary)
+                if installed == true {
+                    Button("Remove wake permission") {
+                        Task {
+                            _ = await WakePermission.remove()
+                            installed = await Task.detached { WakePermission.isInstalled }.value
+                        }
+                    }
+                }
+            }
+        }
+        .task { installed = await Task.detached { WakePermission.isInstalled }.value }
+    }
 }

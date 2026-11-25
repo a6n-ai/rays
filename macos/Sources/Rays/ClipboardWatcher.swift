@@ -78,6 +78,10 @@ final class ClipboardWatcher: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content
+        if info.categoryIdentifier == QueueActions.category {
+            if response.actionIdentifier == QueueActions.cancelAction { await MainActor.run { QueueActions.shared.cancel() } }
+            return
+        }
         guard info.categoryIdentifier == Self.category,
               response.actionIdentifier == Self.download || response.actionIdentifier == UNNotificationDefaultActionIdentifier,
               let links = info.userInfo["links"] as? [String]

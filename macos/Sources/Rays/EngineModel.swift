@@ -39,6 +39,19 @@ final class EngineModel {
             SettingsKey.speedLimit: 0, SettingsKey.connections: 4, SettingsKey.maxRunning: 3,
         ])
         start()
+        onQueueFinished = { [weak self] id in
+            guard let action = self?.queues.first(where: { $0.config.id == id })?.config.whenFinished else { return }
+            QueueActions.shared.perform(action)
+        }
+    }
+
+    /// Keeps the Mac's wake time in step with the queue's next run, one minute early. Needs the wake permission.
+    private func syncWake(_ queue: QueueView) {
+        guard let id = queue.config.id else { return }
+        let next = queue.config.wake ? queue.nextRun.map { Date(timeIntervalSince1970: TimeInterval($0)) } : nil
+        Task.detached {
+            if let next { _ = WakePermission.schedule(queue: id, at: next) } else { WakePermission.cancel(queue: id) }
+        }
     }
 
     private func start() {
@@ -235,6 +248,7 @@ final class EngineModel {
         let engine = try runningEngine
         let id = try engine.saveQueue(config: config)
         queues = engine.queues()
+        if let saved = queues.first(where: { $0.config.id == id }) { syncWake(saved) }
         return id
     }
 
@@ -242,6 +256,7 @@ final class EngineModel {
         let engine = try runningEngine
         try engine.deleteQueue(id: id)
         queues = engine.queues()
+        Task.detached { WakePermission.cancel(queue: id) }
     }
 
     /// Shows a queue action's failure in the notice line; `notice` is only settable in this file.
@@ -399,6 +414,7 @@ final class EngineModel {
             } else {
                 queues.append(queue)
             }
+            syncWake(queue)
         case .queueFinished(let id):
             onQueueFinished?(id)
         }

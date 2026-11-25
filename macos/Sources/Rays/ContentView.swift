@@ -45,7 +45,9 @@ struct ContentView: View {
         } detail: {
             detail
                 .overlay(alignment: .top) { UpdatePill() }
+                .overlay(alignment: .top) { CountdownBanner() }
                 .animation(reduceMotion ? nil : .smooth, value: Updater.shared.showsPill)
+                .animation(reduceMotion ? nil : .smooth, value: QueueActions.shared.countdown != nil)
         }
         .containerBackground(.thinMaterial, for: .window)
         .sheet(isPresented: Binding(get: { scheduling != nil }, set: { if !$0 { scheduling = nil } })) {
