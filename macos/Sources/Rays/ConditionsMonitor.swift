@@ -37,7 +37,7 @@ final class ConditionsMonitor {
     }
 
     nonisolated private static func kind(of path: NWPath) -> NetworkKind {
-        if path.isExpensive { return .expensive }
+        if path.isExpensive || path.isConstrained { return .expensive }
         if path.usesInterfaceType(.wifi) { return .wifi }
         if path.usesInterfaceType(.wiredEthernet) { return .wired }
         return path.status == .satisfied ? .other : .unknown

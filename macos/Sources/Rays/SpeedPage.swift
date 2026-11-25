@@ -87,7 +87,7 @@ private struct SpeedOverview: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
                     if let test = model.lastTest, !test.saved, progress == nil {
-                        Text("Downloads were running, so this result wasn't saved")
+                        Text(model.lastTestMetered ? "Tested on a hotspot, so this result wasn't saved" : "Downloads were running, so this result wasn't saved")
                             .font(.callout)
                             .foregroundStyle(.orange)
                     }
@@ -204,7 +204,6 @@ private struct SpeedHistoryTab: View {
     @State private var sort = ListSort.newest
     @State private var kind = FileKind.all
     @State private var page = 0
-    @State private var hovered: String?
 
     private var shown: [SpeedSample] {
         let kept = model.speedHistory.filter {
@@ -229,8 +228,7 @@ private struct SpeedHistoryTab: View {
                     ForEach(shown.enumerated().map { (id: "\($0.element.at)-\($0.offset)", sample: $0.element) }, id: \.id) { entry in
                         let (id, sample) = (entry.id, entry.sample)
                         row(sample)
-                            .background(RowHighlight(selected: false, hovered: hovered == id))
-                            .onHover { hovered = $0 ? id : nil }
+                            .hoverHighlight()
                             .rowStyle()
                     }
                 }
@@ -283,8 +281,11 @@ private struct SpeedSettingsTab: View {
             Section {
                 LabeledContent("Night tests") {
                     if let until = model.speedSettings.nightUntil, model.nightWeekActive {
-                        Text("On until " + Date(timeIntervalSince1970: TimeInterval(until)).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text("On until " + Date(timeIntervalSince1970: TimeInterval(until)).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                                .foregroundStyle(.secondary)
+                            Button("Stop night tests") { model.stopNightWeek() }
+                        }
                     } else {
                         Button("Test at night for a week") { model.startNightWeek() }
                     }

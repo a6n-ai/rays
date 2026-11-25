@@ -19,6 +19,8 @@ final class EngineModel {
     static let runLimit = 200
     private(set) var bestTime: BestTime?
     private(set) var lastTest: SpeedTestResult?
+    /// The newest test ran on a metered or unknown network, which is never saved.
+    private(set) var lastTestMetered = false
     private(set) var testing = false
     private(set) var speedError: String?
     private(set) var hourly: [UInt64?] = Array(repeating: nil, count: 24)
@@ -300,6 +302,7 @@ final class EngineModel {
         let engine = try runningEngine
         try engine.deleteQueue(id: id)
         queues = engine.queues()
+        bestQueueId = engine.bestTimeQueueId()
         WakePermission.sync(queue: id, wake: false, nextRun: nil)
         QueueAppearances.shared.clear(id)
     }
@@ -463,6 +466,7 @@ final class EngineModel {
             }
             syncWake(queue)
             bestQueueId = engine?.bestTimeQueueId()
+            askNightPromptIfNeeded()
         case .queueFinished(let id):
             onQueueFinished?(id)
         case .runChanged(let run):
@@ -648,6 +652,12 @@ extension EngineModel {
         speedSettings = engine.speedSettings()
         bestQueueId = engine.bestTimeQueueId()
         if let saved = engine.lastSpeedTest(), saved.at >= (lastTest?.at ?? 0) { lastTest = saved }
+        askNightPromptIfNeeded()
+    }
+
+    /// A Best time queue made by `dl` or MCP still gets the one-time night-test question. Nothing runs before Allow.
+    func askNightPromptIfNeeded() {
+        if bestQueueId != nil, !speedSettings.nightPromptAnswered { nightPromptShown = true }
     }
 
     /// Asks first on a hotspot or metered connection. Ignored while a test is already running.
@@ -660,6 +670,7 @@ extension EngineModel {
         guard let engine, !testing else { return }
         testing = true
         speedError = nil
+        lastTestMetered = network == .expensive || network == .unknown
         liveSamples = []
         defer {
             testing = false
@@ -713,7 +724,16 @@ extension EngineModel {
     func clearSpeedHistory() {
         engine?.clearSpeedHistory()
         lastTest = nil
+        loadSpeedHistory()
         refreshSpeed()
+    }
+
+    func stopNightWeek() {
+        guard let engine else { return }
+        var settings = engine.speedSettings()
+        settings.nightUntil = nil
+        engine.setSpeedSettings(s: settings)
+        speedSettings = engine.speedSettings()
     }
 
     /// Whether the Best time queue's night week is running now.
@@ -775,11 +795,17 @@ extension EngineModel {
         }
     }
 
+    /// A global or queue speed limit caps the job, so moving it would not make it faster.
+    private func limitApplies(to job: JobView) -> Bool {
+        defaults.integer(forKey: SettingsKey.speedLimit) > 0 || (queues.first { $0.id == job.queueId }?.config.speedLimit ?? 0) > 0
+    }
+
     func dismissHint(_ job: UInt64) { dismissedHints.insert(job) }
 
     /// "Usually 3x faster at 01:00" when a big, slow download would do much better in the best window.
     func slowHint(for job: JobView) -> String? {
-        guard job.state == .running, !dismissedHints.contains(job.id), !hintGone.contains(job.id) else { return nil }
+        guard job.state == .running, !dismissedHints.contains(job.id), !hintGone.contains(job.id),
+              job.queueId != bestQueueId, !limitApplies(to: job) else { return nil }
         let parts = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let now = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
         guard (job.total ?? 0) >= 1_000_000_000,

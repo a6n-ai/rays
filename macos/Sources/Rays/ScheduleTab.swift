@@ -47,7 +47,7 @@ struct ScheduleTab: View {
                         Toggle("Follow best time", isOn: Binding(get: { queue.config.followBestTime }, set: setFollow))
                             .toggleStyle(.switch)
                         formNote("Rays moves this schedule to your fastest hours once a day")
-                        if model.bestTime?.hasWindow == false {
+                        if queue.config.followBestTime, model.bestTime?.hasWindow == false {
                             formNote("Default night window until Rays has 7 days of speed data")
                         }
                     }
