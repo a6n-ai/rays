@@ -1,9 +1,11 @@
 //! Global bandwidth cap shared by every transfer: a token bucket refilled at `rate` bytes/s, burst of one second.
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 pub struct RateLimiter {
     inner: Mutex<Bucket>,
+    /// A queue's limiter also waits on the global one. One level only: the parent's own parent is not consulted.
+    parent: Option<Arc<RateLimiter>>,
 }
 
 struct Bucket {
@@ -27,11 +29,16 @@ fn lock(m: &Mutex<Bucket>) -> MutexGuard<'_, Bucket> {
 
 impl RateLimiter {
     pub fn new(rate: u64) -> RateLimiter {
-        RateLimiter { inner: Mutex::new(Bucket { rate, tokens: rate as f64, last: Instant::now() }) }
+        RateLimiter { inner: Mutex::new(Bucket { rate, tokens: rate as f64, last: Instant::now() }), parent: None }
+    }
+
+    /// Like `new`, but `acquire` waits on `parent` too.
+    pub fn with_parent(rate: u64, parent: Arc<RateLimiter>) -> RateLimiter {
+        RateLimiter { parent: Some(parent), ..RateLimiter::new(rate) }
     }
 
     pub fn is_limited(&self) -> bool {
-        lock(&self.inner).rate > 0
+        lock(&self.inner).rate > 0 || self.parent.as_ref().is_some_and(|p| p.is_limited())
     }
 
     pub fn set_rate(&self, rate: u64) {
@@ -41,8 +48,16 @@ impl RateLimiter {
         b.tokens = b.tokens.min(rate as f64);
     }
 
-    /// Waits until `n` bytes may pass. A request above the burst waits for a full burst and goes into debt.
+    /// Waits until `n` bytes may pass, here and in the parent.
     pub async fn acquire(&self, n: usize) {
+        self.take(n).await;
+        if let Some(parent) = &self.parent {
+            parent.take(n).await;
+        }
+    }
+
+    /// Waits until `n` bytes may pass. A request above the burst waits for a full burst and goes into debt.
+    async fn take(&self, n: usize) {
         let n = n as f64;
         loop {
             let wait = {
@@ -67,6 +82,17 @@ impl RateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn child_waits_on_parent() {
+        let parent = Arc::new(RateLimiter::new(100_000));
+        let child = RateLimiter::with_parent(0, parent.clone());
+        assert!(child.is_limited());
+        child.acquire(100_000).await;
+        let started = Instant::now();
+        child.acquire(50_000).await;
+        assert!(started.elapsed() >= Duration::from_millis(400), "{:?}", started.elapsed());
+    }
 
     #[tokio::test]
     async fn burst_passes_at_once() {
