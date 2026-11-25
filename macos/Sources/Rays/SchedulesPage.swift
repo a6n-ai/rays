@@ -47,17 +47,17 @@ struct SchedulesPage: View {
     private var list: some View {
         List {
             if nothingScheduled {
+                // The toolbar's + and each queue's calendar button add one, so no button of its own here.
                 HStack(spacing: LayoutMetrics.gap) {
-                    Text("Nothing scheduled yet. Add a schedule to a queue to start its downloads at set times.")
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24)
+                    Text("Nothing scheduled yet. Add a schedule to a queue below, or use + in the toolbar.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Menu("New schedule") { addMenu }
-                        .menuStyle(.button)
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
-                        .fixedSize()
                 }
+                .frame(minHeight: LayoutMetrics.rowAction)
                 .padding(.horizontal, LayoutMetrics.hoverInset)
                 .rowInsets()
             }
