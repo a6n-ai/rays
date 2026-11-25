@@ -20,22 +20,10 @@ struct SchedulesPage: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if nothingScheduled {
-                    VStack(spacing: 0) {
-                        EmptyState(symbol: "calendar.badge.clock", title: "Nothing scheduled",
-                                   message: "Give a queue a schedule to start downloads at set times.")
-                        Button("New schedule", action: newSchedule)
-                            .buttonStyle(.glass)
-                            .padding(.bottom, 80)
-                    }
-                } else {
-                    VStack(spacing: 0) {
-                        ListControls(statuses: QueueFilter.schedules, status: $status, kind: $kind, showsKind: false,
-                                     sorts: [.nextRun, .name], sort: $sort, count: 0, page: $page)
-                        if shown.isEmpty { EmptyState(symbol: "tray", title: "No queues match") } else { list }
-                    }
-                }
+            VStack(spacing: 0) {
+                ListControls(statuses: QueueFilter.schedules, status: $status, kind: $kind, showsKind: false,
+                             sorts: [.nextRun, .name], sort: $sort, count: 0, page: $page)
+                if shown.isEmpty { EmptyState(symbol: "tray", title: "No schedules match") } else { list }
             }
             .navigationTitle("Schedules")
             .toolbar { if selected == nil { toolbar } }
@@ -48,6 +36,19 @@ struct SchedulesPage: View {
 
     private var list: some View {
         List {
+            if nothingScheduled {
+                HStack(spacing: LayoutMetrics.gap) {
+                    Text("Nothing scheduled yet. Add a schedule to a queue to start its downloads at set times.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("New schedule", action: newSchedule)
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, LayoutMetrics.hoverInset)
+                .rowInsets()
+            }
             if !upcoming.isEmpty {
                 Section { ForEach(upcoming) { scheduled($0) } } header: { header("Upcoming") }
             }
