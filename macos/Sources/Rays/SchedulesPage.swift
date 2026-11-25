@@ -7,17 +7,21 @@ struct SchedulesPage: View {
     @Environment(EngineModel.self) private var model
     @AppStorage("queueSection") private var queueSection = QueueSection.downloads
     @State private var selected: UInt64?
+    @State private var status = "All"
+    @State private var sort = ListSort.nextRun
+    @State private var page = 0
+    @State private var kind = FileKind.all
 
-    private var upcoming: [QueueView] {
-        model.queues.filter { $0.config.schedule != nil && $0.config.enabled }.sorted { ($0.nextRun ?? .max) < ($1.nextRun ?? .max) }
-    }
-    private var paused: [QueueView] { model.sortedQueues.filter { $0.config.schedule != nil && !$0.config.enabled } }
-    private var unscheduled: [QueueView] { model.sortedQueues.filter { $0.config.schedule == nil } }
+    private var shown: [QueueView] { model.queues.listed(status: status, sort: sort, pinMain: false) }
+    private var upcoming: [QueueView] { shown.filter { $0.config.schedule != nil && $0.config.enabled } }
+    private var paused: [QueueView] { shown.filter { $0.config.schedule != nil && !$0.config.enabled } }
+    private var unscheduled: [QueueView] { shown.filter { $0.config.schedule == nil } }
+    private var nothingScheduled: Bool { !model.queues.contains { $0.config.schedule != nil } }
 
     var body: some View {
         NavigationStack {
             Group {
-                if upcoming.isEmpty && paused.isEmpty {
+                if nothingScheduled {
                     VStack(spacing: 0) {
                         EmptyState(symbol: "calendar.badge.clock", title: "Nothing scheduled",
                                    message: "Give a queue a schedule to start downloads at set times.")
@@ -26,7 +30,11 @@ struct SchedulesPage: View {
                             .padding(.bottom, 80)
                     }
                 } else {
-                    list
+                    VStack(spacing: 0) {
+                        ListControls(statuses: QueueFilter.schedules, status: $status, kind: $kind, showsKind: false,
+                                     sorts: [.nextRun, .name], sort: $sort, count: 0, page: $page)
+                        if shown.isEmpty { EmptyState(symbol: "tray", title: "No queues match") } else { list }
+                    }
                 }
             }
             .navigationTitle("Schedules")

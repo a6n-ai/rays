@@ -25,7 +25,7 @@ enum FileKind: String, CaseIterable, Identifiable {
 }
 
 enum ListSort: String, CaseIterable, Identifiable {
-    case newest = "Newest first", oldest = "Oldest first", name = "Name", size = "Largest first"
+    case newest = "Newest first", oldest = "Oldest first", name = "Name", size = "Largest first", nextRun = "Next run"
     var id: Self { self }
 }
 
@@ -35,7 +35,9 @@ struct ListControls: View {
     var statuses: [String] = []
     @Binding var status: String
     @Binding var kind: FileKind
-    var sorts: [ListSort] = ListSort.allCases
+    /// False for lists that are not files, such as queues.
+    var showsKind = true
+    var sorts: [ListSort] = [.newest, .oldest, .name, .size]
     @Binding var sort: ListSort
     let count: Int
     @Binding var page: Int
@@ -44,7 +46,7 @@ struct ListControls: View {
 
     static let pageSize = 50
     private var pages: Int { max(1, (count + Self.pageSize - 1) / Self.pageSize) }
-    private var filtered: Bool { kind != .all || (statuses.first.map { status != $0 } ?? false) }
+    private var filtered: Bool { (showsKind && kind != .all) || (statuses.first.map { status != $0 } ?? false) }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -55,10 +57,12 @@ struct ListControls: View {
                     }
                     .pickerStyle(.inline)
                 }
-                Picker("Type", selection: $kind) {
-                    ForEach(FileKind.allCases) { Text($0.rawValue).tag($0) }
+                if showsKind {
+                    Picker("Type", selection: $kind) {
+                        ForEach(FileKind.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.inline)
                 }
-                .pickerStyle(.inline)
             } label: {
                 Label(filtered ? "Filtered" : "Filter", systemImage: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
             }
@@ -126,7 +130,7 @@ extension Array where Element == JobView {
         }
         // Ids grow with each new download, so they order by when it was added.
         return switch sort {
-        case .newest: jobs.sorted { $0.id > $1.id }
+        case .newest, .nextRun: jobs.sorted { $0.id > $1.id }
         case .oldest: jobs.sorted { $0.id < $1.id }
         case .name: jobs.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         case .size: jobs.sorted { ($0.total ?? $0.done) > ($1.total ?? $1.done) }

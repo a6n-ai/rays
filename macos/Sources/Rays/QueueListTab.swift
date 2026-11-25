@@ -7,26 +7,19 @@ struct QueueListTab: View {
     @Environment(EngineModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var deleting: QueueView?
+    @State private var status = "All"
+    @State private var sort = ListSort.newest
+    @State private var page = 0
+    @State private var kind = FileKind.all
+
+    private var shown: [QueueView] { model.queues.listed(status: status, sort: sort) }
 
     var body: some View {
-        List {
-            ForEach(model.sortedQueues) { queue in
-                QueueRow(queue: queue, isDirty: drafts.isDirty(queue.id), onDelete: { deleting = queue })
-                    .contentShape(Rectangle())
-                    .onTapGesture { open(queue.id) }
-                    .listRowInsets(EdgeInsets(
-                        top: LayoutMetrics.rowSpacing / 2,
-                        leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
-                        bottom: LayoutMetrics.rowSpacing / 2,
-                        trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
-                    .listRowSeparator(.hidden)
-            }
+        VStack(spacing: 0) {
+            ListControls(statuses: QueueFilter.queues, status: $status, kind: $kind, showsKind: false,
+                         sorts: [.name, .newest, .nextRun], sort: $sort, count: 0, page: $page)
+            if shown.isEmpty { EmptyState(symbol: "tray", title: "No queues match") } else { list }
         }
-        .listStyle(.inset)
-        .tint(.gray)
-        .scrollContentBackground(.hidden)
-        .scrollEdgeEffectStyle(.soft, for: .all)
-        .animation(reduceMotion ? nil : .smooth, value: model.sortedQueues.map(\.id))
         .confirmationDialog(
             "Delete \(deleting?.config.name ?? "queue")?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -47,6 +40,27 @@ struct QueueListTab: View {
         } message: {
             Text("Its downloads move to Main.")
         }
+    }
+
+    private var list: some View {
+        List {
+            ForEach(shown) { queue in
+                QueueRow(queue: queue, isDirty: drafts.isDirty(queue.id), onDelete: { deleting = queue })
+                    .contentShape(Rectangle())
+                    .onTapGesture { open(queue.id) }
+                    .listRowInsets(EdgeInsets(
+                        top: LayoutMetrics.rowSpacing / 2,
+                        leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
+                        bottom: LayoutMetrics.rowSpacing / 2,
+                        trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
+                    .listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.inset)
+        .tint(.gray)
+        .scrollContentBackground(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .all)
+        .animation(reduceMotion ? nil : .smooth, value: shown.map(\.id))
     }
 }
 
@@ -99,6 +113,7 @@ struct QueueRow: View {
             Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
+                .controlSize(.small)
                 .tint(.accentColor)
                 .help("Enabled")
             if onDelete != nil { primaryButton }

@@ -40,6 +40,7 @@ struct QueueHeader: View {
             Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
+                .controlSize(.small)
                 .tint(.accentColor)
                 .help("Enabled")
         }

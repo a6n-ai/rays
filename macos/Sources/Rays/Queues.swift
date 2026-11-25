@@ -152,3 +152,33 @@ extension EngineModel {
         }
     }
 }
+
+/// The filters and sorts of the Queues and Schedules lists.
+enum QueueFilter {
+    static let queues = ["All", "Running", "Waiting", "Stopped", "Scheduled", "Not scheduled"]
+    static let schedules = ["All", "Upcoming", "Paused", "Not scheduled"]
+}
+
+extension Array where Element == QueueView {
+    /// Filtered by one of `QueueFilter`'s names, then sorted. Main stays first, whatever the sort.
+    func listed(status: String, sort: ListSort, pinMain: Bool = true) -> [QueueView] {
+        let kept = filter { queue in
+            switch status {
+            case "Running": queue.running > 0
+            case "Waiting": if case .waitingForTime = queue.state { true } else if case .waitingForCondition = queue.state { true } else { false }
+            case "Stopped": queue.isStopped
+            case "Scheduled": queue.config.schedule != nil
+            case "Upcoming": queue.config.schedule != nil && queue.config.enabled
+            case "Paused": queue.config.schedule != nil && !queue.config.enabled
+            case "Not scheduled": queue.config.schedule == nil
+            default: true
+            }
+        }
+        let sorted = switch sort {
+        case .name: kept.sorted { $0.config.name.localizedStandardCompare($1.config.name) == .orderedAscending }
+        case .nextRun: kept.sorted { ($0.nextRun ?? .max, $0.id) < ($1.nextRun ?? .max, $1.id) }
+        default: kept.sorted { $0.id > $1.id }
+        }
+        return pinMain ? sorted.filter(\.isMain) + sorted.filter { !$0.isMain } : sorted
+    }
+}
