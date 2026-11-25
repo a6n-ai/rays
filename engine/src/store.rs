@@ -67,9 +67,15 @@ impl Store {
     /// `.part` length. Split jobs take the sum of their segments, since the file is preallocated. A missing
     /// `.part` sets `done = 0` and drops any segments. Running/Queued/Retrying become Paused.
     pub fn load_all(&self) -> Result<Vec<Job>, EngineError> {
+        Ok(self.load_with_saved_state()?.into_iter().map(|(job, _)| job).collect())
+    }
+
+    /// Like `load_all`, with each job's state as it was saved, so the scheduler can keep jobs of scheduled queues Queued.
+    pub fn load_with_saved_state(&self) -> Result<Vec<(Job, JobState)>, EngineError> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(&format!("SELECT {COLUMNS} FROM jobs ORDER BY position, id"))?;
         let mut jobs = stmt.query_map([], job_from_row)?.collect::<rusqlite::Result<Vec<Job>>>()?;
+        let saved: Vec<JobState> = jobs.iter().map(|j| j.state.clone()).collect();
         for job in &mut jobs {
             if matches!(job.state, JobState::Done { .. } | JobState::Failed { .. }) {
                 continue;
@@ -89,7 +95,7 @@ impl Store {
             };
             job.state = JobState::Paused;
         }
-        Ok(jobs)
+        Ok(jobs.into_iter().zip(saved).collect())
     }
 
     /// Inserts `job` (its `id` is ignored), sets `job.id` to the new row id, returns it.

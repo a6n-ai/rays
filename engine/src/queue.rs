@@ -48,11 +48,11 @@ pub struct QueueConfig {
     pub when_finished: FinishAction,
 }
 
-fn at(day: Date, min: u16) -> DateTime {
+pub(crate) fn at(day: Date, min: u16) -> DateTime {
     day.at(0, 0, 0, 0) + i64::from(min).minutes()
 }
 
-fn is_active(repeat: &Repeat, day: Date) -> bool {
+pub(crate) fn is_active(repeat: &Repeat, day: Date) -> bool {
     match repeat {
         Repeat::Once { date } => date.parse::<Date>().is_ok_and(|d| d == day),
         Repeat::Daily => true,

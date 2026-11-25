@@ -267,18 +267,93 @@ async fn restart_mid_run_no_stale_finish() {
     let base = server().await;
     let dir = tempfile::tempdir().unwrap();
     let first = rig(dir.path(), 2);
-    let id = add(&first.sched, &base, "big", 1024, None);
+    let mut cfg = queue("Open all day", 0, 0);
+    cfg.schedule = Some(all_day(false));
+    let q = first.sched.save_queue(&cfg).unwrap();
+    let id = add(&first.sched, &base, "big", 1024, Some(q));
+    let main_id = add(&first.sched, &base, "main", 2048, None);
     wait_for(&first.sched, id, |v| busy(v) && v.done > 0).await;
+    wait_for(&first.sched, main_id, |v| busy(v) && v.done > 0).await;
     first.sched.shutdown();
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(first.finished.lock().unwrap().is_empty());
     drop(first);
 
     let second = rig(dir.path(), 2);
-    second.sched.resume(id);
     wait_for(&second.sched, id, is_done).await;
     tokio::time::sleep(Duration::from_millis(400)).await;
-    assert_eq!(*second.finished.lock().unwrap(), vec![1]);
+    assert_eq!(*second.finished.lock().unwrap(), vec![q]);
+    assert_eq!(second.sched.view(main_id).unwrap().state, JobState::Paused, "an unscheduled queue does not auto-start");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn delete_queue_moves_only_its_own_jobs() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let a = r.sched.save_queue(&queue("A", 0, 0)).unwrap();
+    let b = r.sched.save_queue(&queue("B", 0, 0)).unwrap();
+    r.sched.stop_queue(a);
+    r.sched.stop_queue(b);
+    let in_a = add(&r.sched, &base, "a", 64, Some(a));
+    let in_b = add(&r.sched, &base, "b", 64, Some(b));
+    r.sched.delete_queue(a).unwrap();
+    assert_eq!(r.sched.view(in_a).unwrap().queue_id, 1);
+    assert_eq!(r.sched.view(in_b).unwrap().queue_id, b);
+    r.sched.shutdown();
+    drop(r);
+    let again = rig(dir.path(), 2);
+    assert_eq!(again.sched.view(in_b).unwrap().queue_id, b);
+    assert_eq!(again.sched.view(in_a).unwrap().queue_id, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn no_stop_window_opened_yesterday_runs_on_load() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    r.sched.set_clock(Arc::new(|| date(2026, 11, 26).at(3, 0, 0, 0)));
+    let mut cfg = queue("Overnight", 0, 0);
+    cfg.enabled = false;
+    let q = r.sched.save_queue(&cfg).unwrap();
+    let id = add(&r.sched, &base, "o", 64, Some(q));
+    cfg.id = Some(q);
+    cfg.enabled = true;
+    cfg.schedule = Some(QueueSchedule { repeat: Repeat::Daily, start_min: 23 * 60, stop_min: None, wifi: false, power: false, idle: false });
+    r.sched.save_queue(&cfg).unwrap();
+    let v = wait_for(&r.sched, id, |v| busy(v) || is_done(v)).await;
+    assert_eq!(v.waiting, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_now_on_empty_queue_ends() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    r.sched.set_clock(Arc::new(|| date(2026, 11, 25).at(15, 0, 0, 0)));
+    let mut cfg = queue("Morning", 0, 0);
+    cfg.schedule = Some(QueueSchedule { repeat: Repeat::Daily, start_min: 600, stop_min: Some(660), wifi: false, power: false, idle: false });
+    let q = r.sched.save_queue(&cfg).unwrap();
+    r.sched.run_queue_now(q);
+    let id = add(&r.sched, &base, "m", 64, Some(q));
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let v = r.sched.view(id).unwrap();
+    assert_eq!((v.state, v.waiting.as_deref()), (JobState::Queued, Some("Waiting for schedule")));
+    assert!(r.finished.lock().unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn holding_a_retrying_job_keeps_it_queued() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let q = r.sched.save_queue(&queue("Side", 0, 0)).unwrap();
+    // Nothing listens on port 9, so the job fails and waits to retry.
+    let id = r.sched.add_to(vec!["http://127.0.0.1:9/x".into()], None, vec![Some("x.bin".into())], Some(q))[0].id.unwrap();
+    wait_for(&r.sched, id, |v| matches!(v.state, JobState::Retrying { .. })).await;
+    r.sched.stop_queue(q);
+    wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(r.sched.view(id).unwrap().state, JobState::Queued);
 }
 
 #[tokio::test(flavor = "multi_thread")]

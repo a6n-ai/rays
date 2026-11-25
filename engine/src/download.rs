@@ -204,7 +204,9 @@ pub async fn run(
             return Outcome::Failed(err);
         }
         let id = with_job(&env.live, |j| {
-            j.state = JobState::Retrying { attempt };
+            if matches!(j.state, JobState::Running | JobState::Retrying { .. }) {
+                j.state = JobState::Retrying { attempt };
+            }
             j.id
         });
         env.hub.state_changed(id);
@@ -213,7 +215,11 @@ pub async fn run(
             _ = cancelled(&mut cancel) => return Outcome::Paused,
             _ = tokio::time::sleep(env.next_wait(attempt)) => {}
         }
-        with_job(&env.live, |j| j.state = JobState::Running);
+        with_job(&env.live, |j| {
+            if matches!(j.state, JobState::Retrying { .. }) {
+                j.state = JobState::Running;
+            }
+        });
         env.hub.state_changed(id);
     }
 }

@@ -10,6 +10,7 @@ use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
 use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, QueueState, QueueView, now_secs};
 use jiff::civil::DateTime;
+use jiff::ToSpan;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -59,6 +60,11 @@ impl QueueRt {
     /// loading is not an opening (it neither lifts a hold nor retries failed jobs).
     fn new(config: QueueConfig, held: bool, global: &Arc<RateLimiter>, now: DateTime) -> QueueRt {
         let was_open = config.schedule.as_ref().is_some_and(|s| queue::window_open(s, now));
+        // A window without a stop that opened before now (today, or yesterday on an active day) runs until done.
+        let latched = config.schedule.as_ref().is_some_and(|s| {
+            s.stop_min.is_none()
+                && [now.date() - 1.day(), now.date()].into_iter().any(|d| queue::is_active(&s.repeat, d) && queue::at(d, s.start_min) <= now)
+        });
         QueueRt {
             limiter: Arc::new(RateLimiter::with_parent(config.speed_limit, Arc::clone(global))),
             config,
@@ -66,7 +72,7 @@ impl QueueRt {
             run_now: false,
             started_any: false,
             was_open,
-            latched: false,
+            latched,
             spent: false,
             was_in_window: was_open,
             last_view: None,
@@ -185,7 +191,17 @@ impl Scheduler {
         hf_secrets: Arc<dyn Secrets>,
         hf_base: String,
     ) -> Result<Arc<Scheduler>, EngineError> {
-        let loaded = store.load_all()?;
+        let mut loaded = Vec::new();
+        {
+            // Jobs of a scheduled queue that were waiting or running stay Queued, so its window decides; the rest reload Paused.
+            let scheduled: HashSet<u64> = store.queues()?.into_iter().filter(|(q, _)| q.schedule.is_some()).filter_map(|(q, _)| q.id).collect();
+            for (mut job, saved) in store.load_with_saved_state()? {
+                if scheduled.contains(&job.queue_id) && matches!(saved, JobState::Queued | JobState::Running | JobState::Retrying { .. }) {
+                    job.state = JobState::Queued;
+                }
+                loaded.push(job);
+            }
+        }
         let next_position = loaded.iter().map(|j| j.position).max().map_or(0, |p| p + 1);
         let lives = loaded
             .into_iter()
@@ -489,15 +505,17 @@ impl Scheduler {
         self.find(id).map(|live| self.view_of(&live))
     }
 
-    /// Pauses every running job and saves all jobs.
+    /// Stops every running job (Paused, or Queued in a scheduled queue) and saves all jobs.
     pub fn shutdown(&self) {
         self.stopping.store(true, Ordering::Relaxed);
+        let scheduled: HashSet<u64> = lock(&self.queues).iter().filter(|(_, rt)| rt.config.schedule.is_some()).map(|(id, _)| *id).collect();
         let lives = lock(&self.jobs).to_vec();
         for live in &lives {
             let mut job = lock(&live.job);
             if is_active(&job.state) {
                 lock(&live.cancel).send_replace(true);
-                job.state = JobState::Paused;
+                // A scheduled queue's job stays Queued, so its window decides after the next launch.
+                job.state = if scheduled.contains(&job.queue_id) { JobState::Queued } else { JobState::Paused };
             }
             job.done = live.done.load(Ordering::Relaxed);
             let _ = self.store.save(&job);
@@ -963,7 +981,7 @@ impl Scheduler {
                     rt.limiter.set_rate(config.speed_limit);
                     if rt.config.schedule != config.schedule {
                         let fresh = QueueRt::new(config.clone(), rt.held, &self.limiter, now);
-                        (rt.was_open, rt.was_in_window, rt.latched, rt.spent) = (fresh.was_open, fresh.was_open, false, false);
+                        (rt.was_open, rt.was_in_window, rt.latched, rt.spent) = (fresh.was_open, fresh.was_open, fresh.latched, false);
                     }
                     rt.config = config;
                 }
@@ -985,7 +1003,9 @@ impl Scheduler {
             let moved = {
                 let mut job = lock(&live.job);
                 let moved = job.queue_id == id;
-                job.queue_id = 1;
+                if moved {
+                    job.queue_id = 1;
+                }
                 moved.then_some(job.id)
             };
             if let Some(job) = moved {
@@ -996,6 +1016,7 @@ impl Scheduler {
         Ok(())
     }
 
+    /// A running job moved to another queue keeps its old queue's speed limiter until it restarts.
     /// A running job moved into a closed queue goes back to Queued at once.
     pub fn move_to_queue(self: &Arc<Self>, id: JobId, queue: u64) {
         if !lock(&self.queues).contains_key(&queue) {
@@ -1220,6 +1241,10 @@ impl Scheduler {
         let mut queues = lock(&self.queues);
         for (id, rt) in queues.iter_mut() {
             let left = counts.get(id).is_some_and(|c| c.queued + c.running + c.paused > 0);
+            if !left && !rt.started_any {
+                // Run now on an empty queue: nothing ran, so there is no finish, but the override ends.
+                rt.run_now = false;
+            }
             if !rt.started_any || left {
                 continue;
             }
