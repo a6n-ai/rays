@@ -1241,3 +1241,15 @@ async fn replace_on_keeps_old_when_trash_fails() {
     assert_eq!(std::fs::read(dir.path().join("a.bin")).unwrap(), b"old");
     assert_eq!(sha(&std::fs::read(&path).unwrap()), sha(&data()));
 }
+
+#[test]
+fn snapshot_carries_job_dir() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = engine_in(root.path());
+    let dest = root.path().join("m/sub");
+    let add = engine.add_to(vec!["https://example.com/f.bin".into()], Some(dest.to_string_lossy().into_owned()), vec![Some("w.bin".into())]);
+    assert!(add[0].id.is_some(), "{add:?}");
+    let snap = engine.snapshot();
+    assert_eq!(snap[0].dir, Some(dest.to_string_lossy().into_owned()));
+}
+

@@ -725,6 +725,7 @@ impl Scheduler {
                 parts.sort_by_key(|p| p.start);
                 parts
             },
+            dir: job.dir.as_ref().map(|d| d.to_string_lossy().into_owned()),
         }
     }
 

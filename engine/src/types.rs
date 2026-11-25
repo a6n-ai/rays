@@ -44,6 +44,8 @@ pub struct JobView {
     pub connections: u32,
     /// The file's byte ranges for a split download, in file order; empty for a single stream.
     pub parts: Vec<PartView>,
+    /// The folder the file goes into; None for the downloads folder.
+    pub dir: Option<String>,
 }
 
 /// One range of a split download, for drawing a segmented progress bar.
