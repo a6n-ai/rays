@@ -554,3 +554,46 @@ fn runs_pruned_to_200() {
     assert_eq!(kept[0].id, ids[204], "newest first");
     assert_eq!(kept[199].id, ids[5]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn condition_drop_keeps_one_run() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let mut cfg = queue("Wi-Fi only", 0, 0);
+    cfg.schedule = Some(all_day(true));
+    let q = r.sched.save_queue(&cfg).unwrap();
+    r.sched.set_conditions(true, false, false);
+    let id = add(&r.sched, &base, "w", 1024, Some(q));
+    wait_for(&r.sched, id, |v| busy(v) && v.done > 0).await;
+
+    r.sched.set_conditions(false, false, false);
+    wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let all = runs(&r.sched);
+    assert_eq!((all.len(), all[0].outcome.clone()), (1, RunOutcome::Running));
+
+    r.sched.set_conditions(true, false, false);
+    wait_for(&r.sched, id, is_done).await;
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let all = runs(&r.sched);
+    assert_eq!((all.len(), all[0].outcome.clone(), all[0].files_done), (1, RunOutcome::Finished, 1));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn disabling_mid_run_records_stopped_by_user() {
+    let base = server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let r = rig(dir.path(), 2);
+    let mut cfg = queue("Side", 0, 0);
+    let q = r.sched.save_queue(&cfg).unwrap();
+    let id = add(&r.sched, &base, "big", 2048, Some(q));
+    wait_for(&r.sched, id, |v| busy(v) && v.done > 0).await;
+    cfg.id = Some(q);
+    cfg.enabled = false;
+    r.sched.save_queue(&cfg).unwrap();
+    wait_for(&r.sched, id, |v| v.state == JobState::Queued).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let all = runs(&r.sched);
+    assert_eq!((all.len(), all[0].outcome.clone()), (1, RunOutcome::StoppedByUser));
+}

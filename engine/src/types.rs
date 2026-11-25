@@ -130,6 +130,7 @@ pub struct QueueRun {
     pub started_at: i64,
     pub ended_at: Option<i64>,
     pub files_done: u32,
+    /// Total size of the files that finished in this run, including bytes downloaded in earlier runs.
     pub bytes_done: u64,
     pub outcome: RunOutcome,
 }

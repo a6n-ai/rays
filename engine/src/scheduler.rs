@@ -39,6 +39,8 @@ struct RunRt {
     files: u32,
     bytes: u64,
     last_emit: Instant,
+    /// Counts changed since the last emit.
+    dirty: bool,
 }
 
 /// Running counts reach the app at most this often.
@@ -809,7 +811,8 @@ impl Scheduler {
 
     /// Picks the first Queued job and claims a slot for it, all under the locks so two pumps cannot pick the same job.
     fn start_next(&self) -> Option<(Arc<Live>, JobId, watch::Receiver<bool>)> {
-        // Taken before the job locks: queue state is never read while a job lock is held across it.
+        // Taken before the job locks, to keep one order: queue state, then job locks. `finish` is the exception and
+        // takes the queue lock under one job lock, so nothing may take a job lock while holding the queue lock.
         let gates = self.queue_gates();
         let jobs = lock(&self.jobs);
         let mut inflight = lock(&self.inflight);
@@ -837,11 +840,14 @@ impl Scheduler {
         };
         if let Some(rt) = lock(&self.queues).get_mut(&queue_id) {
             rt.started_any = true;
-            if rt.run.is_none()
-                && let Ok(run) = self.store.open_run(queue_id, now_secs())
-            {
-                rt.run = Some(RunRt { id: run, files: 0, bytes: 0, last_emit: Instant::now() });
-                self.hub.run_changed(run);
+            if rt.run.is_none() {
+                match self.store.open_run(queue_id, now_secs()) {
+                    Ok(run) => {
+                        rt.run = Some(RunRt { id: run, files: 0, bytes: 0, last_emit: Instant::now(), dirty: false });
+                        self.hub.run_changed(run);
+                    }
+                    Err(e) => eprintln!("warn: could not record a run of queue {queue_id}: {e}"),
+                }
             }
         }
         let (tx, rx) = watch::channel(false);
@@ -876,6 +882,7 @@ impl Scheduler {
                     && let Some(run) = lock(&self.queues).get_mut(&job.queue_id).and_then(|rt| rt.run.as_mut())
                 {
                     run.files += 1;
+                    run.dirty = true;
                     run.bytes += job.total.unwrap_or(job.done);
                     let _ = self.store.update_run(run.id, run.files, run.bytes, None);
                 }
@@ -1308,11 +1315,16 @@ impl Scheduler {
             if rt.run.is_none() {
                 continue;
             }
-            if rt.gate(cond, now) != QueueState::Open {
-                self.close_run(rt, RunOutcome::WindowClosed);
-            } else if let Some(run) = rt.run.as_mut().filter(|r| r.last_emit.elapsed() >= RUN_EMIT) {
-                run.last_emit = Instant::now();
-                self.hub.run_changed(run.id);
+            match rt.gate(cond, now) {
+                QueueState::WaitingForTime { .. } => self.close_run(rt, RunOutcome::WindowClosed),
+                QueueState::Off => self.close_run(rt, RunOutcome::StoppedByUser),
+                _ => {
+                    if let Some(run) = rt.run.as_mut().filter(|r| r.dirty && r.last_emit.elapsed() >= RUN_EMIT) {
+                        run.dirty = false;
+                        run.last_emit = Instant::now();
+                        self.hub.run_changed(run.id);
+                    }
+                }
             }
         }
     }
