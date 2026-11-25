@@ -120,6 +120,7 @@ fn queue(name: &str, max_running: u32, speed_limit: u64) -> QueueConfig {
         retry_failed: false,
         wake: false,
         when_finished: FinishAction::Nothing,
+        follow_best_time: false,
     }
 }
 

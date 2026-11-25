@@ -1,6 +1,7 @@
 //! SQLite persistence (`<data_dir>/queue.db`, WAL). Uses the system libsqlite3.
 use crate::queue::QueueConfig;
 use crate::s3::BucketConfig;
+use crate::speed::{NetworkKind, SampleSource, SpeedSample};
 use crate::types::{EngineError, HostView, Job, JobId, JobState, QueueRun, RunOutcome, Segment, now_secs};
 use rusqlite::{Connection, OptionalExtension, Row, named_params, params};
 use std::path::{Path, PathBuf};
@@ -39,6 +40,11 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "ALTER TABLE jobs ADD COLUMN queue_id INTEGER NOT NULL DEFAULT 1",
     "CREATE TABLE queue_runs(id INTEGER PRIMARY KEY, queue_id INTEGER NOT NULL, started_at INTEGER NOT NULL, ended_at INTEGER,
      files_done INTEGER NOT NULL DEFAULT 0, bytes_done INTEGER NOT NULL DEFAULT 0, outcome TEXT NOT NULL)",
+    "CREATE TABLE speed_samples(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, bps INTEGER NOT NULL,
+     source TEXT NOT NULL, network TEXT NOT NULL)",
+    "CREATE INDEX speed_samples_at ON speed_samples(at)",
+    "CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    "ALTER TABLE queues ADD COLUMN follow_best_time INTEGER NOT NULL DEFAULT 0",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
@@ -287,7 +293,7 @@ impl Store {
     pub fn queues(&self) -> Result<Vec<(QueueConfig, bool)>, EngineError> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
-            "SELECT id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished, held \
+            "SELECT id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished, held, follow_best_time \
              FROM queues ORDER BY id",
         )?;
         let rows = stmt
@@ -303,6 +309,7 @@ impl Store {
                     retry_failed: r.get(6)?,
                     wake: r.get(7)?,
                     when_finished: json_or_default(&r.get::<_, String>(8)?, id, "finish action"),
+                    follow_best_time: r.get(10)?,
                 };
                 Ok((config, r.get(9)?))
             })?
@@ -316,11 +323,11 @@ impl Store {
         let when_finished = serde_json::to_string(&config.when_finished).expect("finish action serializes");
         let conn = self.lock()?;
         conn.execute(
-            "INSERT INTO queues (id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
+            "INSERT INTO queues (id, name, max_running, speed_limit, enabled, schedule, retry_failed, wake, when_finished, follow_best_time) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) ON CONFLICT(id) DO UPDATE SET name = excluded.name, \
              max_running = excluded.max_running, speed_limit = excluded.speed_limit, enabled = excluded.enabled, \
              schedule = excluded.schedule, retry_failed = excluded.retry_failed, wake = excluded.wake, \
-             when_finished = excluded.when_finished",
+             when_finished = excluded.when_finished, follow_best_time = excluded.follow_best_time",
             params![
                 config.id.map(|id| id as i64),
                 config.name,
@@ -331,6 +338,7 @@ impl Store {
                 config.retry_failed,
                 config.wake,
                 when_finished,
+                config.follow_best_time,
             ],
         )?;
         Ok(match config.id {
@@ -351,6 +359,58 @@ impl Store {
         // Ids can be reused (no AUTOINCREMENT), so a new queue must not inherit this one's history.
         tx.execute("DELETE FROM queue_runs WHERE queue_id = ?1", [id as i64])?;
         tx.commit()?;
+        Ok(())
+    }
+
+    pub fn add_sample(&self, s: &SpeedSample) -> Result<(), EngineError> {
+        self.lock()?.execute(
+            "INSERT INTO speed_samples (at, bps, source, network) VALUES (?1, ?2, ?3, ?4)",
+            params![s.at, s.bps as i64, source_text(s.source), network_text(s.network)],
+        )?;
+        Ok(())
+    }
+
+    /// Oldest first.
+    pub fn samples_since(&self, at: i64) -> Result<Vec<SpeedSample>, EngineError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare("SELECT at, bps, source, network FROM speed_samples WHERE at >= ?1 ORDER BY at, id")?;
+        let rows = stmt
+            .query_map([at], |r| {
+                Ok(SpeedSample {
+                    at: r.get(0)?,
+                    bps: r.get::<_, i64>(1)? as u64,
+                    source: source_from_text(&r.get::<_, String>(2)?),
+                    network: network_from_text(&r.get::<_, String>(3)?),
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Deletes samples older than `before`; returns how many.
+    pub fn prune_samples(&self, before: i64) -> Result<usize, EngineError> {
+        Ok(self.lock()?.execute("DELETE FROM speed_samples WHERE at < ?1", [before])?)
+    }
+
+    pub fn clear_samples(&self) -> Result<(), EngineError> {
+        self.lock()?.execute("DELETE FROM speed_samples", [])?;
+        Ok(())
+    }
+
+    pub fn setting(&self, key: &str) -> Result<Option<String>, EngineError> {
+        Ok(self.lock()?.query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| r.get(0)).optional()?)
+    }
+
+    /// `None` deletes the key.
+    pub fn set_setting(&self, key: &str, value: Option<&str>) -> Result<(), EngineError> {
+        let conn = self.lock()?;
+        match value {
+            Some(v) => conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![key, v],
+            )?,
+            None => conn.execute("DELETE FROM settings WHERE key = ?1", [key])?,
+        };
         Ok(())
     }
 
@@ -440,6 +500,40 @@ fn run_from_row(r: &rusqlite::Row) -> rusqlite::Result<QueueRun> {
             _ => RunOutcome::Running,
         },
     })
+}
+
+fn source_text(s: SampleSource) -> &'static str {
+    match s {
+        SampleSource::Test => "test",
+        SampleSource::Downloads => "downloads",
+    }
+}
+
+fn source_from_text(s: &str) -> SampleSource {
+    match s {
+        "test" => SampleSource::Test,
+        _ => SampleSource::Downloads,
+    }
+}
+
+fn network_text(n: NetworkKind) -> &'static str {
+    match n {
+        NetworkKind::Wifi => "wifi",
+        NetworkKind::Wired => "wired",
+        NetworkKind::Expensive => "expensive",
+        NetworkKind::Other => "other",
+        NetworkKind::Unknown => "unknown",
+    }
+}
+
+fn network_from_text(s: &str) -> NetworkKind {
+    match s {
+        "wifi" => NetworkKind::Wifi,
+        "wired" => NetworkKind::Wired,
+        "expensive" => NetworkKind::Expensive,
+        "unknown" => NetworkKind::Unknown,
+        _ => NetworkKind::Other,
+    }
 }
 
 /// Returns the `state` column and the `error` column for `state`.
@@ -594,6 +688,7 @@ mod tests {
             retry_failed: false,
             wake: false,
             when_finished: FinishAction::Nothing,
+            follow_best_time: false,
         }
     }
 
@@ -946,5 +1041,50 @@ mod tests {
 
         assert_eq!(store.load_all().unwrap()[0].queue_id, 1);
         assert!(store.delete_queue(1).is_err());
+    }
+
+    #[test]
+    fn samples_round_trip() {
+        use crate::speed::{NetworkKind, SampleSource, SpeedSample};
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let downloads = |at, bps| SpeedSample { at, bps, source: SampleSource::Downloads, network: NetworkKind::Wifi };
+        store.add_sample(&downloads(30, 300)).unwrap();
+        store.add_sample(&downloads(10, 100)).unwrap();
+        let test = SpeedSample { at: 20, bps: 200, source: SampleSource::Test, network: NetworkKind::Wired };
+        store.add_sample(&test).unwrap();
+        assert_eq!(store.samples_since(15).unwrap(), vec![test, downloads(30, 300)]);
+    }
+
+    #[test]
+    fn prune_removes_old() {
+        use crate::speed::{NetworkKind, SampleSource, SpeedSample};
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        for at in [10, 20, 30] {
+            store.add_sample(&SpeedSample { at, bps: 1, source: SampleSource::Downloads, network: NetworkKind::Other }).unwrap();
+        }
+        assert_eq!(store.prune_samples(25).unwrap(), 2);
+        assert_eq!(store.samples_since(0).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn settings_set_get_delete() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        store.set_setting("k", Some("v")).unwrap();
+        assert_eq!(store.setting("k").unwrap(), Some("v".to_string()));
+        store.set_setting("k", None).unwrap();
+        assert_eq!(store.setting("k").unwrap(), None);
+    }
+
+    #[test]
+    fn follow_best_time_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let id = store.save_queue(&QueueConfig { follow_best_time: true, ..sample_queue("Best") }).unwrap();
+        let queues = store.queues().unwrap();
+        let (got, _) = queues.iter().find(|(q, _)| q.id == Some(id)).unwrap();
+        assert!(got.follow_best_time);
     }
 }

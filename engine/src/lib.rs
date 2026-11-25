@@ -28,6 +28,8 @@ pub mod s3;
 #[cfg(feature = "full")]
 pub mod scheduler;
 #[cfg(feature = "full")]
+pub mod speed;
+#[cfg(feature = "full")]
 pub mod store;
 #[cfg(feature = "full")]
 pub mod types;

@@ -47,6 +47,7 @@ pub struct QueueConfig {
     pub retry_failed: bool,
     pub wake: bool,
     pub when_finished: FinishAction,
+    pub follow_best_time: bool,
 }
 
 pub(crate) fn at(day: Date, min: u16) -> DateTime {

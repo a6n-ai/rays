@@ -132,7 +132,7 @@ extension EngineModel {
                 id: nil, name: name,
                 maxRunning: UInt32(max(0, defaults.integer(forKey: SettingsKey.queueDefaultMaxRunning))),
                 speedLimit: UInt64(max(0, defaults.integer(forKey: SettingsKey.queueDefaultSpeed))),
-                enabled: true, schedule: schedule, retryFailed: false, wake: false, whenFinished: finish))
+                enabled: true, schedule: schedule, retryFailed: false, wake: false, whenFinished: finish, followBestTime: false))
         } catch {
             queueFailed("create the queue", error)
             return nil
