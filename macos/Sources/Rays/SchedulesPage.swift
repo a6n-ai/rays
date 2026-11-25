@@ -10,6 +10,8 @@ struct SchedulesPage: View {
     @State private var status = "All"
     @State private var sort = ListSort.nextRun
     @State private var page = 0
+    @State private var naming = false
+    @State private var newName = "Night downloads"
     @State private var kind = FileKind.all
 
     private var shown: [QueueView] { model.queues.listed(status: status, sort: sort, pinMain: false) }
@@ -26,6 +28,14 @@ struct SchedulesPage: View {
                 if shown.isEmpty { EmptyState(symbol: "tray", title: "No schedules match") } else { list }
             }
             .navigationTitle("Schedules")
+            .alert("New queue with a schedule", isPresented: $naming) {
+                TextField("Name", text: $newName)
+                Button("Create", action: createScheduled)
+                    .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("It runs every day at \(SchedulerTime.hhmm(SchedulerTime.defaultStart)).")
+            }
             .toolbar { if selected == nil { toolbar } }
             .navigationDestination(item: $selected) { id in
                 QueuePage(queueId: id, isDropTargeted: isDropTargeted, drafts: drafts, onDeleted: { selected = nil })
@@ -42,9 +52,11 @@ struct SchedulesPage: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    Button("New schedule", action: newSchedule)
+                    Menu("New schedule") { addMenu }
+                        .menuStyle(.button)
                         .buttonStyle(.glass)
                         .controlSize(.small)
+                        .fixedSize()
                 }
                 .padding(.horizontal, LayoutMetrics.hoverInset)
                 .rowInsets()
@@ -62,7 +74,7 @@ struct SchedulesPage: View {
                             QueueTile(queue: queue, size: 24).opacity(0.6)
                             Text(queue.config.name).foregroundStyle(.secondary).lineLimit(1)
                             Spacer()
-                            Button("Add schedule") { open(queue.id) }
+                            Button("Add schedule") { addSchedule(to: queue) }
                                 .buttonStyle(.glass)
                                 .controlSize(.small)
                         }
@@ -112,15 +124,42 @@ struct SchedulesPage: View {
         selected = id
     }
 
-    private func newSchedule() {
-        if let id = model.newQueue(schedule: SchedulerTime.schedule(for: .daily, keeping: nil)) { open(id) }
+    private var dailySchedule: QueueSchedule? { SchedulerTime.schedule(for: .daily, keeping: nil) }
+
+    /// Opens the queue on Schedule with a daily draft; nothing is saved until Save.
+    private func addSchedule(to queue: QueueView) {
+        var config = queue.config
+        config.schedule = dailySchedule
+        drafts.items[queue.id] = QueueDrafts.Draft(base: queue.config, config: config)
+        open(queue.id)
+    }
+
+    private func createScheduled() {
+        if let id = model.newQueue(name: newName.trimmingCharacters(in: .whitespaces), schedule: dailySchedule) { open(id) }
+    }
+
+    @ViewBuilder private var addMenu: some View {
+        let free = model.sortedQueues.filter { $0.config.schedule == nil }
+        if !free.isEmpty {
+            Section("Add schedule to…") {
+                ForEach(free) { queue in
+                    Button { addSchedule(to: queue) } label: {
+                        Label(queue.config.name, systemImage: QueueAppearances.shared.appearance(for: queue).symbol)
+                    }
+                }
+            }
+            Divider()
+        }
+        Button("New queue with a schedule…") { naming = true }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             ToolbarIconGroup {
-                Button(action: newSchedule) { ToolbarIcon(symbol: "plus", title: "New schedule") }
+                Menu { addMenu } label: { ToolbarIcon(symbol: "plus", title: "New schedule") }
+                    .menuStyle(.button)
                     .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
                     .help("New schedule")
             }
         }

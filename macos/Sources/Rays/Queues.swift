@@ -123,12 +123,12 @@ extension EngineModel {
     func openRun(_ queue: UInt64) -> QueueRun? { runs.first { $0.queueId == queue && $0.endedAt == nil } }
 
     /// A new unscheduled queue using the defaults chosen in the Queues settings, or nil after the failure is shown in the notice line.
-    func newQueue(schedule: QueueSchedule? = nil) -> UInt64? {
+    func newQueue(name: String = "New queue", schedule: QueueSchedule? = nil) -> UInt64? {
         let defaults = UserDefaults.standard
         let finish = FinishKind(rawValue: defaults.string(forKey: SettingsKey.queueDefaultFinish) ?? "")?.action ?? .nothing
         do {
             return try saveQueue(QueueConfig(
-                id: nil, name: "New queue",
+                id: nil, name: name,
                 maxRunning: UInt32(max(0, defaults.integer(forKey: SettingsKey.queueDefaultMaxRunning))),
                 speedLimit: UInt64(max(0, defaults.integer(forKey: SettingsKey.queueDefaultSpeed))),
                 enabled: true, schedule: schedule, retryFailed: false, wake: false, whenFinished: finish))
