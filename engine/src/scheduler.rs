@@ -208,6 +208,10 @@ pub struct Scheduler {
     /// One `refresh` at a time, so edges and events are not interleaved.
     refreshing: Mutex<()>,
     auto_plan: Mutex<AutoPlan>,
+    /// Serialises user saves with the follower's writes, so neither overwrites the other from a stale copy.
+    queue_edit: Mutex<()>,
+    /// One `best_time_queue` at a time, so concurrent first calls cannot create two queues.
+    best_queue: Mutex<()>,
 }
 
 /// Unix seconds of the minutes at which automatic speed tests start.
@@ -218,6 +222,8 @@ struct AutoPlan {
     at: Vec<i64>,
     /// Set by tests; the plan is then left alone.
     pinned: bool,
+    /// The last minute `auto_test_due` looked at.
+    checked: Option<i64>,
 }
 
 const KEY_BEST_QUEUE: &str = "best_time_queue_id";
@@ -347,6 +353,8 @@ impl Scheduler {
             clock: Mutex::new(clock),
             refreshing: Mutex::new(()),
             auto_plan: Mutex::new(AutoPlan::default()),
+            queue_edit: Mutex::new(()),
+            best_queue: Mutex::new(()),
         });
         let weak = Arc::downgrade(&sched);
         sched.rt.spawn(async move {
@@ -1136,6 +1144,7 @@ impl Scheduler {
 
     pub fn save_queue(self: &Arc<Self>, config: &QueueConfig) -> Result<u64, EngineError> {
         validate_queue(config, self.now())?;
+        let _edit = lock(&self.queue_edit);
         let mut config = config.clone();
         // Editing the schedule of a following queue is the user taking over.
         if config.follow_best_time {
@@ -1143,6 +1152,10 @@ impl Scheduler {
             if current.is_some_and(|c| c.follow_best_time && c.schedule != config.schedule) {
                 config.follow_best_time = false;
             }
+        }
+        // A following queue always has a Daily window; its conditions stay as the user set them.
+        if let Some(s) = config.schedule.as_mut().filter(|_| config.follow_best_time) {
+            s.repeat = Repeat::Daily;
         }
         self.write_queue(&config)
     }
@@ -1524,23 +1537,23 @@ fn token_not_ready(e: &EngineError) -> bool {
 }
 
 impl Scheduler {
-    fn local_samples(&self) -> Vec<(DateTime, u64)> {
+    fn local_samples(&self) -> Result<Vec<(DateTime, u64)>, EngineError> {
         let since = self.now_secs() - SAMPLE_DAYS * 86_400;
         let tz = jiff::tz::TimeZone::system();
-        self.store
-            .samples_since(since)
-            .unwrap_or_default()
+        Ok(self
+            .store
+            .samples_since(since)?
             .into_iter()
             .filter_map(|s| Some((jiff::Timestamp::from_second(s.at).ok()?.to_zoned_datetime(tz.clone()).datetime(), s.bps)))
-            .collect()
+            .collect())
     }
 
     pub fn best_time(&self) -> BestTime {
-        speed::best_window(&self.local_samples(), 4)
+        speed::best_window(&self.local_samples().unwrap_or_default(), 4)
     }
 
     pub fn hourly_typical(&self) -> Vec<Option<u64>> {
-        let local = self.local_samples();
+        let local = self.local_samples().unwrap_or_default();
         (0..24).map(|h| speed::typical_bps_at(&local, h)).collect()
     }
 
@@ -1550,6 +1563,7 @@ impl Scheduler {
 
     /// The queue that follows the best time, made on first use. Found by its stored id, never its name.
     pub fn best_time_queue(self: &Arc<Self>) -> Result<u64, EngineError> {
+        let _one = lock(&self.best_queue);
         let stored = self.store.setting(KEY_BEST_QUEUE)?.and_then(|v| v.parse::<u64>().ok());
         if let Some(id) = stored.filter(|id| lock(&self.queues).contains_key(id)) {
             return Ok(id);
@@ -1580,20 +1594,33 @@ impl Scheduler {
         if self.store.setting(KEY_REFRESHED).ok().flatten().as_deref() == Some(today.as_str()) {
             return;
         }
+        // A database error must not use up the day.
+        let Ok(local) = self.local_samples() else { return };
         let _ = self.store.set_setting(KEY_REFRESHED, Some(&today));
-        let BestTime::Window { start_min, end_min, .. } = self.best_time() else { return };
+        let BestTime::Window { start_min, end_min, .. } = speed::best_window(&local, 4) else { return };
         let following: Vec<QueueConfig> =
             lock(&self.queues).values().filter(|rt| rt.config.follow_best_time).map(|rt| rt.config.clone()).collect();
-        for config in following {
-            let schedule = match &config.schedule {
-                Some(s) if !speed::window_moved(s, start_min, end_min) => continue,
-                Some(s) => queue::QueueSchedule { start_min, stop_min: Some(end_min), ..s.clone() },
-                None => speed::window_schedule(start_min, end_min),
-            };
-            if let Ok(id) = self.write_queue(&QueueConfig { schedule: Some(schedule), ..config }) {
+        for snapshot in following {
+            if let Some(id) = self.follow_write(&snapshot, start_min, end_min) {
                 self.hub.queue_changed(id);
             }
         }
+    }
+
+    /// Moves `snapshot`'s queue to the window if it moved by 30 minutes. It re-reads the queue under the edit lock
+    /// and leaves it alone when the user took over or changed the schedule since the snapshot.
+    fn follow_write(self: &Arc<Self>, snapshot: &QueueConfig, start_min: u16, end_min: u16) -> Option<u64> {
+        let _edit = lock(&self.queue_edit);
+        let current = lock(&self.queues).get(&snapshot.id?)?.config.clone();
+        if !current.follow_best_time || current.schedule != snapshot.schedule {
+            return None;
+        }
+        let schedule = match &current.schedule {
+            Some(s) if !speed::window_moved(s, start_min, end_min) => return None,
+            Some(s) => queue::QueueSchedule { repeat: Repeat::Daily, start_min, stop_min: Some(end_min), ..s.clone() },
+            None => speed::window_schedule(start_min, end_min),
+        };
+        self.write_queue(&QueueConfig { schedule: Some(schedule), ..current }).ok()
     }
 
     pub fn speed_settings(&self) -> SpeedSettings {
@@ -1619,11 +1646,14 @@ impl Scheduler {
 
     #[doc(hidden)]
     pub fn set_auto_test_plan(&self, at: Vec<i64>) {
-        *lock(&self.auto_plan) = AutoPlan { made_for: None, at, pinned: true };
+        *lock(&self.auto_plan) = AutoPlan { made_for: None, at, pinned: true, checked: None };
     }
 
     /// True when this local minute is one a test was planned for. Planned minutes that passed are dropped, not caught up.
     pub(crate) fn auto_test_due(&self) -> bool {
+        if self.stopping.load(Ordering::Relaxed) {
+            return false;
+        }
         let (now, secs) = (self.now(), self.now_secs());
         let settings = self.speed_settings();
         let (night, auto) = (settings.night_until.is_some_and(|t| t > secs), settings.auto_tests);
@@ -1635,10 +1665,13 @@ impl Scheduler {
             plan.at = speed::pick_minutes(seed, &slots).into_iter().map(|m| unix_secs(queue::at(now.date(), m))).collect();
             plan.made_for = Some(made_for);
         }
+        // Minutes since the last look count, so a late tick does not skip one; older ones are gone.
         let minute = secs.div_euclid(60);
-        let before = plan.at.len();
-        plan.at.retain(|at| at.div_euclid(60) != minute);
-        plan.at.len() != before
+        let from = plan.checked.unwrap_or(minute - 1).max(minute - 3);
+        plan.checked = Some(minute);
+        let due = plan.at.iter().any(|at| (from + 1..=minute).contains(&at.div_euclid(60)));
+        plan.at.retain(|at| at.div_euclid(60) > minute);
+        due
     }
 }
 

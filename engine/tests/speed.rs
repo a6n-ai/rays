@@ -334,9 +334,51 @@ mod best_time {
         e.set_speed_test_duration(300);
         let clock = clocked(&e, date(2026, 11, 26).at(0, 41, 0, 0));
         e.set_auto_test_plan(vec![unix(date(2026, 11, 26).at(0, 41, 0, 0))]);
-        *clock.lock().unwrap() = date(2026, 11, 26).at(0, 43, 30, 0);
+        *clock.lock().unwrap() = date(2026, 11, 26).at(0, 44, 30, 0);
         rt.block_on(e.auto_test_tick());
         assert!(stored(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn late_tick_still_runs_planned_minute() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        e.set_speed_test_duration(300);
+        let clock = clocked(&e, date(2026, 11, 26).at(0, 40, 0, 0));
+        e.set_auto_test_plan(vec![unix(date(2026, 11, 26).at(0, 41, 0, 0))]);
+        rt.block_on(e.auto_test_tick());
+        *clock.lock().unwrap() = date(2026, 11, 26).at(0, 42, 5, 0);
+        rt.block_on(e.auto_test_tick());
+        assert_eq!(stored(dir.path()).len(), 1);
+        *clock.lock().unwrap() = date(2026, 11, 26).at(0, 43, 5, 0);
+        rt.block_on(e.auto_test_tick());
+        assert_eq!(stored(dir.path()).len(), 1);
+    }
+
+    #[test]
+    fn follow_queue_is_always_daily() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+        let clock = clocked(&e, date(2026, 11, 25).at(10, 0, 0, 0));
+        let id = e.best_time_queue().unwrap();
+        let mut c = follow_config(&e, id);
+        c.schedule.as_mut().unwrap().repeat = Repeat::Days { mask: 0b11 };
+        c.schedule.as_mut().unwrap().wifi = true;
+        e.save_queue(c.clone()).unwrap();
+        let off = follow_config(&e, id);
+        assert!(!off.follow_best_time);
+        assert_eq!(off.schedule.as_ref().unwrap().repeat, Repeat::Days { mask: 0b11 });
+        e.save_queue(QueueConfig { follow_best_time: true, ..off }).unwrap();
+        let on = follow_config(&e, id).schedule.unwrap();
+        assert_eq!(on.repeat, Repeat::Daily);
+        assert!(on.wifi);
+        let new = e.save_queue(QueueConfig { id: None, name: "N".into(), follow_best_time: true, schedule: c.schedule.clone(), ..c }).unwrap();
+        assert_eq!(follow_config(&e, new).schedule.unwrap().repeat, Repeat::Daily);
+        seed(dir.path(), 17, 8);
+        *clock.lock().unwrap() = date(2026, 11, 26).at(10, 0, 0, 0);
+        e.tick();
+        let s = follow_config(&e, id).schedule.unwrap();
+        assert_eq!((s.repeat, s.stop_min, s.wifi), (Repeat::Daily, Some(300), true));
     }
 
     #[test]
