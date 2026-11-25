@@ -110,8 +110,12 @@ struct SidebarView: View {
         ) {
             Button("Delete", role: .destructive) {
                 if let id = deleting?.id {
-                    try? model.deleteQueue(id)
-                    if selection == .queue(id) { selection = .downloads }
+                    do {
+                        try model.deleteQueue(id)
+                        if selection == .queue(id) { selection = .downloads }
+                    } catch {
+                        model.queueFailed("delete the queue", error)
+                    }
                 }
                 deleting = nil
             }
@@ -161,7 +165,7 @@ extension SidebarView {
             // Main (id 1) holds the jobs that other queues hand back, so it cannot go.
             if queue.id != 1 {
                 Divider()
-                Button("Delete", role: .destructive) { deleting = queue }
+                Button("Delete queue…", role: .destructive) { deleting = queue }
             }
         }
     }
@@ -174,6 +178,7 @@ extension SidebarView {
             }
             .foregroundStyle(.secondary)
             .monospacedDigit()
+            .accessibilityLabel("\(queue.running) downloading")
         } else if case .waitingForTime(let next) = queue.state {
             Text(Date(timeIntervalSince1970: TimeInterval(next)).formatted(Date.FormatStyle().hour().minute()))
                 .foregroundStyle(.secondary)

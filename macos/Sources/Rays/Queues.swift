@@ -11,9 +11,14 @@ extension EngineModel {
     /// The engine returns queues in no fixed order; Main is id 1.
     var sortedQueues: [QueueView] { queues.sorted { $0.id < $1.id } }
 
-    /// A new unscheduled queue, or nil if the engine refused to save it.
+    /// A new unscheduled queue, or nil after the failure is shown in the notice line.
     func newQueue() -> UInt64? {
-        try? saveQueue(QueueConfig(id: nil, name: "New queue", maxRunning: 0, speedLimit: 0, enabled: true,
-                                   schedule: nil, retryFailed: false, wake: false, whenFinished: .nothing))
+        do {
+            return try saveQueue(QueueConfig(id: nil, name: "New queue", maxRunning: 0, speedLimit: 0, enabled: true,
+                                             schedule: nil, retryFailed: false, wake: false, whenFinished: .nothing))
+        } catch {
+            queueFailed("create the queue", error)
+            return nil
+        }
     }
 }

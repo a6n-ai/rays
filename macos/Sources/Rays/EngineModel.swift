@@ -244,6 +244,11 @@ final class EngineModel {
         queues = engine.queues()
     }
 
+    /// Shows a queue action's failure in the notice line; `notice` is only settable in this file.
+    func queueFailed(_ action: String, _ error: Error) {
+        notice = "Couldn't \(action): \(Self.message(for: error))"
+    }
+
     func moveToQueue(job: UInt64, queue: UInt64) { engine?.moveToQueue(job: job, queue: queue) }
 
     func startQueue(_ id: UInt64) { engine?.startQueue(id: id) }

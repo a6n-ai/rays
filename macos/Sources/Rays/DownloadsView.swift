@@ -32,8 +32,8 @@ struct DownloadsView: View {
         pageView(queue == nil ? section : .recent)
             .safeAreaInset(edge: .top) { ExtensionBanner() }
             .safeAreaInset(edge: .bottom) {
-                if section != .settings {
-                    AddBar(isTargeted: isDropTargeted)
+                if (queue == nil ? section : .recent) != .settings {
+                    AddBar(isTargeted: isDropTargeted, defaultQueue: queue ?? 1)
                         .disabled(model.startError != nil)
                 }
             }
@@ -162,15 +162,15 @@ struct DownloadsView: View {
     }
 
     private var subtitle: String {
-        let running = model.jobs.filter { $0.state == .running }
-        let paused = model.jobs.filter { $0.state == .paused }.count
+        let running = inQueue.filter { $0.state == .running }
+        let paused = inQueue.filter { $0.state == .paused }.count
         var text = ""
         if !running.isEmpty {
             let speed = running.reduce(UInt64(0)) { $0 + $1.bytesPerSec }
             text = "\(running.count) downloading, \(byteText(speed))/s"
         } else if paused > 0 {
             text = "\(paused) paused"
-        } else if !model.jobs.isEmpty && model.jobs.allSatisfy(\.isDone) {
+        } else if !inQueue.isEmpty && inQueue.allSatisfy(\.isDone) {
             text = "All done"
         }
         return text

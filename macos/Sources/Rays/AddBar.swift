@@ -7,10 +7,18 @@ struct AddBar: View {
     @Environment(\.isEnabled) private var isEnabled
     @FocusState private var fieldFocused: Bool
     @State private var input = ""
-    /// The queue the next paste goes to; Main until the menu picks another.
-    @State private var queue: UInt64 = 1
+    /// A queue picked from the menu for the next paste only; submitting clears it.
+    @State private var chosen: UInt64?
     @Namespace private var glass
     let isTargeted: Bool
+    /// The queue a paste goes to unless the menu picks another: the page's queue, or Main.
+    let defaultQueue: UInt64
+
+    /// The chosen queue while it still exists; a deleted choice falls back to the default.
+    private var target: UInt64 {
+        if let chosen, model.queues.contains(where: { $0.id == chosen }) { return chosen }
+        return defaultQueue
+    }
 
     private var isBlank: Bool {
         input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -94,8 +102,8 @@ struct AddBar: View {
         // Always the round icon; a pasted link fills it with the accent colour instead of growing a label.
         Menu {
             ForEach(model.sortedQueues) { option in
-                Button { queue = option.id } label: {
-                    if option.id == queue {
+                Button { chosen = option.id } label: {
+                    if option.id == target {
                         Label(option.config.name, systemImage: "checkmark")
                     } else {
                         Text(option.config.name)
@@ -103,23 +111,31 @@ struct AddBar: View {
                 }
             }
         } label: {
-            Label("Download", systemImage: "arrow.down")
-                .labelStyle(.iconOnly)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(ready ? AnyShapeStyle(Color(nsColor: .alternateSelectedControlTextColor)) : AnyShapeStyle(.tint))
-                .frame(width: LayoutMetrics.barHeight, height: LayoutMetrics.barHeight)
-                .glassEffect(ready ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
-                .glassEffectID("download", in: glass)
-                .contentShape(Circle())
-                .opacity(dimmed ? 0.4 : 1)
+            HStack(spacing: 6) {
+                Label("Download", systemImage: "arrow.down")
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(ready ? AnyShapeStyle(Color(nsColor: .alternateSelectedControlTextColor)) : AnyShapeStyle(.tint))
+                    .frame(width: LayoutMetrics.barHeight, height: LayoutMetrics.barHeight)
+                    .glassEffect(ready ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
+                    .glassEffectID("download", in: glass)
+                    .contentShape(Circle())
+                    .opacity(dimmed ? 0.4 : 1)
+                if target != defaultQueue, let name = model.queues.first(where: { $0.id == target })?.config.name {
+                    Text(name)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         } primaryAction: {
             submit()
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
         .disabled(!ready)
+        .accessibilityHint("Choose a queue")
         .help(links.isEmpty ? "Paste a link that starts with http:// or https://" : "Download \(linkCount)")
     }
 
@@ -140,7 +156,8 @@ struct AddBar: View {
 
     private func submit() {
         guard !isBlank else { return }
-        model.add(input, queue: queue)
+        model.add(input, queue: target)
         input = ""
+        chosen = nil
     }
 }

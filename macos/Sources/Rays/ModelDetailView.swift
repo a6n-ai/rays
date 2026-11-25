@@ -219,8 +219,10 @@ struct ModelDetailView: View {
         .padding(.vertical, 12)
     }
 
+    /// Resolved at each use, so a deleted choice falls back instead of sending a stale id.
     private var queueId: UInt64 {
-        chosenQueue ?? model.queues.first { $0.config.name == "Hugging Face" }?.id ?? 1
+        if let chosenQueue, model.queues.contains(where: { $0.id == chosenQueue }) { return chosenQueue }
+        return model.queues.first { $0.config.name == "Hugging Face" }?.id ?? 1
     }
 
     private var queuePicker: some View {
@@ -245,6 +247,7 @@ struct ModelDetailView: View {
         .glassEffect(.regular.interactive(), in: .capsule)
         .help("Queue")
         .accessibilityLabel("Queue")
+        .accessibilityValue(model.queues.first { $0.id == queueId }?.config.name ?? "Main")
         .fixedSize()
     }
 

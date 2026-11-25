@@ -18,7 +18,7 @@ struct QueueHeader: View {
         case .stopped:
             ("pause.circle", "Stopped", .secondary)
         case .off:
-            ("minus.circle", "Off", .gray)
+            ("minus.circle", "Off", Color(nsColor: .tertiaryLabelColor))
         }
     }
 
