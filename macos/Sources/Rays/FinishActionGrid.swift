@@ -92,10 +92,11 @@ struct FinishActionGrid: View {
                 Spacer(minLength: 0)
                 Text(kind.title)
                     .font(.callout)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
             .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .padding(10)
+            .padding(8)
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)

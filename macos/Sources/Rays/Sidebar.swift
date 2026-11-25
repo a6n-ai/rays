@@ -43,6 +43,7 @@ struct SidebarView: View {
     @Binding var selection: Destination?
     let onNewQueue: () -> Void
     let onSchedule: (UInt64) -> Void
+    let isDirty: (UInt64) -> Bool
     @State private var folders: [SidebarFolder] = []
     @State private var deleting: QueueView?
     @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = false
@@ -162,6 +163,7 @@ extension SidebarView {
                 Button("Stop queue") { model.stopQueue(queue.id) }
             }
             Button("Run now") { model.runQueueNow(queue.id) }
+                .disabled(isDirty(queue.id))
             // Main (id 1) holds the jobs that other queues hand back, so it cannot go.
             if queue.id != 1 {
                 Divider()

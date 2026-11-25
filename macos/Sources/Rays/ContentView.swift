@@ -8,8 +8,8 @@ struct ContentView: View {
     /// The last sidebar folder, restored on launch the way Apple's apps reopen where you left off.
     @AppStorage("lastFolder") private var lastFolder = ""
     @State private var isDropTargeted = false
-    /// The queue whose scheduler is open; nil when closed.
-    @State private var scheduling: UInt64?
+    @State private var drafts = QueueDrafts()
+    @AppStorage("queueSection") private var queueSection = QueueSection.downloads
     /// Links taken from the current drag. A browser drop can carry both a URL and a String for the same link.
     @State private var droppedLinks = Set<String>()
     @State private var query = ""
@@ -18,7 +18,8 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(selection: $destination, onNewQueue: { scheduling = model.newQueue() }, onSchedule: { scheduling = $0 })
+            SidebarView(selection: $destination, onNewQueue: newQueue, onSchedule: { openSchedule($0) },
+                        isDirty: { drafts.isDirty($0) })
                 // On the sidebar column (not the split view) so the field doesn't take toolbar space.
                 .searchable(text: $query, placement: .sidebar, prompt: "Search")
                 .onAppear {
@@ -50,9 +51,6 @@ struct ContentView: View {
                 .animation(reduceMotion ? nil : .smooth, value: QueueActions.shared.countdown != nil)
         }
         .containerBackground(.thinMaterial, for: .window)
-        .sheet(isPresented: Binding(get: { scheduling != nil }, set: { if !$0 { scheduling = nil } })) {
-            if let scheduling { SchedulerSheet(queueId: scheduling) }
-        }
         .frame(minWidth: 640, idealWidth: 760, minHeight: 440, idealHeight: 520)
         .overlay {
             if isDropTargeted {
@@ -91,7 +89,7 @@ struct ContentView: View {
                 case .models?:
                     ModelsView()
                 case .queue(let id)?:
-                    DownloadsView(isDropTargeted: isDropTargeted, queue: id, onSchedule: { scheduling = $0 })
+                    QueuePage(queueId: id, isDropTargeted: isDropTargeted, drafts: drafts, onDeleted: { destination = .downloads })
                 default:
                     DownloadsView(isDropTargeted: isDropTargeted)
                 }
@@ -100,6 +98,15 @@ struct ContentView: View {
             .transition(.opacity)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: destination)
         }
+    }
+
+    private func openSchedule(_ id: UInt64) {
+        queueSection = .schedule
+        destination = .queue(id)
+    }
+
+    private func newQueue() {
+        if let id = model.newQueue() { openSchedule(id) }
     }
 
     private func setTargeted(_ targeted: Bool) {

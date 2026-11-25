@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// The top of a queue's page: its name, totals, the state when not open, and the controls that stop, start and schedule it.
+/// The top of a queue's page, above every tab: an editable name, totals, the state when not open, and the enabled switch.
 struct QueueHeader: View {
     let queue: QueueView
     let items: Int
-    let onSchedule: () -> Void
+    @Binding var draft: QueueConfig
+    let showsRunNow: Bool
+    let isDirty: Bool
     @Environment(EngineModel.self) private var model
 
     private var pill: (symbol: String, text: String, tint: Color)? {
@@ -25,7 +27,8 @@ struct QueueHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: LayoutMetrics.gap) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(queue.config.name)
+                TextField("Queue name", text: $draft.name)
+                    .textFieldStyle(.plain)
                     .font(.title2.weight(.semibold))
                 Text("\(items) items · \(queue.running) downloading · \(byteText(queue.totalBytes)) total")
                     .font(.callout)
@@ -41,24 +44,17 @@ struct QueueHeader: View {
                 }
             }
             Spacer()
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    if queue.isStopped {
-                        Button { model.startQueue(queue.id) } label: {
-                            Label("Start queue", systemImage: "play.circle")
-                        }
-                    } else {
-                        Button { model.stopQueue(queue.id) } label: {
-                            Label("Stop queue", systemImage: "stop.circle")
-                        }
-                    }
-                    Button(action: onSchedule) {
-                        Label("Schedule…", systemImage: "calendar.badge.clock")
-                    }
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
+            if showsRunNow {
+                Button { model.runQueueNow(queue.id) } label: { Label("Run now", systemImage: "play.fill") }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                    .disabled(isDirty)
+                    .help(isDirty ? "Save your changes first" : "Run this queue now")
             }
+            Toggle("Enabled", isOn: $draft.enabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .help("Enabled")
         }
         .padding(.horizontal, LayoutMetrics.margin)
         .padding(.vertical, 10)

@@ -7,7 +7,6 @@ struct DownloadsView: View {
     let isDropTargeted: Bool
     /// nil is every download; a queue id shows only that queue, with its header.
     var queue: UInt64? = nil
-    var onSchedule: (UInt64) -> Void = { _ in }
     @AppStorage("downloadsSection") private var section = DownloadsSection.recent
     @State private var status = "All"
     @State private var kind = FileKind.all
@@ -68,9 +67,6 @@ struct DownloadsView: View {
         case .recent:
             content.safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
-                    if let queueView {
-                        QueueHeader(queue: queueView, items: inQueue.count) { onSchedule(queueView.id) }
-                    }
                     if !model.jobs.isEmpty && model.startError == nil {
                         ListControls(statuses: JobView.statuses, status: $status, kind: $kind, sort: $sort,
                                      count: matching.count, page: $page) {
@@ -153,12 +149,12 @@ struct DownloadsView: View {
                 }
             }
             .sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: .primaryAction) {
+                ToolbarActions()
+            }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
         }
-        ToolbarItem(placement: .primaryAction) {
-            ToolbarActions()
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
     }
 
     private var subtitle: String {

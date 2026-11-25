@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// The four choices of the Repeat control. `none` is a queue without a schedule.
 enum RepeatKind: String, CaseIterable, Identifiable {
@@ -33,7 +34,8 @@ enum SchedulerTime {
     static var today: String { text(Date()) }
 
     static func clock(_ minutes: UInt16) -> Date {
-        Calendar.current.date(bySettingHour: Int(minutes) / 60, minute: Int(minutes) % 60, second: 0, of: Date()) ?? Date()
+        // A fixed mid-January date, so a daylight saving jump never shifts the shown time.
+        Calendar.current.date(from: DateComponents(year: 2001, month: 1, day: 15, hour: Int(minutes) / 60, minute: Int(minutes) % 60)) ?? Date()
     }
 
     static func minutes(_ date: Date) -> UInt16 {
@@ -64,22 +66,52 @@ enum SchedulerTime {
         if RepeatKind(old) != kind { schedule.repeat = repeatRule }
         return schedule
     }
+}
 
-    /// The subtitle under a queue's name in the scheduler's list.
-    static func summary(_ queue: QueueView) -> String {
-        let config = queue.config
-        if queue.state == .open && queue.running > 0 { return "Running" }
-        guard let schedule = config.schedule else { return "Not scheduled" }
-        if !config.enabled { return "Off" }
-        let time = hhmm(schedule.startMin)
-        switch schedule.repeat {
-        case .daily: return "Every day at \(time)"
-        case .once(let date): return "Once, " + (Self.date(date)?.formatted(Date.FormatStyle().day().month(.abbreviated)) ?? date) + " at \(time)"
-        case .days(let mask):
-            if mask == weekdays { return "Weekdays at \(time)" }
-            if mask == 0b1100000 { return "Weekends at \(time)" }
-            let names = (0..<7).filter { mask & (1 << $0) != 0 }.map { String(dayNames[$0].prefix(3)) }
-            return names.joined(separator: ", ") + " at \(time)"
+extension QueueConfig {
+    /// Why this config can't be saved yet, or nil when it can.
+    var problem: String? {
+        if name.trimmingCharacters(in: .whitespaces).isEmpty { return "Give the queue a name." }
+        if case .days(let mask)? = schedule?.repeat, mask == 0 { return "Pick at least one day." }
+        if case .command(let command) = whenFinished, command.trimmingCharacters(in: .whitespaces).isEmpty { return "Enter a command to run." }
+        return nil
+    }
+}
+
+extension WakePermission {
+    /// Whether the rule file works, and whether a wake queue is missing it. `isInstalled` runs sudo, so it stays off the main thread.
+    static func status() async -> (installed: Bool, missing: Bool) {
+        let installed = await Task.detached { isInstalled }.value
+        return (installed, isMissingForWakeQueues)
+    }
+}
+
+/// One row of a tab's two-column grid: a 110pt right-aligned label, then the controls.
+func formRow(_ label: String, top: Bool = false, @ViewBuilder content: () -> some View) -> some View {
+    GridRow(alignment: top ? .top : .firstTextBaseline) {
+        Text(label)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .frame(width: 110, alignment: .trailing)
+        VStack(alignment: .leading, spacing: 8) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+func formNote(_ text: String) -> some View {
+    Text(text)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+}
+
+extension View {
+    /// A centred column of at most 640pt, scrolling when the window is short.
+    func formColumn() -> some View {
+        ScrollView {
+            self.frame(maxWidth: 640)
+                .padding(LayoutMetrics.margin)
+                .frame(maxWidth: .infinity)
         }
     }
 }
