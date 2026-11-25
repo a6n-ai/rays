@@ -1084,6 +1084,26 @@ impl Scheduler {
         clock()
     }
 
+    pub(crate) fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
+    pub(crate) fn store(&self) -> &Store {
+        &self.store
+    }
+
+    pub(crate) fn network(&self) -> NetworkKind {
+        *lock(&self.network)
+    }
+
+    pub(crate) fn now_secs(&self) -> i64 {
+        clock_secs(self.now())
+    }
+
+    pub(crate) fn any_running(&self) -> bool {
+        lock(&self.jobs).iter().any(|live| lock(&live.job).state == JobState::Running)
+    }
+
     pub fn queues(&self) -> Vec<QueueView> {
         let (now, cond, counts) = (self.now(), *lock(&self.conditions), self.counts());
         lock(&self.queues).values().map(|rt| view_of_queue(rt, &counts, cond, now)).collect()

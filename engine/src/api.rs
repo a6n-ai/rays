@@ -5,11 +5,12 @@ use crate::ipc;
 use crate::s3::{self, BucketConfig, Keychain, Listing, ProviderPreset};
 use crate::scheduler::Scheduler;
 use crate::speed::NetworkKind;
+use crate::speedtest::{self, SpeedTestResult};
 use crate::store::Store;
 use crate::queue::QueueConfig;
 use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView, QueueRun, QueueView};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[derive(uniffi::Object)]
 pub struct Engine {
@@ -17,6 +18,8 @@ pub struct Engine {
     sched: Arc<Scheduler>,
     hub: Arc<EventHub>,
     socket_path: PathBuf,
+    /// Speed test server and duration in ms; tests point these at a local server.
+    speed_test: Mutex<(String, u64)>,
 }
 
 #[uniffi::export]
@@ -52,7 +55,7 @@ impl Engine {
             let listener = ipc::bind(&socket_path)?;
             rt.spawn(ipc::serve(listener, Arc::clone(&sched)));
         }
-        Ok(Arc::new(Engine { rt, sched, hub, socket_path }))
+        Ok(Arc::new(Engine { rt, sched, hub, socket_path, speed_test: Mutex::new((speedtest::DEFAULT_BASE.into(), speedtest::DEFAULT_MS)) }))
     }
 
     pub fn add(&self, urls: Vec<String>) -> Vec<AddResult> {
@@ -99,6 +102,28 @@ impl Engine {
     /// What the app measured: connected over Wi-Fi, on power, idle for a while.
     pub fn set_conditions(&self, wifi: bool, on_power: bool, idle: bool, network: NetworkKind) {
         self.sched.set_conditions(wifi, on_power, idle, network);
+    }
+
+    /// Measures download speed against the speed test server. Refuses on a metered link unless `force`.
+    pub async fn run_speed_test(&self, force: bool) -> Result<SpeedTestResult, EngineError> {
+        let (base, ms) = self.speed_test.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { speedtest::run(&sched, &base, ms, force).await }).await.map_err(join_error)?
+    }
+
+    /// The newest saved test result.
+    pub fn last_speed_test(&self) -> Option<SpeedTestResult> {
+        speedtest::last(&self.sched)
+    }
+
+    #[doc(hidden)]
+    pub fn set_speed_test_base(&self, base: String) {
+        self.speed_test.lock().unwrap_or_else(|e| e.into_inner()).0 = base;
+    }
+
+    #[doc(hidden)]
+    pub fn set_speed_test_duration(&self, ms: u64) {
+        self.speed_test.lock().unwrap_or_else(|e| e.into_inner()).1 = ms;
     }
 
     pub fn pause(&self, id: JobId) {
