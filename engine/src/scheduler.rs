@@ -1667,7 +1667,7 @@ impl Scheduler {
         }
         // Minutes since the last look count, so a late tick does not skip one; older ones are gone.
         let minute = secs.div_euclid(60);
-        let from = plan.checked.unwrap_or(minute - 1).max(minute - 3);
+        let from = plan.checked.filter(|c| *c <= minute).unwrap_or(minute - 1).max(minute - 3);
         plan.checked = Some(minute);
         let due = plan.at.iter().any(|at| (from + 1..=minute).contains(&at.div_euclid(60)));
         plan.at.retain(|at| at.div_euclid(60) > minute);

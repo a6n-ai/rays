@@ -58,7 +58,8 @@ impl Engine {
         let speed_test = Arc::new(Mutex::new((String::from(speedtest::DEFAULT_BASE), speedtest::DEFAULT_MS)));
         let (weak, cfg) = (Arc::downgrade(&sched), Arc::clone(&speed_test));
         rt.spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+            let minute = std::time::Duration::from_secs(60);
+            let mut tick = tokio::time::interval_at(tokio::time::Instant::now() + minute, minute);
             loop {
                 tick.tick().await;
                 let Some(sched) = weak.upgrade() else { break };
