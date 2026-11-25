@@ -39,6 +39,20 @@ Files that already exist with the same name follow the **If a file with the same
 - **Failed files.** Adding a model again resumes a file that failed earlier, if it is the same file and revision. Otherwise the download starts fresh.
 - **Already there.** A file that is already in the folder with the right size is skipped ("Already downloaded"). A file that is already downloading shows "Already in Downloads".
 
+## Verify a download
+
+On the **Downloaded** tab, hover a model or open its **⋯** menu and choose **Verify**. Rays checks each file against the record it saved when the file downloaded: its size and SHA-256 checksum. The check runs on your Mac and doesn't go online.
+
+The result is one of:
+
+- **All N files match.**
+- **N files checked by size only.** Hugging Face gave no checksum for those files.
+- Per file: **Missing**, **Wrong size** or **Checksum didn't match**.
+
+Click **Re-download N files** to queue only the files that failed. If **If a file with the same name exists** isn't set to **Replace**, Rays first moves the bad files to the Trash.
+
+With no record of the download, click **Look up on Hugging Face**. Rays checks the files against the latest revision, so a model that has changed on Hugging Face since you downloaded it can fail.
+
 ## Gated and private models
 
 Some models need a Hugging Face access token. Add it under **Settings > Downloads > Hugging Face > Access token**. It is stored in the macOS Keychain and sent only to huggingface.co.

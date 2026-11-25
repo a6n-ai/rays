@@ -4,6 +4,7 @@ export const ICONS: Record<string, string> = {
 	start: 'M5 21V4 M5 4h11l-2 4 2 4H5',
 	install: 'M3 7l9-4 9 4-9 4-9-4z M3 7v10l9 4 9-4V7 M12 11v10',
 	download: 'M12 3v12 M7 10l5 5 5-5 M5 21h14',
+	queues: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
 	engine: 'M4 17a8 8 0 1 1 16 0 M12 17l4-5 M4 21h16',
 	chart: 'M4 20V10 M10 20V4 M16 20v-7 M3 20h18',
 	cloud: 'M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.1 4.5 4.5 0 0 0 7 18z',
