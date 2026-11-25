@@ -13,7 +13,7 @@ import { svg } from '../components/docs/icons';
 
 <Base
 	title="Rays: Free Download Manager for Mac with AI File Sorting"
-	description="Free, open-source download manager for Mac. Downloads as fast as your line allows, survives dropped connections, and sorts every file with on-device AI."
+	description="Free, open-source download manager for Mac. Fast multi-connection downloads, queues and schedules, a speed test, and on-device AI that sorts your files."
 >
 	<div class="page">
 		<main id="main" class="column" data-pagefind-body data-pagefind-meta="title:Rays: free download manager for Mac">
@@ -22,21 +22,21 @@ import { svg } from '../components/docs/icons';
 			<section class="hero" aria-labelledby="hero-title">
 				<div class="headline">
 				<h1 id="hero-title">
-					<span class="sr-only">File management for everything you download.</span>
+					<span class="sr-only">Rays, the download manager for Mac that sorts everything you download.</span>
 					<span aria-hidden="true" class="lead">File management for</span>
 					<WordDrum />
 				</h1>
 				</div>
 				<Panel />
-				<p class="sub">Rays downloads from your browser, Terminal, AI assistants and Hugging Face at full line speed, in queues that run on your schedule. Then every file lands in a folder that fits, sorted by AI that never leaves your Mac. Free.</p>
+				<p class="sub">Rays downloads from your browser, Terminal, AI assistants and Hugging Face at full line speed, in queues that run on your schedule or at your connection's fastest hours. Then every file lands in a folder that fits, sorted by AI that never leaves your Mac. Free.</p>
 				<InstallBar />
 			</section>
 
 
 				<Passage title="A download isn't done at the last byte" id="why">
 				<p>
-					Files reach your Mac from everywhere now: browsers, Terminal, AI assistants, cloud buckets, model and
-					dataset hubs. They all land in one folder and stay there, under names like <code>download (3).zip</code>.
+					Files reach your Mac from everywhere now: browsers, Terminal, AI assistants, cloud buckets and
+					Hugging Face. They all land in one folder and stay there, under names like <code>download (3).zip</code>.
 				</p>
 				<p>
 					It's done when the file is where you'll look for it. Rays does both halves.
@@ -44,7 +44,7 @@ import { svg } from '../components/docs/icons';
 			</Passage>
 
 			<Passage title="Everything Rays does today" id="features">
-				<p>Five groups. Each one opens its docs page.</p>
+				<p>Six groups. Each one opens its docs page.</p>
 				<div class="overview">
 					{OVERVIEW.map((g) => (
 						<section aria-labelledby={`ov-${g.id}`}>
@@ -219,8 +219,8 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 
 			<Passage title="Queues that run on your schedule" id="queues">
 				<p>
-					Main is the default queue. Add more, each with its own icon, colour, speed limit and number of files at a
-					time. Then say when each one runs.
+					A download starts right away unless you pick a queue. Add queues, each with its own icon, colour, speed
+					limit and number of files at a time. Then say when each one runs.
 				</p>
 				<ol class="flow" aria-label="How a scheduled queue runs">
 					<li><span class="step">Starts</span><code>start time</code><p>once, every day or on chosen days, with an optional stop time</p></li>
@@ -238,12 +238,21 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 						<dd>A history of what your queues have done.</dd>
 					</div>
 				</dl>
-				<p>Or send a download to the best time of night: Rays learns when your connection is usually fastest, from your downloads and a speed test. <a href="/docs/app/speed/">Speed test and best time</a>.</p>
 				<p class="more"><a href="/docs/app/queues/">Read about queues and schedules</a></p>
 			</Passage>
 
+			<Passage title="Download when your connection is fastest" id="speed">
+				<p>
+					Run a speed test in about 10 seconds. After 7 days, Rays shows the hours your connection is usually
+					fastest, learned from your own downloads and tests. Send a download to <b>At best time</b> and it waits
+					for that window.
+				</p>
+				<p>The data stays on your Mac. <code>dl speed</code> and <code>dl add --best-time</code> do the same from Terminal.</p>
+				<p class="more"><a href="/docs/app/speed/">Read about the speed test and best time</a></p>
+			</Passage>
+
 			<Passage title="Your files stay on your Mac." id="private" big>
-				<p>Sorting runs on Apple's on-device model. Nothing is uploaded, and there is no account to make.</p>
+				<p>Sorting runs on Apple's on-device model. Nothing is uploaded, and there is no account to make. <a href="/privacy/">Read the privacy policy</a>.</p>
 			</Passage>
 
 			<Passage title="Terminal, AI assistants and your browser" id="anywhere">

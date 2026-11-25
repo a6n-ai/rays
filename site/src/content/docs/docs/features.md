@@ -3,7 +3,7 @@ title: "Features"
 description: "Everything Rays does: adaptive multi-connection downloads, crash-safe resume, on-device AI sorting, S3 buckets, browser extensions, dl and MCP. Free."
 ---
 
-Rays is free, open source (AGPL-3.0) and made for macOS 26. There is no account, no ads and no tracking.
+Rays is free, open source (AGPL-3.0) and made for macOS 26. There is no account, no ads and no analytics.
 
 ## Numbers
 

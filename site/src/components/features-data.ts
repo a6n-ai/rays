@@ -71,16 +71,27 @@ export const GROUPS: Group[] = [
 		icon: 'queues',
 		href: '/docs/app/queues/',
 		summary: 'Group downloads, run them when you want, and choose what the Mac does next.',
-		short: ['Queues with their own limits', 'Schedules', 'Wi-Fi, charging or idle', 'When finished', 'Wake the Mac', 'Speed test', 'Best time'],
+		short: ['Queues with their own limits', 'Schedules', 'Wi-Fi, charging or idle', 'When finished', 'Wake the Mac'],
 		items: [
-			{ icon: 'queues', title: 'Queues', text: 'Main is the default queue. Add more, each with its own icon, colour, speed limit and number of files at a time.' },
+			{ icon: 'queues', title: 'Queues', text: 'A download starts right away unless you pick a queue. Add queues, each with its own icon, colour, speed limit and number of files at a time.' },
 			{ icon: 'calendar', title: 'Schedules', text: 'Run once, every day or on chosen days, with a start time and an optional stop time.' },
 			{ icon: 'wifi', title: 'Conditions', text: 'Run only on Wi-Fi (not a hotspot), while charging, or when the Mac is idle.' },
 			{ icon: 'clock', title: 'Activity history', text: 'A history of what your queues have done.' },
 			{ icon: 'power', title: 'When finished', text: 'Play a sound, quit, sleep, lock, shut down, or run a command.' },
 			{ icon: 'moon', title: 'Wake the Mac', text: 'Optionally wake a sleeping Mac for a scheduled queue. It asks for your admin password once.' },
+		],
+	},
+	{
+		id: 'speed',
+		title: 'Speed test & best time',
+		icon: 'speed',
+		href: '/docs/app/speed/',
+		summary: 'Measure your connection, learn its fastest hours, and download big files then.',
+		short: ['10 second speed test', 'Fastest hours of the day', 'At best time', 'Stays on your Mac'],
+		items: [
 			{ icon: 'speed', title: 'Speed test', text: 'Measure your download speed in about 10 seconds, with the last result in the sidebar.', href: '/docs/app/speed/' },
-			{ icon: 'chart', title: 'Best time', text: 'Learns the fastest hours of the day from your downloads, and sends a queue there.', href: '/docs/app/speed/' },
+			{ icon: 'chart', title: 'Best time', text: 'After 7 days, Rays shows the hours your connection is usually fastest, learned from your downloads and tests.', href: '/docs/app/speed/' },
+			{ icon: 'moon', title: 'At best time', text: 'Send a download to the Best time queue and it waits for that window.', href: '/docs/app/speed/' },
 		],
 	},
 	{
@@ -89,7 +100,7 @@ export const GROUPS: Group[] = [
 		icon: 'cloud',
 		href: '/docs/s3/',
 		summary: 'Buckets download with the same engine.',
-		short: ['Amazon S3, R2, B2, Wasabi, MinIO', 'Browse like Finder', 'No secrets stored by Rays'],
+		short: ['Amazon S3, R2, B2, Wasabi, MinIO', 'Browse like Finder', 'Keys stay in your Keychain'],
 		items: [
 			{ icon: 'cloud', title: 'Any S3-compatible service', text: 'Amazon S3, Cloudflare R2, Backblaze B2, Wasabi, MinIO and the rest.' },
 			{ icon: 'folder', title: 'Browse like Finder', text: 'Providers, buckets and folders, as icons or a list.' },
@@ -134,9 +145,9 @@ export const GROUPS: Group[] = [
 			{ icon: 'refresh', title: 'Updates itself', text: 'Click Update and Rays replaces itself and reopens.' },
 			{ icon: 'install', title: 'Install and uninstall', text: 'Use the DMG or Homebrew. Uninstall from Settings, which also removes the sorter, browser helpers and the command line.' },
 			{ icon: 'settings', title: 'Light, dark or system', text: 'Pick the appearance that suits you.' },
-			{ icon: 'heart', title: 'Free and open', text: 'AGPL-3.0, no account, no ads and no tracking.' },
+			{ icon: 'heart', title: 'Free and open', text: 'AGPL-3.0, no account, no ads and no analytics.' },
 		],
 	},
 ];
 
-export const OVERVIEW = GROUPS.filter((g) => ['download', 'sort', 'models', 'queues', 'agents'].includes(g.id));
+export const OVERVIEW = GROUPS.filter((g) => ['download', 'sort', 'models', 'queues', 'speed', 'agents'].includes(g.id));

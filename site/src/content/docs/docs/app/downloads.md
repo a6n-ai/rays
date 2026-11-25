@@ -16,6 +16,7 @@ Downloads go to `~/Downloads` unless you choose another folder in **Settings > G
 
 ## How Rays downloads
 
+- **Start now, or queue it.** A download starts at once, in no queue. To run it later, pick a queue in the **Download** button's menu, or use **Move to Queue**. See [Queues and schedules](/docs/app/queues/).
 - **Smart splitting.** Files of 32 MB or more start on 4 connections; smaller ones on one. Rays doubles the count, up to 16, only while each step makes the file faster, steps back down when more stop helping, and replaces a connection that is far slower than the others. A finished part takes over half of the largest part left. See [How the engine works](/docs/engine/).
 - **Slow servers.** When a server pushes back or drops connections, Rays remembers it and uses fewer connections next time. A server that cannot send parts gets one connection.
 - **Retries.** Up to 5 automatic retries, waiting 2 seconds at first and up to a minute.
