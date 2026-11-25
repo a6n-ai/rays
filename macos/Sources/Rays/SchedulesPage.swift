@@ -74,9 +74,18 @@ struct SchedulesPage: View {
                             QueueTile(queue: queue, size: 24).opacity(0.6)
                             Text(queue.config.name).foregroundStyle(.secondary).lineLimit(1)
                             Spacer()
-                            Button("Add schedule") { addSchedule(to: queue) }
-                                .buttonStyle(.glass)
-                                .controlSize(.small)
+                            Button { addSchedule(to: queue) } label: {
+                                Image(systemName: "calendar.badge.plus")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(.tint)
+                                    .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
+                                    .glassEffect(.regular.interactive(), in: .circle)
+                                    .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .help("Add schedule to \(queue.config.name)")
+                            .accessibilityLabel("Add schedule to \(queue.config.name)")
                         }
                         .frame(minHeight: LayoutMetrics.rowAction)
                         .padding(.horizontal, LayoutMetrics.hoverInset)
