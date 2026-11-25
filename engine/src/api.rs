@@ -21,7 +21,8 @@ pub struct Engine {
     socket_path: PathBuf,
     /// Speed test server and duration in ms; tests point these at a local server.
     speed_test: Arc<Mutex<(String, u64)>>,
-    cancel_test: Arc<AtomicBool>,
+    /// The running speed test's stop flag; each run has its own, so a cancel can't be erased by a later start.
+    cancel_test: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 #[uniffi::export]
@@ -69,7 +70,7 @@ impl Engine {
                 speedtest::auto(&sched, &base, ms).await;
             }
         });
-        Ok(Arc::new(Engine { rt, sched, hub, socket_path, speed_test, cancel_test: Arc::default() }))
+        Ok(Arc::new(Engine { rt, sched, hub, socket_path, speed_test, cancel_test: Mutex::default() }))
     }
 
     pub fn add(&self, urls: Vec<String>) -> Vec<AddResult> {
@@ -122,14 +123,18 @@ impl Engine {
     pub async fn run_speed_test(&self, force: bool) -> Result<SpeedTestResult, EngineError> {
         let (base, ms) = self.speed_test.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let sched = Arc::clone(&self.sched);
-        let cancel = Arc::clone(&self.cancel_test);
-        cancel.store(false, Ordering::Relaxed);
-        self.rt.spawn(async move { speedtest::run(&sched, &base, ms, force, &cancel).await }).await.map_err(join_error)?
+        let cancel = Arc::new(AtomicBool::new(false));
+        *self.cancel_test.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&cancel));
+        let result = self.rt.spawn(async move { speedtest::run(&sched, &base, ms, force, &cancel).await }).await.map_err(join_error)?;
+        *self.cancel_test.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        result
     }
 
     /// Stops a running speed test; it returns "Speed test stopped" and saves nothing.
     pub fn cancel_speed_test(&self) {
-        self.cancel_test.store(true, Ordering::Relaxed);
+        if let Some(flag) = self.cancel_test.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            flag.store(true, Ordering::Relaxed);
+        }
     }
 
     /// Saved speed samples, newest first.

@@ -29,6 +29,8 @@ final class EngineModel {
     private(set) var liveSamples: [LivePoint] = []
     private(set) var speedHistory: [SpeedSample] = []
     @ObservationIgnored private var ignoreProgressUntil = Date.distantPast
+    @ObservationIgnored private var staleProgress: Task<Void, Never>?
+    @ObservationIgnored private var errorCount = 0
     var confirmHotspot = false
     var nightPromptShown = false
     /// Slow-hint dismissals live only for this session.
@@ -470,9 +472,18 @@ final class EngineModel {
                 runs.insert(run, at: 0)
                 if runs.count > Self.runLimit { runs.removeLast() }
             }
+        case .speedTestEnded:
+            staleProgress?.cancel()
+            speedProgress = nil
+            ignoreProgressUntil = Date().addingTimeInterval(1)
+            if !testing {
+                refreshSpeed()
+                loadSpeedHistory()
+            }
         case .speedTestProgress(let phase, let bps, let elapsed, let total):
             // A late event from a test that already ended must not bring the indicator back.
-            if !testing, phase == .download, Date() < ignoreProgressUntil { break }
+            if !testing, Date() < ignoreProgressUntil { break }
+            watchProgress()
             if phase == .latency { liveSamples = [] } else { liveSamples.append(LivePoint(ms: elapsed, bps: bps)) }
             speedProgress = SpeedProgress(phase: phase, bps: bps, elapsedMs: elapsed, totalMs: total)
             // A test the app did not start (an automatic one) ends here; there is no result call to clear it.
@@ -662,14 +673,26 @@ extension EngineModel {
             // Stopping is the user's own action, not a failure.
             if message != "Speed test stopped" {
                 speedError = message
+                errorCount += 1
+                let mine = errorCount
                 Task {
                     try? await Task.sleep(for: .seconds(10))
-                    if speedError == message { speedError = nil }
+                    if errorCount == mine { speedError = nil }
                 }
             }
         }
         refreshSpeed(engine)
         loadSpeedHistory()
+    }
+
+    /// Safety net: an automatic test that ends without telling us must not leave the indicator up.
+    private func watchProgress() {
+        staleProgress?.cancel()
+        staleProgress = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled, let self, !self.testing else { return }
+            self.speedProgress = nil
+        }
     }
 
     func cancelSpeedTest() { if testing { engine?.cancelSpeedTest() } }

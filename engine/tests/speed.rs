@@ -519,3 +519,90 @@ fn speed_test_cancel_stops_fast_and_saves_nothing() {
     assert!(err.to_string().contains("Speed test stopped"), "{err}");
     assert!(stored(dir.path()).is_empty());
 }
+
+fn ended(events: Vec<dl_engine::JobEvent>) -> Vec<(bool, Option<String>)> {
+    events
+        .into_iter()
+        .filter_map(|ev| match ev {
+            dl_engine::JobEvent::SpeedTestEnded { saved, error } => Some((saved, error)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Runs a test and returns its result with every end event the engine delivered.
+type Ended = Vec<(bool, Option<String>)>;
+
+fn run_collecting(rt: &tokio::runtime::Runtime, e: &Arc<Engine>) -> (Result<dl_engine::speedtest::SpeedTestResult, dl_engine::EngineError>, Ended) {
+    let r = rt.block_on(e.run_speed_test(false));
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        seen.extend(ended(rt.block_on(async { tokio::time::timeout(Duration::from_millis(400), e.next_events()).await.unwrap_or_default() })));
+    }
+    (r, seen)
+}
+
+#[test]
+fn speed_test_ended_event_on_ok() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (_dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+    let (r, seen) = run_collecting(&rt, &e);
+    assert!(r.is_ok());
+    assert_eq!(seen, vec![(true, None)]);
+}
+
+#[test]
+fn speed_test_ended_event_on_error() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (_dir, e, mode, _) = rig(&rt, NetworkKind::Wifi);
+    mode.store(BLOCKED, Ordering::Relaxed);
+    let (r, seen) = run_collecting(&rt, &e);
+    assert!(r.is_err());
+    assert_eq!(seen.len(), 1, "{seen:?}");
+    assert!(!seen[0].0 && seen[0].1.is_some(), "{seen:?}");
+}
+
+#[test]
+fn speed_test_ended_event_on_cancel() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (_dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+    e.set_speed_test_duration(10_000);
+    let runner = Arc::clone(&e);
+    let task = rt.spawn(async move { runner.run_speed_test(false).await });
+    std::thread::sleep(Duration::from_millis(500));
+    e.cancel_speed_test();
+    assert!(rt.block_on(task).unwrap().is_err());
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        seen.extend(ended(rt.block_on(async { tokio::time::timeout(Duration::from_millis(400), e.next_events()).await.unwrap_or_default() })));
+    }
+    assert_eq!(seen.len(), 1, "{seen:?}");
+    assert!(!seen[0].0 && seen[0].1.as_deref().is_some_and(|m| m.contains("stopped")), "{seen:?}");
+}
+
+#[test]
+fn speed_test_cancel_right_after_start_always_cancels() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+    e.set_speed_test_duration(10_000);
+    for _ in 0..5 {
+        let runner = Arc::clone(&e);
+        let task = rt.spawn(async move { runner.run_speed_test(false).await });
+        // Only just started: the run may not have set itself up yet, but a cancel must still stop it.
+        std::thread::sleep(Duration::from_millis(30));
+        let cancelled = Instant::now();
+        e.cancel_speed_test();
+        let err = rt.block_on(task).unwrap().unwrap_err();
+        assert!(cancelled.elapsed() < Duration::from_secs(2), "{:?}", cancelled.elapsed());
+        assert!(err.to_string().contains("Speed test stopped"), "{err}");
+    }
+    assert!(stored(dir.path()).is_empty());
+}
+
+#[test]
+fn a_cancel_with_no_test_running_does_not_stop_the_next_one() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (_dir, e, _, _) = rig(&rt, NetworkKind::Wifi);
+    e.cancel_speed_test();
+    assert!(rt.block_on(e.run_speed_test(false)).unwrap().saved);
+}

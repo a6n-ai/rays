@@ -20,8 +20,8 @@ pub struct Changes {
     pub finished: Vec<u64>,
     /// Queue runs opened, closed or counted.
     pub runs: Vec<u64>,
-    /// The newest speed test progress.
-    pub speed: Option<JobEvent>,
+    /// The newest speed test progress, then the end event if the test is over.
+    pub speed: Vec<JobEvent>,
 }
 
 #[derive(Default)]
@@ -31,7 +31,7 @@ struct State {
     queues: BTreeSet<u64>,
     finished: Vec<u64>,
     runs: BTreeSet<u64>,
-    speed: Option<JobEvent>,
+    speed: Vec<JobEvent>,
     urgent: bool,
     last_delivery: Option<Instant>,
 }
@@ -107,11 +107,14 @@ impl EventHub {
         }
         self.notify.notify_one();
     }
-    /// A speed test update: only the newest is kept, delivered at once.
+    /// A speed test update: only the newest progress is kept, but an end event is never dropped. Delivered at once.
     pub fn speed_progress(&self, event: JobEvent) {
         {
             let mut s = self.lock();
-            s.speed = Some(event);
+            if !matches!(event, JobEvent::SpeedTestEnded { .. }) {
+                s.speed.retain(|e| matches!(e, JobEvent::SpeedTestEnded { .. }));
+            }
+            s.speed.push(event);
             s.urgent = true;
         }
         self.notify.notify_one();
@@ -121,7 +124,7 @@ impl EventHub {
         loop {
             let hold_until = {
                 let mut s = self.lock();
-                let pending = !s.changed.is_empty() || !s.removed.is_empty() || !s.queues.is_empty() || !s.finished.is_empty() || !s.runs.is_empty() || s.speed.is_some();
+                let pending = !s.changed.is_empty() || !s.removed.is_empty() || !s.queues.is_empty() || !s.finished.is_empty() || !s.runs.is_empty() || !s.speed.is_empty();
                 if !pending {
                     None
                 } else {
@@ -152,7 +155,7 @@ impl EventHub {
             queues: std::mem::take(&mut s.queues).into_iter().collect(),
             finished: std::mem::take(&mut s.finished),
             runs: std::mem::take(&mut s.runs).into_iter().collect(),
-            speed: s.speed.take(),
+            speed: std::mem::take(&mut s.speed),
         }
     }
 }

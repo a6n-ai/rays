@@ -28,7 +28,7 @@ struct SpeedPage: View {
             ToolbarIconGroup {
                 ForEach([(SpeedSection.overview, "gauge.with.dots.needle.67percent", "Overview"),
                          (SpeedSection.history, "clock.arrow.circlepath", "History"),
-                         (SpeedSection.settings, "slider.horizontal.3", "Speed settings")], id: \.0) { item in
+                         (SpeedSection.settings, "slider.horizontal.3", "Settings")], id: \.0) { item in
                     Button { section = item.0 } label: {
                         ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
                     }
@@ -82,8 +82,10 @@ private struct SpeedOverview: View {
     }
 
     private var accessibility: String {
-        guard let progress else { return "Speed test, \(Int(mbps.rounded())) megabits per second, \(phaseText)" }
-        return "Speed test, \(Int(mbps.rounded())) megabits per second, \(phaseText.lowercased()), \(progress.elapsedMs / 1000) of \(progress.totalMs / 1000) seconds"
+        let base = "Speed test, \(Int(mbps.rounded())) megabits per second"
+        guard let progress else { return base }
+        let phase = progress.phase == .latency ? "checking latency" : "downloading"
+        return "\(base), \(phase), \(progress.elapsedMs / 1000) of \(progress.totalMs / 1000) seconds"
     }
 
     var body: some View {
@@ -116,9 +118,14 @@ private struct SpeedOverview: View {
         .formColumn()
     }
 
+    /// The network the last test ran on, if its sample is still in the history.
+    private func network(of test: SpeedTestResult) -> NetworkKind? {
+        model.speedHistory.first { $0.source == .test && $0.at == test.at }?.network
+    }
+
     @ViewBuilder private var details: some View {
         if let test = model.lastTest {
-            Text("\(test.latencyMs) ms latency · \(model.network.title) · \(SpeedFormat.ago(test.at))")
+            Text(([ "\(test.latencyMs) ms latency" ] + [network(of: test)?.title].compactMap { $0 } + [SpeedFormat.ago(test.at)]).joined(separator: " · "))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
@@ -244,7 +251,7 @@ private struct SpeedHistoryTab: View {
     @State private var sort = ListSort.newest
     @State private var kind = FileKind.all
     @State private var page = 0
-    @State private var hovered: Int64?
+    @State private var hovered: String?
 
     private var shown: [SpeedSample] {
         let kept = model.speedHistory.filter {
@@ -266,10 +273,11 @@ private struct SpeedHistoryTab: View {
                            message: "Run a test, or download something. Rays keeps 60 days.")
             } else {
                 List {
-                    ForEach(Array(shown.enumerated()), id: \.offset) { _, sample in
+                    ForEach(shown.enumerated().map { (id: "\($0.element.at)-\($0.offset)", sample: $0.element) }, id: \.id) { entry in
+                        let (id, sample) = (entry.id, entry.sample)
                         row(sample)
-                            .background(RowHighlight(selected: false, hovered: hovered == sample.at))
-                            .onHover { hovered = $0 ? sample.at : nil }
+                            .background(RowHighlight(selected: false, hovered: hovered == id))
+                            .onHover { hovered = $0 ? id : nil }
                             .rowStyle()
                     }
                 }

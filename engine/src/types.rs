@@ -110,6 +110,8 @@ pub enum JobEvent {
     RunChanged { run: QueueRun },
     /// The speed test is running; `bps` is 0 until warm-up ends. About every 250 ms while it downloads.
     SpeedTestProgress { phase: SpeedTestPhase, bps: u64, elapsed_ms: u32, total_ms: u32 },
+    /// The speed test is over, however it ended: finished, failed or stopped. `error` is None when it finished.
+    SpeedTestEnded { saved: bool, error: Option<String> },
 }
 
 #[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]

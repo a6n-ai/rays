@@ -92,9 +92,11 @@ struct SidebarView: View {
                     FolderNode(url: folder.url, count: folder.count, expandable: folder.url != EngineModel.downloadsURL)
                 }
             }
+            Section {
+                SpeedCard().tag(Destination.speed)
+            }
         }
         .listStyle(.sidebar)
-        SpeedCard(selection: $selection)
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .task(id: "\(EngineModel.downloadsURL.path(percentEncoded: false))|\(model.jobs.filter(\.isDone).count)|\(model.folderRevision)|\(activations)") {

@@ -170,7 +170,17 @@ async fn throughput(
     Ok(bps)
 }
 
+/// Runs one test and announces how it ended, on every path.
 pub async fn run(sched: &Scheduler, base: &str, ms: u64, force: bool, cancel: &AtomicBool) -> Result<SpeedTestResult, EngineError> {
+    let result = measure(sched, base, ms, force, cancel).await;
+    sched.hub().speed_progress(JobEvent::SpeedTestEnded {
+        saved: result.as_ref().is_ok_and(|r| r.saved),
+        error: result.as_ref().err().map(ToString::to_string),
+    });
+    result
+}
+
+async fn measure(sched: &Scheduler, base: &str, ms: u64, force: bool, cancel: &AtomicBool) -> Result<SpeedTestResult, EngineError> {
     let network = sched.network();
     if network == NetworkKind::Expensive && !force {
         return Err(EngineError::Io {

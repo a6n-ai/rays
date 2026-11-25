@@ -1,12 +1,10 @@
 import SwiftUI
 
-/// The sidebar's speed summary: the last result or the live test, and a button to run or stop a test.
-/// Clicking the card opens the Speed page.
+/// The sidebar's speed summary, a row of the sidebar list tagged `Destination.speed`: the last result or the live
+/// test, and a button to run or stop a test.
 struct SpeedCard: View {
     @Environment(EngineModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Binding var selection: Destination?
-    @State private var hovered = false
 
     private var progress: SpeedProgress? { model.speedProgress }
 
@@ -20,43 +18,36 @@ struct SpeedCard: View {
         if let progress {
             if progress.phase == .latency { return ("Checking latency", false) }
             let seconds = "\(progress.elapsedMs / 1000) s of \(progress.totalMs / 1000)"
-            return (model.testing ? "Testing  \(seconds)" : "Automatic test  \(seconds)", false)
+            return (model.testing ? "Testing \(seconds)" : "Automatic test \(progress.elapsedMs / 1000) s", false)
         }
-        return (model.lastTest.map { SpeedFormat.ago($0.at) } ?? "Check your connection", false)
+        return (model.lastTest.map { SpeedFormat.ago($0.at) } ?? "Not tested yet", false)
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            Button { selection = .speed } label: {
-                HStack(spacing: 8) {
-                    tile
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(value)
-                            .font(.title3.weight(.semibold))
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                            .transaction { if reduceMotion { $0.animation = nil } }
-                        Text(caption.text)
-                            .font(.caption)
-                            .foregroundStyle(caption.isError ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                            .monospacedDigit()
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
+            tile
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(value)
+                        .font(.title3.weight(.semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .transaction { if reduceMotion { $0.animation = nil } }
+                    if progress != nil, model.liveSamples.count > 1 { Sparkline(points: model.liveSamples) }
                 }
-                .contentShape(Rectangle())
+                Text(caption.text)
+                    .font(.caption)
+                    .foregroundStyle(caption.isError ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Speed, \(value), \(caption.text)")
-            .help("Open Speed")
+            Spacer(minLength: 0)
             actionButton
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(RowHighlight(selected: selection == .speed, hovered: hovered), alignment: .center)
-        .onHover { hovered = $0 }
-        .padding(.bottom, 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Speed, \(value), \(caption.text)")
     }
 
     private var tile: some View {
@@ -89,5 +80,24 @@ struct SpeedCard: View {
         .disabled(model.automaticTestRunning)
         .help(stops ? "Stop the speed test" : "Run a speed test")
         .accessibilityLabel(stops ? "Stop test" : "Run test")
+    }
+}
+
+/// The last 20 readings of the running test as a tiny teal line.
+private struct Sparkline: View {
+    let points: [LivePoint]
+
+    var body: some View {
+        let recent = points.suffix(20).map { Double($0.bps) }
+        let top = max(recent.max() ?? 1, 1)
+        Path { path in
+            for (index, value) in recent.enumerated() {
+                let point = CGPoint(x: 40 * Double(index) / Double(max(recent.count - 1, 1)), y: 12 - 12 * value / top)
+                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+        }
+        .stroke(Color.teal, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        .frame(width: 40, height: 12)
+        .accessibilityHidden(true)
     }
 }
