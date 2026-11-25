@@ -7,8 +7,6 @@ import Panel from '../components/Panel.astro';
 import Newsletter from '../components/Newsletter.astro';
 import Faq from '../components/Faq.astro';
 import SiteNav from '../components/SiteNav.astro';
-import { OVERVIEW } from '../components/features-data';
-import { svg } from '../components/docs/icons';
 ---
 
 <Base
@@ -41,28 +39,9 @@ import { svg } from '../components/docs/icons';
 				<p>
 					It's done when the file is where you'll look for it. Rays does both halves.
 				</p>
+				<p class="more"><a href="/features/">See everything Rays does</a></p>
 			</Passage>
 
-			<Passage title="Everything Rays does today" id="features">
-				<p>Six groups. Each one opens its docs page.</p>
-				<div class="overview">
-					{OVERVIEW.map((g) => (
-						<section aria-labelledby={`ov-${g.id}`}>
-							<h3 id={`ov-${g.id}`}>
-								<a href={g.href}>
-									<Fragment set:html={svg(g.icon, 22)} />
-									<span class="name">{g.title}</span>
-								</a>
-							</h3>
-							<p>{g.summary}</p>
-							<ul>
-								{g.short.map((t) => <li>{t}</li>)}
-							</ul>
-						</section>
-					))}
-				</div>
-				<p class="more"><a href="/features/">See all features</a></p>
-			</Passage>
 
 			<Passage title="Paste a wall of links" id="downloads">
 				<p>One per line, comma-separated, or a whole CSV. Rays finds every one.</p>
@@ -247,25 +226,68 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 					fastest, learned from your own downloads and tests. Send a download to <b>At best time</b> and it waits
 					for that window.
 				</p>
+				<figure class="hours">
+					<ol aria-hidden="true">
+						<li style="--v:0.62"></li>
+						<li style="--v:0.78" class="best"></li>
+						<li style="--v:0.92" class="best"></li>
+						<li style="--v:0.96" class="best"></li>
+						<li style="--v:0.9" class="best"></li>
+						<li style="--v:0.74"></li>
+						<li style="--v:0.55"></li>
+						<li style="--v:0.48"></li>
+						<li style="--v:0.44"></li>
+						<li style="--v:0.46"></li>
+						<li style="--v:0.5"></li>
+						<li style="--v:0.52"></li>
+						<li style="--v:0.5"></li>
+						<li style="--v:0.47"></li>
+						<li style="--v:0.45"></li>
+						<li style="--v:0.43"></li>
+						<li style="--v:0.4"></li>
+						<li style="--v:0.36"></li>
+						<li style="--v:0.3"></li>
+						<li style="--v:0.27"></li>
+						<li style="--v:0.28"></li>
+						<li style="--v:0.33"></li>
+						<li style="--v:0.41"></li>
+						<li style="--v:0.5"></li>
+					</ol>
+					<div class="axis" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+					<figcaption>An example connection: typical speed for each hour of the day. Its fastest four hours, 01:00 to 05:00, are where <b>At best time</b> downloads run.</figcaption>
+				</figure>
 				<p>The data stays on your Mac. <code>dl speed</code> and <code>dl add --best-time</code> do the same from Terminal.</p>
 				<p class="more"><a href="/docs/app/speed/">Read about the speed test and best time</a></p>
 			</Passage>
 
-			<Passage title="Your files stay on your Mac." id="private" big>
+			<Passage title="Your files stay on your Mac" id="private" big>
 				<p>Sorting runs on Apple's on-device model. Nothing is uploaded, and there is no account to make. <a href="/privacy/">Read the privacy policy</a>.</p>
 			</Passage>
 
 			<Passage title="Terminal, AI assistants and your browser" id="anywhere">
-				<p>
-					Rays comes with the <a href="/docs/dl/"><code>dl</code> command</a>, so you can download and sort from Terminal, or let AI assistants do it over <a href="/docs/mcp/">MCP</a>: they can add downloads to a queue, start and stop queues, and verify a model. The
-					Rays extension for <a href="https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail">Chrome</a> and <a href="https://addons.mozilla.org/firefox/addon/rays@a6n.ai/">Firefox</a> sends links to Rays with a right-click.
-				</p>
-				<a class="browsers" href="/docs/app/browser/">
-					{['chrome', 'brave', 'edge', 'firefox', 'zen'].map((b) => (
-						<img src={`/browsers/${b}.svg`} alt="" width="22" height="22" loading="lazy" />
-					))}
-					<span class="label">Get the extension</span>
-				</a>
+				<p>Download and sort from wherever you already work.</p>
+				<div class="cards">
+					<section aria-labelledby="any-dl">
+						<h3 id="any-dl"><a href="/docs/dl/">Terminal</a></h3>
+						<p>The <code>dl</code> command adds downloads, runs queues and sorts folders.</p>
+						<code class="sample">dl add --queue Night &lt;link&gt;</code>
+					</section>
+					<section aria-labelledby="any-mcp">
+						<h3 id="any-mcp"><a href="/docs/mcp/">AI assistants</a></h3>
+						<p>Over MCP, an assistant can add downloads, start and stop queues, and verify a model.</p>
+						<code class="sample">add_downloads, start_queue, verify_model</code>
+					</section>
+					<section aria-labelledby="any-ext">
+						<h3 id="any-ext"><a href="/docs/app/browser/">Your browser</a></h3>
+						<p>Right-click a link and choose <b>Download with Rays</b>. For Chrome, Brave, Edge, Firefox and Zen.</p>
+						<a class="browsers" href="/docs/app/browser/">
+							{['chrome', 'brave', 'edge', 'firefox', 'zen'].map((b) => (
+								<img src={`/browsers/${b}.svg`} alt="" width="22" height="22" loading="lazy" />
+							))}
+							<span class="label">Get the extension</span>
+						</a>
+					</section>
+				</div>
 				<p>Rays lives in your menu bar and Dock with progress at a glance, and keeps downloading after you close the window.</p>
 				<p>New version out? Click Update. Rays installs it and reopens.</p>
 			</Passage>
@@ -552,73 +574,89 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		font-size: var(--t-small);
 		line-height: 1.45;
 	}
-	/* Feature overview: five groups on one set of rules, two across, the last one full width. */
-	.overview {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 32px;
-		margin: 16px 0 8px;
+	/* Speed by hour: 24 bars, the best window in the accent colour. */
+	.hours {
+		margin: 12px 0 4px;
 		max-width: var(--measure);
 	}
-	.overview section {
+	.hours ol {
 		display: grid;
-		align-content: start;
-		gap: 8px;
-		padding-top: 16px;
-		border-top: 1px solid var(--line);
-	}
-	.overview section:last-child:nth-child(odd) {
-		grid-column: 1 / -1;
-	}
-	.overview h3 {
+		grid-template-columns: repeat(24, minmax(0, 1fr));
+		align-items: end;
+		gap: 3px;
+		height: 120px;
 		margin: 0;
-		font: 500 1.25rem / 1.2 var(--font-display);
-		letter-spacing: -0.02em;
+		padding: 0;
+		list-style: none;
+		border-bottom: 1px solid var(--line);
 	}
-	.overview h3 a {
-		display: inline-flex;
-		align-items: center;
-		gap: 10px;
-		min-height: 32px;
-		color: var(--ink);
-		text-decoration: none;
+	.hours li {
+		height: calc(var(--v) * 100%);
+		border-radius: 3px 3px 0 0;
+		background: var(--line);
 	}
-	.overview h3 a :global(svg) {
-		flex: none;
-		color: var(--accent);
+	.hours li.best {
+		background: var(--accent);
 	}
-	.overview .name {
-		background: linear-gradient(currentColor, currentColor) left bottom / 0 1px no-repeat;
-		padding-bottom: 2px;
-		transition: background-size 220ms var(--ease-out);
+	.hours .axis {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 6px;
+		color: var(--muted);
+		font: var(--t-small) var(--font-mono);
+		font-variant-numeric: tabular-nums;
 	}
-	.overview h3 a:hover .name,
-	.overview h3 a:focus-visible .name {
-		background-size: 100% 1px;
-	}
-	.overview section > p {
-		margin: 0;
+	.hours figcaption {
+		margin-top: 10px;
 		color: var(--muted);
 		font-size: var(--t-small);
 		line-height: 1.45;
 	}
-	.overview ul {
+	/* Three ways in, side by side: a heading, one line, and what it looks like. */
+	.cards {
 		display: grid;
-		gap: 2px;
-		margin: 4px 0 0;
-		padding: 0;
-		list-style: none;
-		font-size: var(--t-small);
-		line-height: 1.5;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 12px;
+		margin: 12px 0 8px;
+		max-width: var(--measure);
 	}
-	.overview li::before {
-		content: '';
-		display: inline-block;
-		width: 5px;
-		height: 5px;
-		margin: 0 10px 2px 0;
-		border-radius: 50%;
-		background: var(--muted);
+	.cards section {
+		display: grid;
+		grid-template-rows: auto 1fr auto;
+		gap: 8px;
+		padding: 18px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+	}
+	.cards h3 {
+		margin: 0;
+		font: 500 1.125rem / 1.2 var(--font-display);
+		letter-spacing: -0.02em;
+	}
+	.cards h3 a {
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.cards h3 a:hover {
+		text-decoration: underline;
+	}
+	.cards p {
+		color: var(--muted);
+		font-size: var(--t-small);
+		line-height: 1.45;
+	}
+	.cards .browsers {
+		flex-wrap: wrap;
+		width: auto;
+	}
+	.cards .sample {
+		display: block;
+		padding: 8px 10px;
+		border-radius: 8px;
+		background: var(--chip);
+		color: var(--muted);
+		font: 0.75rem / 1.5 var(--font-mono);
+		overflow-wrap: anywhere;
 	}
 	.features {
 		display: grid;
@@ -642,6 +680,11 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		font-size: var(--t-small);
 		line-height: 1.5;
 	}
+	@media (max-width: 899px) {
+		.cards {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
 	@media (max-width: 600px) {
 		.stats {
 			grid-template-columns: minmax(0, 1fr);
@@ -656,9 +699,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 			gap: 10px;
 		}
 		.features div {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.overview {
 			grid-template-columns: minmax(0, 1fr);
 		}
 	}
