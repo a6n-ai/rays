@@ -807,9 +807,9 @@ extension BestTime {
 
 enum SpeedFormat {
     /// 100 or more shows no decimals; below that, one.
-    static func mbps(_ bps: UInt64) -> String {
+    static func mbps(_ bps: UInt64, whole: Bool = false) -> String {
         let value = Double(bps) * 8 / 1_000_000
-        return (value >= 100 ? String(Int(value.rounded())) : String(format: "%.1f", value)) + " Mb/s"
+        return (value >= 100 || whole ? String(Int(value.rounded())) : String(format: "%.1f", value)) + " Mb/s"
     }
 
     static func ago(_ at: Int64) -> String {

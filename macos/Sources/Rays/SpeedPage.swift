@@ -118,12 +118,6 @@ private struct SpeedOverview: View {
                 }
             }
             Spacer()
-            Button { model.testing ? model.cancelSpeedTest() : model.requestSpeedTest() } label: {
-                Label(model.testing ? "Stop" : "Run test", systemImage: model.testing ? "stop.circle" : "play.fill")
-            }
-            .buttonStyle(.glass)
-            .controlSize(.small)
-            .disabled(model.automaticTestRunning)
         }
         .padding(.horizontal, LayoutMetrics.margin)
         .padding(.vertical, 10)

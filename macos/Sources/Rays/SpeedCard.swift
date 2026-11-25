@@ -7,12 +7,13 @@ struct SpeedCard: View {
     var body: some View {
         HStack(spacing: 6) {
             Label("Speed test", systemImage: "gauge.with.dots.needle.67percent")
+                .layoutPriority(1)
             Spacer(minLength: 0)
             if let progress = model.speedProgress {
                 ProgressView().controlSize(.mini)
-                if progress.bps > 0 { badge(SpeedFormat.mbps(progress.bps)) }
+                if progress.bps > 0 { badge(SpeedFormat.mbps(progress.bps, whole: true)) }
             } else if let test = model.lastTest {
-                badge(SpeedFormat.mbps(test.bps))
+                badge(SpeedFormat.mbps(test.bps, whole: true))
             }
         }
         .contextMenu {
