@@ -48,6 +48,7 @@ pub enum BestTime {
 
 const MIN_DAYS: u32 = 7;
 const HIGH_DAYS: u32 = 14;
+const HIGH_PER_HOUR: usize = 5;
 const MIN_BUCKET: usize = 3;
 
 fn hour_buckets(local: &[(jiff::civil::DateTime, u64)]) -> [Vec<u64>; 24] {
@@ -64,25 +65,29 @@ fn median(v: &mut [u64]) -> u64 {
     if n % 2 == 1 { v[n / 2] } else { (v[n / 2 - 1] + v[n / 2]) / 2 }
 }
 
+/// `hours` outside 1..=24 gives `NotEnoughData`.
 pub fn best_window(local: &[(jiff::civil::DateTime, u64)], hours: u8) -> BestTime {
     let days = local.iter().map(|(at, _)| at.date()).collect::<std::collections::BTreeSet<_>>().len() as u32;
     let not_enough = BestTime::NotEnoughData { days, needed: MIN_DAYS };
     if days < MIN_DAYS || !(1..=24).contains(&hours) {
         return not_enough;
     }
-    let medians: Vec<Option<u64>> = hour_buckets(local)
+    let mut buckets = hour_buckets(local);
+    let lens: Vec<usize> = buckets.iter().map(Vec::len).collect();
+    let medians: Vec<Option<u64>> = buckets
         .iter_mut()
         .map(|v| (v.len() >= MIN_BUCKET).then(|| median(v)))
         .collect();
     let width = usize::from(hours);
-    let mut best: Option<(u64, usize)> = None;
+    let mut best: Option<(u64, usize, usize)> = None;
     for start in 0..24 {
         let sum: Option<u64> = (0..width).map(|i| medians[(start + i) % 24]).sum();
-        if let Some(sum) = sum.filter(|&s| best.is_none_or(|(b, _)| s > b)) {
-            best = Some((sum, start));
+        if let Some(sum) = sum.filter(|&s| best.is_none_or(|(b, _, _)| s > b)) {
+            let min_len = (0..width).map(|i| lens[(start + i) % 24]).min().unwrap_or(0);
+            best = Some((sum, start, min_len));
         }
     }
-    let Some((sum, start)) = best else {
+    let Some((sum, start, min_len)) = best else {
         return not_enough;
     };
     BestTime::Window {
@@ -90,7 +95,11 @@ pub fn best_window(local: &[(jiff::civil::DateTime, u64)], hours: u8) -> BestTim
         end_min: (((start + width) % 24) * 60) as u16,
         typical_bps: sum / u64::from(hours),
         days,
-        confidence: if days >= HIGH_DAYS { Confidence::High } else { Confidence::Medium },
+        confidence: if days >= HIGH_DAYS && min_len >= HIGH_PER_HOUR {
+            Confidence::High
+        } else {
+            Confidence::Medium
+        },
     }
 }
 
@@ -192,16 +201,50 @@ mod tests {
 
     #[test]
     fn best_window_dst_day() {
-        let base = samples(8, 5, fast_1_to_4);
-        let dst = day_samples(date(2026, 11, 1), 5, fast_1_to_4);
-        let dup_hour_1: Vec<_> = dst.iter().filter(|(at, _)| at.hour() == 1).cloned().collect();
-        let mut with_dst = base.clone();
+        let fast = |h: i8| if (10..=13).contains(&h) { 100_000_000 } else { 20_000_000 };
+        let base = samples(8, 5, fast);
+        let dst = day_samples(date(2026, 11, 1), 5, fast);
+        let outliers: Vec<_> = dst
+            .iter()
+            .filter(|(at, _)| at.hour() == 1)
+            .map(|(at, bps)| (*at, bps * 10))
+            .collect();
+        let mut with_dst = base;
         with_dst.extend(dst);
         let mut with_dups = with_dst.clone();
-        with_dups.extend(dup_hour_1);
-        let expected = best_window(&with_dst, 4);
-        assert!(matches!(expected, BestTime::Window { .. }));
+        with_dups.extend(outliers);
+        let expected = BestTime::Window {
+            start_min: 600,
+            end_min: 840,
+            typical_bps: 100_000_000,
+            days: 9,
+            confidence: Confidence::Medium,
+        };
+        assert_eq!(best_window(&with_dst, 4), expected);
         assert_eq!(best_window(&with_dups, 4), expected);
+    }
+
+    #[test]
+    fn high_needs_five_per_hour() {
+        let mut s = samples(14, 1, fast_1_to_4);
+        s.retain(|(at, _)| !((1..=4).contains(&at.hour()) && at.date().day() > 4));
+        assert!(matches!(best_window(&s, 4), BestTime::Window { confidence: Confidence::Medium, .. }));
+    }
+
+    #[test]
+    fn no_fully_covered_window() {
+        let mut s = samples(8, 5, fast_1_to_4);
+        let mut kept = [0; 24];
+        s.retain(|(at, _)| {
+            let h = at.hour() as usize;
+            if h.is_multiple_of(4) {
+                kept[h] += 1;
+                kept[h] <= 2
+            } else {
+                true
+            }
+        });
+        assert_eq!(best_window(&s, 4), BestTime::NotEnoughData { days: 8, needed: 7 });
     }
 
     #[test]
