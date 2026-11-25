@@ -140,6 +140,19 @@ impl QueueRt {
     }
 }
 
+/// Local calendar day as one number, so the prune runs once per local day.
+fn day_key(dt: DateTime) -> i64 {
+    i64::from(dt.year()) * 1000 + i64::from(dt.day_of_year())
+}
+
+/// Unix seconds of the scheduler's local clock; the wall clock only if the zone lookup fails.
+fn clock_secs(dt: DateTime) -> i64 {
+    match unix_secs(dt) {
+        0 => now_secs(),
+        s => s,
+    }
+}
+
 fn unix_secs(dt: DateTime) -> i64 {
     dt.to_zoned_datetime(jiff::tz::TimeZone::system()).map_or(0, |z| z.timestamp().as_second())
 }
@@ -189,7 +202,7 @@ pub struct Scheduler {
     conditions: Mutex<Conditions>,
     network: Mutex<NetworkKind>,
     sampler: Mutex<Sampler>,
-    /// Day number (unix days) of the last speed-log prune.
+    /// `day_key` of the last speed-log prune.
     pruned_day: AtomicI64,
     clock: Mutex<Clock>,
     /// One `refresh` at a time, so edges and events are not interleaved.
@@ -970,7 +983,8 @@ impl Scheduler {
 
     /// Feeds the speed log: one sample per clean minute of unthrottled downloading. Runs every progress tick.
     fn sample_speed(&self) {
-        let (now, day) = (now_secs(), now_secs().div_euclid(86_400));
+        let local = self.now();
+        let (now, day) = (clock_secs(local), day_key(local));
         if self.pruned_day.swap(day, Ordering::Relaxed) != day {
             let _ = self.store.prune_samples(now - 60 * 86_400);
         }
@@ -1454,4 +1468,19 @@ fn validate_queue(config: &QueueConfig, now: DateTime) -> Result<(), EngineError
 /// R2 rejects a token for a moment after it is created.
 fn token_not_ready(e: &EngineError) -> bool {
     e.to_string().contains("InvalidAccessKeyId") || e.to_string().contains("Unauthorized")
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::*;
+    use jiff::civil::date;
+
+    #[test]
+    fn sample_time_follows_the_injected_clock() {
+        let dt = date(2026, 11, 25).at(10, 0, 0, 0);
+        assert_eq!(clock_secs(dt), unix_secs(dt));
+        assert_eq!(clock_secs(dt) - clock_secs(date(2026, 11, 25).at(9, 0, 0, 0)), 3600);
+        assert_ne!(day_key(dt), day_key(date(2026, 11, 26).at(0, 0, 0, 0)));
+        assert_eq!(day_key(dt), day_key(date(2026, 11, 25).at(23, 59, 0, 0)));
+    }
 }
