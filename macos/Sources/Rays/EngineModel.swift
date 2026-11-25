@@ -208,8 +208,8 @@ final class EngineModel {
     }
 
     /// The engine call can block on disk, so it runs off the main actor.
-    func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) async -> [HfAdd] {
-        guard let engine else { return [] }
+    func addModel(repo: String, sha: String, files: [HfFile], to dir: URL) async throws -> [HfAdd] {
+        let engine = try runningEngine
         let destDir = dir.path(percentEncoded: false)
         return await Task.detached { engine.addHf(repo: repo, sha: sha, files: files, destDir: destDir) }.value
     }
@@ -392,7 +392,7 @@ enum Links {
         var out = AttributedString(text)
         let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
         for match in detector?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? [] {
-            guard let url = match.url, let range = Range(match.range, in: out) else { continue }
+            guard let url = match.url, url.scheme == "https", let range = Range(match.range, in: out) else { continue }
             out[range].link = url
         }
         return out

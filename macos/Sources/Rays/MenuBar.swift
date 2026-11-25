@@ -37,7 +37,7 @@ final class DockProgress {
     private func track() {
         withObservationTracking {
             update()
-        } onChange: {
+        } onChange: { [weak self] in
             Task { @MainActor [weak self] in self?.track() }
         }
     }

@@ -16,6 +16,7 @@ struct ModelDetailView: View {
     /// Notes from the disk for the selected files, read when the choice changes rather than on every redraw.
     @State private var fileNotes: [String: String] = [:]
     @State private var downloading = false
+    @State private var errorText: String?
 
     private struct NoteInputs: Equatable {
         let selected: Set<String>
@@ -260,13 +261,25 @@ struct ModelDetailView: View {
                 Text("Not enough space: needs \(byteText(total)), \(byteText(freeBytes)) free")
                     .foregroundStyle(.red)
             }
+            if let errorText {
+                Text(errorText).foregroundStyle(.red)
+            }
             HStack {
                 Spacer()
                 Button(total == 0 ? "Download" : "Download \(byteText(total))") {
+                    let picked = (selected, dir)
                     downloading = true
                     Task {
-                        added = await model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir)
-                        downloading = false
+                        defer { downloading = false }
+                        do {
+                            let result = try await model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir)
+                            // A choice changed during the call has already cleared `added`; this result is for the old choice.
+                            guard selected == picked.0, dir == picked.1 else { return }
+                            added = result
+                            errorText = nil
+                        } catch {
+                            errorText = EngineModel.message(for: error)
+                        }
                     }
                 }
                 .keyboardShortcut(.defaultAction)
