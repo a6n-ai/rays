@@ -1,26 +1,23 @@
 ---
 interface Props {
-	label: string;
+	title: string;
 	id: string;
+	big?: boolean;
 }
-const { label, id } = Astro.props;
+const { title, id, big } = Astro.props;
 ---
 
 <section class="passage" aria-labelledby={id}>
-	<h2 id={id}>{label}</h2>
+	<h2 id={id} class:list={['sec-title', { big }]}>{title}</h2>
 	<slot />
 </section>
 
 <style>
 	.passage {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 12px;
-		padding-block: 40px;
-	}
-	h2 {
-		margin: 0;
-		color: var(--muted);
-		font: 400 var(--t-label) / 1.4 var(--font-text);
+		padding-block: 48px 36px;
 	}
 	.passage :global(p) {
 		margin: 0;

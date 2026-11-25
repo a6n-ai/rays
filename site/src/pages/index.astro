@@ -8,6 +8,8 @@ import Panel from '../components/Panel.astro';
 import Newsletter from '../components/Newsletter.astro';
 import Faq from '../components/Faq.astro';
 import SiteNav from '../components/SiteNav.astro';
+import { Image } from 'astro:assets';
+import sorterShot from '../assets/sorter.png';
 import { OVERVIEW } from '../components/features-data';
 import { svg } from '../components/docs/icons';
 ---
@@ -34,19 +36,29 @@ import { svg } from '../components/docs/icons';
 				<InstallBar />
 			</section>
 
-			<Passage label="Why" id="why">
+			<figure class="shot">
+					<Image
+						src={sorterShot}
+						alt="The Rays Sorter tab: on-device AI is ready, new files sort after 10 seconds, files are renamed from their content, and the Documents and Downloads folders are watched."
+						widths={[640, 960, 1280]}
+						sizes="(max-width: 899px) calc(100vw - 32px), 640px"
+						loading="lazy"
+					/>
+					<figcaption>The Sorter tab in Rays: the folders it watches and when it files new arrivals.</figcaption>
+				</figure>
+
+				<Passage title="A download isn't done at the last byte" id="why">
 				<p>
 					Files reach your Mac from everywhere now: browsers, Terminal, AI assistants, cloud buckets, model and
 					dataset hubs. They all land in one folder and stay there, under names like <code>download (3).zip</code>.
 				</p>
 				<p>
-					We think a download isn't done when the last byte lands. It's done when the file is where you'll look for
-					it. Rays does both halves.
+					It's done when the file is where you'll look for it. Rays does both halves.
 				</p>
 			</Passage>
 
-			<Passage label="Features" id="features">
-				<p>Everything Rays does today, in five groups. Each one opens its docs page.</p>
+			<Passage title="Everything Rays does today" id="features">
+				<p>Five groups. Each one opens its docs page.</p>
 				<div class="overview">
 					{OVERVIEW.map((g) => (
 						<section aria-labelledby={`ov-${g.id}`}>
@@ -63,11 +75,11 @@ import { svg } from '../components/docs/icons';
 						</section>
 					))}
 				</div>
-				<p><a href="/features/">See all features</a></p>
+				<p class="more"><a href="/features/">See all features</a></p>
 			</Passage>
 
-			<Passage label="Downloads" id="downloads">
-				<p>Paste a wall of links: one per line, comma-separated, or a whole CSV. Rays finds every one.</p>
+			<Passage title="Paste a wall of links" id="downloads">
+				<p>One per line, comma-separated, or a whole CSV. Rays finds every one.</p>
 				<figure class="paste">
 					<pre aria-label="An example of pasted text with three links in it"><code>From the release thread:
 <mark>https://huggingface.co/openai-community/gpt2/resolve/main/model.safetensors</mark>
@@ -117,7 +129,7 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 				</dl>
 			</Passage>
 
-			<Passage label="Engine" id="engine">
+			<Passage title="Rays measures, then adds connections" id="engine">
 				<p>
 					More connections don't always mean faster. On a line one connection already fills, extra connections just
 					fight each other, and your file arrives later. So Rays measures: a connection stays only while it makes the
@@ -165,12 +177,12 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 						</dd>
 					</div>
 				</dl>
-				<p><a href="/docs/engine/#benchmarks">See every benchmark, and rerun them yourself</a></p>
+				<p class="more"><a href="/docs/engine/#benchmarks">See every benchmark, and rerun them yourself</a></p>
 			</Passage>
 
-			<Passage label="Sorting" id="sorting">
+			<Passage title="Your Downloads folder, finally tidy" id="sorting">
 				<p>
-					Your Downloads folder, finally tidy. Rays watches it, and any folder you add. A few seconds after a file
+					Rays watches it, and any folder you add. A few seconds after a file
 					arrives, it moves into a folder that fits, like Installers, Archives, Images or Work.
 				</p>
 				<p>Rays can even rename files from what is inside them, or keep every original name. Your call.</p>
@@ -200,7 +212,7 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 				</dl>
 			</Passage>
 
-			<Passage label="Models" id="models">
+			<Passage title="Models from Hugging Face" id="models">
 				<p>
 					Search Hugging Face from Rays. Trending models show as cards with a type colour and icon, and you can filter
 					by Text, Vision, Image, Audio or Embeddings.
@@ -216,10 +228,10 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 						<dd>A model file downloads like any other, with pause, resume and your speed limit.</dd>
 					</div>
 				</dl>
-				<p><a href="/docs/app/models/">Read about models</a></p>
+				<p class="more"><a href="/docs/app/models/">Read about models</a></p>
 			</Passage>
 
-			<Passage label="Queues" id="queues">
+			<Passage title="Queues that run on your schedule" id="queues">
 				<p>
 					Main is the default queue. Add more, each with its own icon, colour, speed limit and number of files at a
 					time. Then say when each one runs.
@@ -241,15 +253,14 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 					</div>
 				</dl>
 				<p>Or send a download to the best time of night: Rays learns when your connection is usually fastest, from your downloads and a speed test. <a href="/docs/app/speed/">Speed test and best time</a>.</p>
-				<p><a href="/docs/app/queues/">Read about queues and schedules</a></p>
+				<p class="more"><a href="/docs/app/queues/">Read about queues and schedules</a></p>
 			</Passage>
 
-			<Passage label="Private" id="private">
-				<p class="statement">Your files stay on your Mac.</p>
+			<Passage title="Your files stay on your Mac." id="private" big>
 				<p>Sorting runs on Apple's on-device model. Nothing is uploaded, and there is no account to make.</p>
 			</Passage>
 
-			<Passage label="Anywhere" id="anywhere">
+			<Passage title="Terminal, AI assistants and your browser" id="anywhere">
 				<p>
 					Rays comes with the <a href="/docs/dl/"><code>dl</code> command</a>, so you can download and sort from Terminal, or let AI assistants do it over <a href="/docs/mcp/">MCP</a>: they can add downloads to a queue, start and stop queues, and verify a model. The
 					Rays extension for <a href="https://chromewebstore.google.com/detail/mgepiogdappnhmohefhalmeppkfciail">Chrome</a> and <a href="https://addons.mozilla.org/firefox/addon/rays@a6n.ai/">Firefox</a> sends links to Rays with a right-click.
@@ -264,7 +275,7 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 				<p>New version out? Click Update. Rays installs it and reopens.</p>
 			</Passage>
 
-			<Passage label="Made by a6n" id="a6n">
+			<Passage title="Open source, made by a6n" id="a6n">
 				<p>
 					Rays is open source under the AGPL-3.0 licence. The code, issues and releases live on{' '}
 					<a href="https://github.com/a6n-ai/rays">GitHub</a>.
@@ -342,6 +353,27 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 	.browsers span {
 		margin-left: 6px;
 	}
+	.shot {
+		margin: 0 0 8px;
+		max-width: 40rem;
+	}
+	.shot img {
+		width: 100%;
+		filter: drop-shadow(0 24px 32px rgb(0 0 0 / 0.28));
+	}
+	:global(:root[data-theme='light']) .shot img {
+		filter: drop-shadow(0 20px 28px rgb(60 40 20 / 0.22));
+	}
+	.shot figcaption {
+		margin-top: 12px;
+		color: var(--muted);
+		font-size: var(--t-small);
+		max-width: var(--measure);
+	}
+	.more a {
+		display: inline-flex;
+		align-items: center;
+	}
 	.hero {
 		display: grid;
 		gap: 22px;
@@ -349,14 +381,12 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		align-content: center;
 		padding-block: 48px;
 	}
-	/* One 40rem column (the install bar's width): the pause button and the subline end on its right edge. */
+	/* One 40rem column. The pause button sits just past the drum's right edge, on the line it controls. */
 	.headline {
-		display: flex;
-		align-items: center;
-		justify-content: flex-start;
-		align-items: flex-end;
-		gap: 20px;
+		--fs: clamp(2.25rem, 4.4vw, 4.25rem);
+		position: relative;
 		max-width: 40rem;
+		font-size: var(--fs);
 	}
 	/* Two lines: the lead, then the drum at the same size. Sized so the lead fills the 40rem hero column. */
 	h1 {
@@ -364,7 +394,7 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		font: 500 clamp(2.25rem, 4.4vw, 4.25rem) / 1.05 var(--font-display);
+		font: 500 1em / 1.05 var(--font-display);
 		letter-spacing: -0.035em;
 		overflow-wrap: break-word;
 		min-width: 0;
@@ -373,11 +403,12 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		margin: 0;
 		max-width: 40rem;
 		color: var(--muted);
-		text-wrap: balance;
+		text-wrap: pretty;
 	}
 	.headline :global(.pause) {
-		align-self: flex-end;
-		margin-bottom: 0.9rem;
+		position: absolute;
+		left: calc(6.6 * var(--fs) + 8px);
+		bottom: calc(0.14 * var(--fs));
 	}
 	/* Sorting as four stops on one line: the file's name changes from the first stop to the last. */
 	.flow {
@@ -513,11 +544,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 	}
 	.ramp li:nth-child(3) .lanes {
 		transition-delay: 320ms;
-	}
-	.statement {
-		font: 500 clamp(1.75rem, 3.4vw, 3rem) / 1.1 var(--font-display);
-		letter-spacing: -0.03em;
-		color: var(--ink);
 	}
 	/* Benchmark numbers set as display type: the one place the page shouts. */
 	.stats {
@@ -688,6 +714,13 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		.hero {
 			min-height: 0;
 			padding-block: 24px 40px;
+		}
+	}
+	@media (max-width: 899px), (pointer: coarse) {
+		.browsers,
+		.overview h3 a,
+		.more a {
+			min-height: 44px;
 		}
 	}
 </style>

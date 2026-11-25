@@ -5,6 +5,8 @@ import icon from '../assets/icon.png';
 const DMG = 'https://rays.a6n.ai/download/Rays.dmg?src=site';
 const NOTES = '/releases/';
 const BREW = 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays';
+// Each word is one unbreakable unit, so the command only ever wraps at a space, never inside a name.
+const WORDS = BREW.split(' ');
 ---
 
 <div class="install">
@@ -18,7 +20,7 @@ const BREW = 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays';
 	</div>
 
 	<div class="brew">
-		<code id="brew-cmd">{BREW}</code>
+		<code id="brew-cmd">{WORDS.map((w, i) => <><span>{w}</span>{i < WORDS.length - 1 ? ' ' : ''}</>)}</code>
 		<button type="button" class="copy" data-copy="brew-cmd">Copy</button>
 		<span class="sr-only" role="status" aria-live="polite" data-copy-status></span>
 	</div>
@@ -60,7 +62,6 @@ const BREW = 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays';
 	}
 	.notes {
 		color: var(--muted);
-		min-height: 24px;
 		width: fit-content;
 	}
 	.notes:hover {
@@ -109,8 +110,10 @@ const BREW = 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays';
 	.brew code {
 		flex: 1;
 		min-width: 0;
-		overflow-wrap: anywhere;
 		font: 0.9375rem / 1.4 var(--font-mono);
+	}
+	.brew code span {
+		white-space: nowrap;
 	}
 	.brew code::before {
 		content: '$ ';
@@ -161,6 +164,15 @@ const BREW = 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays';
 	}
 	.mac-only {
 		display: none;
+	}
+	@media (max-width: 899px), (pointer: coarse) {
+		.copy {
+			min-height: 44px;
+			min-width: 5rem;
+		}
+		.note summary {
+			min-height: 44px;
+		}
 	}
 	@media (max-width: 899px) {
 		.mac-only {
