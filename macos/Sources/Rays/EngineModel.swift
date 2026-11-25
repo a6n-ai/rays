@@ -39,6 +39,7 @@ final class EngineModel {
             SettingsKey.speedLimit: 0, SettingsKey.connections: 4, SettingsKey.maxRunning: 3,
         ])
         start()
+        QueueActions.shared.onNotice = { [weak self] in self?.notice = $0 }
         onQueueFinished = { [weak self] id in
             guard let action = self?.queues.first(where: { $0.config.id == id })?.config.whenFinished else { return }
             QueueActions.shared.perform(action)
@@ -48,11 +49,11 @@ final class EngineModel {
     /// Keeps the Mac's wake time in step with the queue's next run, one minute early. Needs the wake permission.
     private func syncWake(_ queue: QueueView) {
         guard let id = queue.config.id else { return }
-        let next = queue.config.wake ? queue.nextRun.map { Date(timeIntervalSince1970: TimeInterval($0)) } : nil
-        Task.detached {
-            if let next { _ = WakePermission.schedule(queue: id, at: next) } else { WakePermission.cancel(queue: id) }
-        }
+        WakePermission.sync(queue: id, wake: queue.config.wake,
+                            nextRun: queue.nextRun.map { Date(timeIntervalSince1970: TimeInterval($0)) })
     }
+
+    func showNotice(_ text: String) { notice = text }
 
     private func start() {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -77,6 +78,7 @@ final class EngineModel {
             jobs.forEach(track)
             buckets = engine.buckets()
             queues = engine.queues()
+            queues.forEach(syncWake)
             conditions = ConditionsMonitor { wifi, onPower, idle in
                 engine.setConditions(wifi: wifi, onPower: onPower, idle: idle)
             }
@@ -256,7 +258,7 @@ final class EngineModel {
         let engine = try runningEngine
         try engine.deleteQueue(id: id)
         queues = engine.queues()
-        Task.detached { WakePermission.cancel(queue: id) }
+        WakePermission.sync(queue: id, wake: false, nextRun: nil)
     }
 
     /// Shows a queue action's failure in the notice line; `notice` is only settable in this file.

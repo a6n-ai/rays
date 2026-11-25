@@ -289,6 +289,7 @@ extension URL {
 }
 
 private struct WakePermissionRow: View {
+    @Environment(EngineModel.self) private var model
     @State private var installed: Bool?
 
     var body: some View {
@@ -299,7 +300,9 @@ private struct WakePermissionRow: View {
                 if installed == true {
                     Button("Remove wake permission") {
                         Task {
-                            _ = await WakePermission.remove()
+                            if !(await WakePermission.remove()) {
+                                model.showNotice("Couldn't remove the wake permission. Try Remove wake permission again.")
+                            }
                             installed = await Task.detached { WakePermission.isInstalled }.value
                         }
                     }

@@ -56,5 +56,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Rays asks System Events to shut down your Mac when a queue finishes, only if you choose Shut down.</string>
 </dict>
 </plist>

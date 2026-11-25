@@ -28,19 +28,45 @@ enum WakePermission {
         return await Task.detached(operation: { isInstalled }).value
     }
 
+    /// One administrator prompt cancels every wake Rays recorded, as root, then removes the rule file.
+    /// The records are cleared only when that succeeds.
     @MainActor
     static func remove() async -> Bool {
-        await Task.detached {
-            let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix(keyPrefix) }
-            for key in keys { if let id = UInt64(key.dropFirst(keyPrefix.count)) { cancel(queue: id) } }
-        }.value
-        guard await runAsAdmin("/bin/rm -f \(file)") else { return false }
-        return !FileManager.default.fileExists(atPath: file)
+        let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix(keyPrefix) }
+        let cancels = keys.flatMap { key in
+            (UserDefaults.standard.array(forKey: key) as? [Double] ?? []).map { format(Date(timeIntervalSince1970: $0)) }
+        }
+        .filter { $0.range(of: #"^\d\d/\d\d/\d\d \d\d:\d\d:\d\d$"#, options: .regularExpression) != nil }
+        .map { "/usr/bin/pmset schedule cancel wake '\($0)'; " }
+        .joined()
+        guard await runAsAdmin(cancels + "/bin/rm -f '\(file)'"), !FileManager.default.fileExists(atPath: file) else { return false }
+        for key in keys { UserDefaults.standard.removeObject(forKey: key) }
+        return true
+    }
+
+    private static var wanting = Set<UInt64>()
+    private static let serial = DispatchQueue(label: "app.rays.wake")
+
+    /// Some queue has Wake on but the rule file is gone, so the toggle should offer "Set Up Again".
+    static var isMissingForWakeQueues: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return !wanting.isEmpty && !FileManager.default.fileExists(atPath: file)
+    }
+
+    /// Brings the Mac's wake time in step with a queue. Calls run one at a time, in the order they were made.
+    static func sync(queue: UInt64, wake: Bool, nextRun: Date?) {
+        lock.lock()
+        if wake { wanting.insert(queue) } else { wanting.remove(queue) }
+        lock.unlock()
+        serial.async {
+            if wake, let nextRun { _ = schedule(queue: queue, at: nextRun) } else { cancel(queue: queue) }
+        }
     }
 
     /// Wakes the Mac a minute before `at`. A wake already recorded for that time is left alone.
     static func schedule(queue: UInt64, at: Date) -> Bool {
         lock.lock(); defer { lock.unlock() }
+        guard FileManager.default.fileExists(atPath: file) else { return false }
         let target = at.addingTimeInterval(-60)
         guard target > .now else { return false }
         if recorded(queue) == [target.timeIntervalSince1970] { return true }
@@ -93,15 +119,19 @@ enum WakePermission {
         name.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil ? name : nil
     }
 
-    /// The temp file is validated before it is chowned, chmodded and moved; any failure removes it and leaves
-    /// `target` untouched. `user` must come from `validatedUser`; `target` and `visudo` are fixed paths.
+    /// The only dates sudo will accept, in the sudoers line below.
+    private static let datePattern = #"[0-9][0-9]/[0-9][0-9]/[0-9][0-9] [0-9][0-9]\:[0-9][0-9]\:[0-9][0-9]"#
+    static let sudoersRule = "/usr/bin/pmset schedule wake \(datePattern), /usr/bin/pmset schedule cancel wake \(datePattern)"
+
+    /// The temp file is made inside the root-owned target directory, so nobody else can swap it, and its dot name
+    /// keeps sudo from reading it before the move. It is validated, then chowned, chmodded and renamed into place;
+    /// any failure removes it and leaves `target` untouched. `user` must come from `validatedUser`.
     static func installScript(user: String, target: String, visudo: String) -> String {
-        """
-        USER_NAME='\(user)'; f='\(target)'; t=$(/usr/bin/mktemp) || exit 1; \
-        /usr/bin/printf '%s ALL=(root) NOPASSWD: /usr/bin/pmset schedule wake *, /usr/bin/pmset schedule cancel wake *\\n' "$USER_NAME" > "$t" \
-        && '\(visudo)' -cf "$t" && /usr/sbin/chown root:wheel "$t" && /bin/chmod 0440 "$t" && /bin/mv "$t" "$f" \
-        || { /bin/rm -f "$t"; exit 1; }
-        """
+        let dir = (target as NSString).deletingLastPathComponent
+        return #"""
+        USER_NAME='\#(user)'; f='\#(target)'; t=$(/usr/bin/mktemp '\#(dir)/.rays-wake.XXXXXX') || exit 1; 
+        /usr/bin/printf '%s ALL=(root) NOPASSWD: %s\n' "$USER_NAME" '\#(sudoersRule)' > "$t"         && '\#(visudo)' -cf "$t" && /usr/sbin/chown root:wheel "$t" && /bin/chmod 0440 "$t" && /bin/mv "$t" "$f"         || { /bin/rm -f "$t"; exit 1; }
+        """#
     }
 
     /// `osascript` shows the system administrator prompt. The script text is fixed apart from the validated user name.

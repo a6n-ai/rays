@@ -18,7 +18,7 @@
 - **Held jobs:** they are `Queued` with a derived waiting reason. They are never `Paused`, and the UI says "Waiting for schedule", "Waiting for Wi-Fi", "Waiting for charger", "Waiting for idle" or "Queue stopped".
 - **QueueFinished:** fires only at the end of a run that started at least one job. Paused jobs count as remaining.
 - **Conditions:** they count as not met until the app's first `set_conditions`.
-- **Wake permission:** the file `/etc/sudoers.d/rays-wake` contains exactly `<user> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wake *, /usr/bin/pmset schedule cancel wake *`, with mode 0440, owner root:wheel, validated with `visudo -cf` and deleted if invalid. Wake is off by default.
+- **Wake permission:** the file `/etc/sudoers.d/rays-wake` contains exactly `<user> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wake [0-9][0-9]/[0-9][0-9]/[0-9][0-9] [0-9][0-9]\:[0-9][0-9]\:[0-9][0-9], /usr/bin/pmset schedule cancel wake [0-9][0-9]/[0-9][0-9]/[0-9][0-9] [0-9][0-9]\:[0-9][0-9]\:[0-9][0-9]`, with mode 0440, owner root:wheel, validated with `visudo -cf` and deleted if invalid. Wake is off by default.
 - **Copy:**
   - "Rays starts this queue at HH:MM if your Mac is awake and Rays is running."
   - Run command note: "Runs as your user account".
@@ -253,8 +253,8 @@
   - `remove()` cancels every recorded wake, then runs `rm -f /etc/sudoers.d/rays-wake` with administrator privileges.
 - **Install script:**
   ```
-  f=/etc/sudoers.d/rays-wake; t=$(mktemp)
-  printf '%s ALL=(root) NOPASSWD: /usr/bin/pmset schedule wake *, /usr/bin/pmset schedule cancel wake *\n' "$USER_NAME" > "$t"
+  f=/etc/sudoers.d/rays-wake; t=$(/usr/bin/mktemp /etc/sudoers.d/.rays-wake.XXXXXX) || exit 1
+  printf '%s ALL=(root) NOPASSWD: %s\n' "$USER_NAME" '/usr/bin/pmset schedule wake [0-9][0-9]/[0-9][0-9]/[0-9][0-9] [0-9][0-9]\:[0-9][0-9]\:[0-9][0-9], /usr/bin/pmset schedule cancel wake [0-9][0-9]/[0-9][0-9]/[0-9][0-9] [0-9][0-9]\:[0-9][0-9]\:[0-9][0-9]' > "$t"
   /usr/sbin/visudo -cf "$t" && /usr/sbin/chown root:wheel "$t" && /bin/chmod 0440 "$t" && /bin/mv "$t" "$f" || { /bin/rm -f "$t"; exit 1; }
   ```
   Here `USER_NAME` is passed safely: a quoted-form literal of `NSUserName()` that has been validated as matching `^[A-Za-z0-9._-]+$`, and refused otherwise.

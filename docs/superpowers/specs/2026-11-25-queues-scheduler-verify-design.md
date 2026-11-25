@@ -118,7 +118,7 @@ The user asked for queues *and* a scheduler like the reference, and A is the onl
   - Footer: Run now, Delete queue (not for Main), Revert, Save schedule
   - Below Start at: "Rays starts this queue at 02:00 if your Mac is awake and Rays is running." This hides once wake is set up and on.
 - **Wake flow.** Turning on "Wake the Mac to start" without the permission shows the explainer alert (Not Now / Continue…). Continue runs, once, with administrator privileges, through `osascript … with administrator privileges`, a script that:
-  - writes `/etc/sudoers.d/rays-wake` with exactly `<user> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wake *, /usr/bin/pmset schedule cancel wake *`
+  - writes `/etc/sudoers.d/rays-wake` with exactly `<user> ALL=(root) NOPASSWD: /usr/bin/pmset schedule wake [0-9][0-9]/[0-9][0-9]/[0-9][0-9] [0-9][0-9]\:[0-9][0-9]\:[0-9][0-9], /usr/bin/pmset schedule cancel wake [0-9][0-9]/[0-9][0-9]/[0-9][0-9] [0-9][0-9]\:[0-9][0-9]\:[0-9][0-9]`
   - sets mode 0440, owner root:wheel
   - validates with `visudo -cf` and deletes the file if validation fails
   

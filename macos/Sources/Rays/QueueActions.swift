@@ -12,11 +12,11 @@ final class QueueActions {
     static let shared = QueueActions()
     nonisolated static let category = "ai.a6n.rays.queue-finished"
     nonisolated static let cancelAction = "cancel"
-    private static let notificationID = "queue-finished-countdown"
     private nonisolated static let log = Logger(subsystem: "app.rays", category: "queue-actions")
     private static let countdownSeconds = 30
 
     struct Countdown: Equatable {
+        let id = UUID().uuidString
         let action: FinishAction
         var remaining: Int
 
@@ -30,6 +30,8 @@ final class QueueActions {
     }
 
     private(set) var countdown: Countdown?
+    /// Shows a line in the app's notice capsule; set by `EngineModel`.
+    @ObservationIgnored var onNotice: ((String) -> Void)?
     @ObservationIgnored private var task: Task<Void, Never>?
 
     func perform(_ action: FinishAction) {
@@ -45,15 +47,23 @@ final class QueueActions {
     func cancel() {
         task?.cancel()
         task = nil
+        if let id = countdown?.id { Self.removeNotification(id) }
         countdown = nil
-        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [Self.notificationID])
+    }
+
+    private static func removeNotification(_ id: String) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+        center.removeDeliveredNotifications(withIdentifiers: [id])
     }
 
     private func startCountdown(_ action: FinishAction) {
         cancel()
-        countdown = Countdown(action: action, remaining: Self.countdownSeconds)
+        let started = Countdown(action: action, remaining: Self.countdownSeconds)
+        countdown = started
+        // The notification is posted on its own, so an unanswered permission prompt never stalls the ticks.
+        Task { await Self.postNotification(for: started) }
         task = Task { @MainActor in
-            await Self.postNotification(for: countdown)
             while let current = countdown, current.remaining > 0 {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
@@ -61,13 +71,13 @@ final class QueueActions {
             }
             guard !Task.isCancelled else { return }
             cancel()
-            Self.finish(action)
+            finish(action)
         }
     }
 
-    private static func finish(_ action: FinishAction) {
+    private func finish(_ action: FinishAction) {
         switch action {
-        case .sleep: launch("/usr/bin/pmset", ["sleepnow"])
+        case .sleep: Self.launch("/usr/bin/pmset", ["sleepnow"])
         case .quit: NSApp.terminate(nil)
         case .shutDown: shutDown()
         default: break
@@ -75,8 +85,7 @@ final class QueueActions {
     }
 
     /// Authorization is asked the first time a countdown is needed. If it is denied, the in-app banner still shows.
-    private static func postNotification(for countdown: Countdown?) async {
-        guard let countdown else { return }
+    private static func postNotification(for countdown: Countdown) async {
         let center = UNUserNotificationCenter.current()
         guard (try? await center.requestAuthorization(options: [.alert])) == true else { return }
         let cancel = UNNotificationAction(identifier: cancelAction, title: "Cancel", options: [])
@@ -88,7 +97,9 @@ final class QueueActions {
         content.title = countdown.message
         content.body = "A queue has finished downloading."
         content.categoryIdentifier = category
-        try? await center.add(UNNotificationRequest(identifier: notificationID, content: content, trigger: nil))
+        try? await center.add(UNNotificationRequest(identifier: countdown.id, content: content, trigger: nil))
+        // Cancel or finish may have come while the request was being added.
+        if shared.countdown?.id != countdown.id { removeNotification(countdown.id) }
     }
 
     private static func launch(_ path: String, _ arguments: [String]) {
@@ -98,7 +109,7 @@ final class QueueActions {
         do { try process.run() } catch { log.error("Couldn't run \(path, privacy: .public): \(error.localizedDescription, privacy: .public)") }
     }
 
-    /// The only place text from the user runs, as the user. Output stays at debug level and private.
+    /// The only place text from the user runs, as the user. Output stays at debug level and private; it stops after an hour.
     private static func run(_ command: String) {
         let process = Process()
         process.executableURL = URL(filePath: "/bin/zsh")
@@ -111,7 +122,9 @@ final class QueueActions {
             if data.isEmpty { handle.readabilityHandler = nil; return }
             log.debug("\(String(decoding: data, as: UTF8.self), privacy: .private)")
         }
-        do { try process.run() } catch { log.error("Couldn't run the finish command: \(error.localizedDescription, privacy: .public)") }
+        process.terminationHandler = { log.debug("Finish command exited with status \($0.terminationStatus)") }
+        do { try process.run() } catch { return log.error("Couldn't run the finish command: \(error.localizedDescription, privacy: .public)") }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3600) { if process.isRunning { process.terminate() } }
     }
 
     /// `CGSession -suspend` is gone on current macOS, so this uses the login framework's own lock call.
@@ -125,18 +138,29 @@ final class QueueActions {
         _ = unsafeBitCast(symbol, to: Lock.self)()
     }
 
-    private static func shutDown() {
-        let key = "shutDownExplained"
-        if !UserDefaults.standard.bool(forKey: key) {
+    private static let shutDownKey = "shutDownExplained"
+
+    /// Explains the Automation permission and triggers its prompt once, so an unattended shut down is not blocked.
+    /// Returns whether macOS allows Rays to control System Events.
+    func prepareShutDown() async -> Bool {
+        if !UserDefaults.standard.bool(forKey: Self.shutDownKey) {
             let alert = NSAlert()
             alert.messageText = "Allow Rays to shut down your Mac"
-            alert.informativeText = "macOS will ask whether Rays can control System Events. Click OK to let Rays shut down your Mac when a queue finishes. You can change this in System Settings > Privacy & Security > Automation."
+            alert.informativeText = "macOS will ask whether Rays can control System Events. Click OK so Rays can shut down your Mac when a queue finishes. You can change this in System Settings > Privacy & Security > Automation."
             alert.runModal()
-            UserDefaults.standard.set(true, forKey: key)
+            UserDefaults.standard.set(true, forKey: Self.shutDownKey)
         }
         var error: NSDictionary?
+        NSAppleScript(source: "tell application \"System Events\" to get name")?.executeAndReturnError(&error)
+        return error == nil
+    }
+
+    private func shutDown() {
+        var error: NSDictionary?
         NSAppleScript(source: "tell application \"System Events\" to shut down")?.executeAndReturnError(&error)
-        if let error { log.error("Shut down failed: \(String(describing: error[NSAppleScript.errorMessage]), privacy: .public)") }
+        guard error != nil else { return }
+        Self.log.error("Shut down failed: \(String(describing: error?[NSAppleScript.errorMessage]), privacy: .public)")
+        onNotice?("Couldn't shut down your Mac. Allow Rays under System Settings > Privacy & Security > Automation.")
     }
 }
 
