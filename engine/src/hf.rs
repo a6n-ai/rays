@@ -152,9 +152,15 @@ pub struct VerifyResult {
     pub status: VerifyStatus,
 }
 
+/// Larger than any manifest this app writes; a bigger file is not read at all.
+const MANIFEST_MAX_BYTES: u64 = 16 << 20;
+
 pub fn read_manifest(dir: &Path) -> Option<HfManifest> {
-    let bytes = std::fs::read(dir.join(MANIFEST_NAME)).ok()?;
-    serde_json::from_slice(&bytes).ok()
+    let path = dir.join(MANIFEST_NAME);
+    if std::fs::metadata(&path).ok()?.len() > MANIFEST_MAX_BYTES {
+        return None;
+    }
+    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
 }
 
 /// Serialises writers, so two adds at once cannot each merge into the old file and drop the other's entries.
@@ -164,11 +170,10 @@ static MANIFEST_LOCK: Mutex<()> = Mutex::new(());
 pub fn merge_manifest(dir: &Path, repo: &str, sha: &str, added: Vec<HfFile>) -> io::Result<()> {
     let _guard = MANIFEST_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let mut manifest = match read_manifest(dir) {
-        // Another repo's files must not be listed under this one, so its manifest is replaced.
-        Some(m) if m.repo == repo => m,
+        // Another repo's or revision's files must not be listed under this one, so that manifest is replaced.
+        Some(m) if m.repo == repo && m.sha == sha => m,
         _ => HfManifest { repo: repo.to_owned(), sha: sha.to_owned(), files: Vec::new() },
     };
-    manifest.sha = sha.to_owned();
     for file in added {
         match manifest.files.iter_mut().find(|f| f.path == file.path) {
             Some(existing) => *existing = file,
@@ -179,7 +184,9 @@ pub fn merge_manifest(dir: &Path, repo: &str, sha: &str, added: Vec<HfFile>) -> 
     std::fs::create_dir_all(dir)?;
     let tmp = dir.join(format!("{MANIFEST_NAME}.tmp"));
     std::fs::write(&tmp, json)?;
-    std::fs::rename(&tmp, dir.join(MANIFEST_NAME))
+    std::fs::rename(&tmp, dir.join(MANIFEST_NAME)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
 }
 
 pub fn sha256_file(path: &Path) -> io::Result<String> {
@@ -207,9 +214,11 @@ pub async fn verify_files(dir: &Path, files: Vec<HfFile>) -> Vec<VerifyResult> {
             None => Some(VerifyStatus::Missing),
             Some((parent, name)) => {
                 let path = parent.join(name);
-                match std::fs::metadata(&path) {
-                    Ok(m) if m.is_file() && m.len() != file.size => Some(VerifyStatus::WrongSize { actual: m.len() }),
-                    Ok(m) if m.is_file() => match &file.sha256 {
+                // A symlink can point anywhere, so only a regular file whose folder is really inside `dir` counts.
+                let inside = matches!((parent.canonicalize(), dir.canonicalize()), (Ok(p), Ok(d)) if p.starts_with(&d));
+                match std::fs::symlink_metadata(&path) {
+                    Ok(m) if inside && m.file_type().is_file() && m.len() != file.size => Some(VerifyStatus::WrongSize { actual: m.len() }),
+                    Ok(m) if inside && m.file_type().is_file() => match &file.sha256 {
                         None => Some(VerifyStatus::SizeChecked),
                         Some(expected) => {
                             to_hash.push((i, path, expected.to_ascii_lowercase()));
@@ -222,22 +231,24 @@ pub async fn verify_files(dir: &Path, files: Vec<HfFile>) -> Vec<VerifyResult> {
         };
         status.push(quick);
     }
-    for pair in to_hash.chunks(2) {
-        let tasks: Vec<_> = pair
-            .iter()
-            .map(|(i, path, expected)| {
-                let (path, expected) = (path.clone(), expected.clone());
-                (*i, tokio::task::spawn_blocking(move || (sha256_file(&path), expected)))
-            })
-            .collect();
-        for (i, task) in tasks {
-            status[i] = Some(match task.await {
-                Ok((Ok(actual), expected)) if actual == expected => VerifyStatus::Ok,
-                Ok((Ok(_), _)) => VerifyStatus::WrongChecksum,
-                // A file that cannot be read cannot be shown good, so it is reported as missing.
-                _ => VerifyStatus::Missing,
-            });
-        }
+    // The permit is taken before each spawn, so at most two hashes run at once.
+    let gate = std::sync::Arc::new(tokio::sync::Semaphore::new(2));
+    let mut hashing = Vec::with_capacity(to_hash.len());
+    for (i, path, expected) in to_hash {
+        let permit = gate.clone().acquire_owned().await.expect("the gate is never closed");
+        hashing.push((i, tokio::task::spawn_blocking(move || {
+            let actual = sha256_file(&path);
+            drop(permit);
+            (actual, expected)
+        })));
+    }
+    for (i, task) in hashing {
+        status[i] = Some(match task.await {
+            Ok((Ok(actual), expected)) if actual == expected => VerifyStatus::Ok,
+            Ok((Ok(_), _)) => VerifyStatus::WrongChecksum,
+            // A file that cannot be read cannot be shown good, so it is reported as missing.
+            _ => VerifyStatus::Missing,
+        });
     }
     files
         .into_iter()

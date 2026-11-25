@@ -759,3 +759,42 @@ async fn manifest_paths_are_safe() {
     assert_eq!(got.len(), 1);
     assert_eq!(got[0].status, dl_engine::hf::VerifyStatus::Missing);
 }
+#[tokio::test(flavor = "multi_thread")]
+async fn verify_ignores_symlinks() {
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("model");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::fs::write(dir.path().join("outside.bin"), b"0123456789").unwrap();
+    std::os::unix::fs::symlink(dir.path().join("outside.bin"), dest.join("w.gguf")).unwrap();
+    let got = dl_engine::hf::verify_files(&dest, vec![file("w.gguf", 10, None)]).await;
+    assert_eq!(got[0].status, dl_engine::hf::VerifyStatus::Missing);
+}
+#[test]
+fn new_revision_resets_manifest() {
+    let dir = tempfile::tempdir().unwrap();
+    dl_engine::hf::merge_manifest(dir.path(), "open/m", "abc", vec![file("w.gguf", 3, None)]).unwrap();
+    dl_engine::hf::merge_manifest(dir.path(), "open/m", "def", vec![file("onnx/m.onnx", 4, None)]).unwrap();
+    let m = dl_engine::hf::read_manifest(dir.path()).unwrap();
+    assert_eq!(m.sha, "def");
+    assert_eq!(m.files, vec![file("onnx/m.onnx", 4, None)]);
+}
+#[test]
+fn oversized_manifest_is_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let big = vec![b' '; (16 << 20) + 1];
+    std::fs::write(dir.path().join(dl_engine::hf::MANIFEST_NAME), big).unwrap();
+    assert!(dl_engine::hf::read_manifest(dir.path()).is_none());
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn manifest_name_is_not_a_repo_file() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("model");
+    let res = sched.add_hf("open/m", "abc", vec![file(".rays-model.json", SIZE as u64, None)], &dest, None);
+    assert!(matches!(res[0].status, HfAddStatus::Rejected { .. }), "{:?}", res[0]);
+    assert!(sched.views().is_empty());
+    assert!(!dest.join(".rays-model.json").exists());
+    sched.shutdown();
+}

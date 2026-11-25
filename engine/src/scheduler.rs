@@ -401,8 +401,10 @@ impl Scheduler {
             })
             .collect();
         if !recorded.is_empty() {
-            // shortcut: a manifest that fails to write only costs offline verify; the downloads themselves still go ahead.
-            let _ = hf::merge_manifest(dest_dir, repo, sha, recorded);
+            // The downloads still go ahead; only offline verify loses this manifest.
+            if let Err(e) = hf::merge_manifest(dest_dir, repo, sha, recorded) {
+                eprintln!("warn: could not write the model manifest in {}: {e}", dest_dir.display());
+            }
         }
         self.refresh();
         results
@@ -423,7 +425,8 @@ impl Scheduler {
         if !is_plain_abs(dest_dir) {
             return rejected("destination must be an absolute path with no ..");
         }
-        let Some((parent, name)) = hf::hf_target(dest_dir, &file.path) else {
+        // The manifest lives at the folder's root under this name, so a repo file must not take it.
+        let Some((parent, name)) = hf::hf_target(dest_dir, &file.path).filter(|_| file.path != hf::MANIFEST_NAME) else {
             return rejected("unsafe file path");
         };
         if !file.sha256.as_deref().is_none_or(|h| h.len() == 64 && h.bytes().all(|c| c.is_ascii_hexdigit())) {
