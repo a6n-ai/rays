@@ -653,3 +653,43 @@ async fn failed_twin_is_resumed_not_duplicated() {
     assert_eq!(again[0].status, HfAddStatus::Added { id });
     assert_eq!(sched.views().len(), 1, "the failed twin was duplicated");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn failed_twin_with_other_checksum_is_replaced() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("models");
+    let first = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let HfAddStatus::Added { id: old } = first[0].status else { panic!("{:?}", first[0]) };
+    wait_for(&sched, old, |v| matches!(v.state, JobState::Failed { .. })).await;
+    let part = dl_engine::names::part_path(&dest, "w.gguf", old);
+    std::fs::write(&part, b"partial").unwrap();
+
+    let new_sha = "ab".repeat(32);
+    let again = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, Some(new_sha))], &dest);
+    let HfAddStatus::Added { id } = again[0].status else { panic!("{:?}", again[0]) };
+    assert!(!part.exists(), "the old job's .part was left behind");
+    assert_eq!(sched.views().iter().map(|v| v.id).collect::<Vec<_>>(), vec![id]);
+    sched.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn failed_twin_from_another_url_is_replaced() {
+    let (cdn, _) = fake_cdn().await;
+    let (hf, _) = fake_hf(cdn).await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sched, _) = scheduler(dir.path(), format!("http://127.0.0.1:{}", hf.port()));
+    let dest = dir.path().join("models");
+    let other = sched.add_to(vec![format!("http://127.0.0.1:{}/nowhere/w.gguf", hf.port())], Some(dest.clone()), vec![Some("w.gguf".into())]);
+    let old = other[0].id.expect("queued");
+    wait_for(&sched, old, |v| matches!(v.state, JobState::Failed { .. })).await;
+
+    let res = sched.add_hf("gated/m", "abc", vec![file("w.gguf", SIZE as u64, None)], &dest);
+    let HfAddStatus::Added { id } = res[0].status else { panic!("{:?}", res[0]) };
+    let views = sched.views();
+    assert_eq!(views.iter().map(|v| v.id).collect::<Vec<_>>(), vec![id]);
+    assert_eq!(views[0].url, format!("http://127.0.0.1:{}/gated/m/resolve/abc/w.gguf", hf.port()));
+    sched.shutdown();
+}

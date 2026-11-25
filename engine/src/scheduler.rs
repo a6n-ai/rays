@@ -262,8 +262,16 @@ impl Scheduler {
             return hf::HfAddStatus::AlreadyQueued { id };
         }
         if let Some(id) = self.twin(&parent, &name, |s| matches!(s, JobState::Failed { .. })) {
-            self.resume(id);
-            return hf::HfAddStatus::Added { id };
+            let same = self.find(id).is_some_and(|live| {
+                let job = lock(&live.job);
+                job.url == url && job.sha256.as_deref().map(str::to_ascii_lowercase) == file.sha256.as_deref().map(str::to_ascii_lowercase)
+            });
+            if same {
+                self.resume(id);
+                return hf::HfAddStatus::Added { id };
+            }
+            // Another revision or checksum, or another URL: the old job must not finish under the new add.
+            self.remove(id, true);
         }
         let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone());
         match (res.id, res.error) {
