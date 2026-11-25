@@ -42,6 +42,7 @@ struct SidebarView: View {
     @Binding var selection: Destination?
     @State private var folders: [SidebarFolder] = []
     @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = false
+    @AppStorage("sidebarDownloadsExpanded") private var downloadsExpanded = true
     @State private var denied = false
     @State private var activations = 0
     @Environment(\.openSettings) private var openSettings
@@ -50,12 +51,15 @@ struct SidebarView: View {
         VStack(spacing: 0) {
         List(selection: $selection) {
             Section {
-                Label("Downloads", systemImage: "arrow.down.circle")
-                    .tag(Destination.downloads)
+                DisclosureGroup(isExpanded: $downloadsExpanded) {
+                    Label("Models", systemImage: "cube")
+                        .tag(Destination.models)
+                } label: {
+                    Label("Downloads", systemImage: "arrow.down.circle")
+                        .tag(Destination.downloads)
+                }
                 Label("Sorter", systemImage: "sparkles")
                     .tag(Destination.sorter)
-                Label("Models", systemImage: "cube")
-                    .tag(Destination.models)
                 Label("Cloud", systemImage: "cloud")
                     .tag(Destination.cloud)
             } header: {

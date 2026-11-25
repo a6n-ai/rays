@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Where model downloads go by default: the sorter's AI Models destination for Downloads, else a folder inside it.
@@ -24,5 +25,11 @@ enum AIModelsFolder {
         let lmStudio = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".lmstudio", directoryHint: .isDirectory)
         guard FileManager.default.fileExists(atPath: lmStudio.path(percentEncoded: false)) else { return nil }
         return lmStudio.appending(path: "models", directoryHint: .isDirectory)
+    }
+
+    /// Opens the folder in Finder, creating it first if it's missing.
+    static func reveal(_ folder: URL) {
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(folder)
     }
 }

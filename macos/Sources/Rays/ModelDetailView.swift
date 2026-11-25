@@ -69,129 +69,50 @@ struct ModelDetailView: View {
         AIModelsFolder.lmStudioModels?.appending(path: repo.id, directoryHint: .isDirectory)
     }
 
-    private var hubURL: URL? { URL(string: "https://huggingface.co/\(repo.id)") }
-
     var body: some View {
         List {
-            Section {
-                header
-            }
+            ModelHeaderCard(repo: repo, isGGUF: isGGUF, total: total, freeBytes: freeBytes)
+                .plainRow()
             if !versions.isEmpty {
-                Section {
-                    versionChips
-                } header: {
-                    Text("Version")
-                }
+                ModelVersionPills(versions: versions, selected: $selected)
+                    .plainRow()
             }
-            Section {
-                ForEach(repo.files, id: \.path) { fileRow($0) }
-            } header: {
-                filesHeader
-            }
-            Section {
-                saveTo
-            }
-            Section {
-                footer
+            filesHeader
+                .plainRow()
+            ForEach(repo.files, id: \.path) { file in
+                ModelFileRow(
+                    file: file,
+                    isOn: Binding(
+                        get: { selected.contains(file.path) },
+                        set: { on in if on { selected.insert(file.path) } else { selected.remove(file.path) } }),
+                    note: note(for: file))
+                .plainRow(horizontal: LayoutMetrics.margin - LayoutMetrics.hoverInset)
             }
         }
         .listStyle(.inset)
+        .tint(.gray)
         .scrollContentBackground(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .all)
+        .navigationTitle(hfNameParts(repo.id).name)
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .task(id: dir) { freeBytes = Self.freeSpace(near: dir) }
         .task(id: NoteInputs(selected: selected, dir: dir, replace: replaceExisting)) { fileNotes = diskNotes() }
         .onChange(of: selected) { _, _ in added = nil }
         .onChange(of: dir) { _, _ in added = nil }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(repo.id).font(.title3.weight(.semibold)).textSelection(.enabled).lineLimit(1)
-                Spacer()
-                Text(byteText(total)).font(.title3).foregroundStyle(.secondary).monospacedDigit()
-            }
-            HStack(spacing: 10) {
-                if isGGUF {
-                    Text("GGUF")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary, in: .capsule)
-                }
-                Label(repo.downloads.formatted(.number.notation(.compactName)), systemImage: "arrow.down.circle")
-                if let hubURL { Link("Open on Hugging Face", destination: hubURL) }
-                Spacer()
-                if let freeBytes {
-                    Text("\(byteText(freeBytes)) free").foregroundStyle(.secondary)
-                }
-            }
-            .font(.callout)
-            if needsToken {
-                HStack {
-                    Text("This model is gated. Add your Hugging Face token in Settings")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Open Settings") { openSettings() }
-                }
-                .font(.callout)
-            }
-        }
-    }
-
-    private var versionChips: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(versions, id: \.label) { version in
-                    let on = Set(version.files) == selected
-                    Button {
-                        selected = Set(version.files)
-                    } label: {
-                        Text("\(version.label)\(version.recommended ? " ★" : "")  \(byteText(version.size))")
-                            .font(.callout)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(on ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.06), in: .capsule)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
-            }
-        }
-    }
-
     private var filesHeader: some View {
         HStack {
-            Text("Files")
+            Text("Files").font(.headline)
             Text("\(selected.count) of \(repo.files.count) selected").foregroundStyle(.secondary)
             Spacer()
             Button("Recommended") { selected = Set(hfRecommended(files: repo.files)) }
-            Button("Select all") { selected = Set(repo.files.map(\.path)) }
+            Button("All") { selected = Set(repo.files.map(\.path)) }
             Button("None") { selected = [] }
         }
-        .buttonStyle(.link)
-        .textCase(nil)
-    }
-
-    private func fileRow(_ file: HfFile) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Toggle(isOn: Binding(
-                    get: { selected.contains(file.path) },
-                    set: { on in if on { selected.insert(file.path) } else { selected.remove(file.path) } }
-                )) {
-                    Text(file.path).lineLimit(1).truncationMode(.middle)
-                }
-                .toggleStyle(.checkbox)
-                Spacer()
-                Text(byteText(file.size)).foregroundStyle(.secondary).monospacedDigit()
-            }
-            if let note = note(for: file) {
-                Text(note.text)
-                    .font(.caption)
-                    .foregroundStyle(note.isError ? Color.red : Color.secondary)
-                    .padding(.leading, 22)
-            }
-        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .padding(.top, 8)
     }
 
     /// Per-file status after a download, or a warning about a same-name file already in the folder.
@@ -226,28 +147,42 @@ struct ModelDetailView: View {
     }
 
     private var saveTo: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Save to")
+        Menu {
+            Button("AI Models folder") { chosen = nil }
+            if let lmStudioDir {
+                Button("LM Studio models folder") { chosen = lmStudioDir }
+            }
+            Button("Choose…") { chooseFolder() }
+        } label: {
+            Label {
                 Text((dir.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Choose…") { chooseFolder() }
+            } icon: {
+                Image(systemName: "folder")
             }
-            if let lmStudioDir {
-                Toggle("Save into LM Studio's models folder", isOn: Binding(
-                    get: { chosen == lmStudioDir },
-                    set: { chosen = $0 ? lmStudioDir : nil }
-                ))
-                .toggleStyle(.checkbox)
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .help("Save to")
+        .accessibilityLabel("Save to")
+        .frame(maxWidth: 360, alignment: .leading)
     }
 
-    private var footer: some View {
+    private var bottomBar: some View {
         VStack(alignment: .trailing, spacing: 6) {
+            if needsToken {
+                HStack {
+                    Text("This model is gated. Add your Hugging Face token in Settings")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Open Settings") { openSettings() }
+                }
+            }
             if let bannerText {
                 HStack {
                     Text(bannerText).foregroundStyle(.secondary)
@@ -264,26 +199,36 @@ struct ModelDetailView: View {
             if let errorText {
                 Text(errorText).foregroundStyle(.red)
             }
-            HStack {
-                Spacer()
-                Button(total == 0 ? "Download" : "Download \(byteText(total))") {
-                    let picked = (selected, dir)
-                    downloading = true
-                    Task {
-                        defer { downloading = false }
-                        do {
-                            let result = try await model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir)
-                            // A choice changed during the call has already cleared `added`; this result is for the old choice.
-                            guard selected == picked.0, dir == picked.1 else { return }
-                            added = result
-                            errorText = nil
-                        } catch {
-                            errorText = EngineModel.message(for: error)
-                        }
-                    }
+            GlassEffectContainer(spacing: 12) {
+                HStack {
+                    saveTo
+                    Spacer()
+                    Button(total == 0 ? "Download" : "Download \(byteText(total))", action: download)
+                        .buttonStyle(.glassProminent)
+                        .controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(files.isEmpty || notEnoughSpace || needsToken || downloading)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(files.isEmpty || notEnoughSpace || needsToken || downloading)
+            }
+        }
+        .font(.callout)
+        .padding(.horizontal, LayoutMetrics.margin)
+        .padding(.vertical, 12)
+    }
+
+    private func download() {
+        let picked = (selected, dir)
+        downloading = true
+        Task {
+            defer { downloading = false }
+            do {
+                let result = try await model.addModel(repo: repo.id, sha: repo.sha, files: files, to: dir)
+                // A choice changed during the call has already cleared `added`; this result is for the old choice.
+                guard selected == picked.0, dir == picked.1 else { return }
+                added = result
+                errorText = nil
+            } catch {
+                errorText = EngineModel.message(for: error)
             }
         }
     }
@@ -321,5 +266,13 @@ struct ModelDetailView: View {
             }
             n += 1
         }
+    }
+}
+
+private extension View {
+    func plainRow(horizontal: CGFloat = LayoutMetrics.margin) -> some View {
+        listRowInsets(EdgeInsets(top: LayoutMetrics.rowSpacing / 2, leading: horizontal, bottom: LayoutMetrics.rowSpacing / 2, trailing: horizontal))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 }
