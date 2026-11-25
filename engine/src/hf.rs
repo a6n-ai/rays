@@ -23,6 +23,7 @@ pub struct HfModel {
     pub likes: u64,
     pub gated: bool,
     pub gguf: bool,
+    pub pipeline_tag: Option<String>,
 }
 
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]
@@ -32,6 +33,7 @@ pub struct HfRepo {
     pub gated: bool,
     pub downloads: u64,
     pub likes: u64,
+    pub pipeline_tag: Option<String>,
     pub files: Vec<HfFile>,
 }
 
@@ -48,6 +50,8 @@ struct WireModel {
     likes: u64,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default)]
+    pipeline_tag: Option<String>,
     #[serde(default)]
     siblings: Vec<WireSibling>,
 }
@@ -75,7 +79,7 @@ fn search_url(base: &str, query: &str) -> Result<reqwest::Url, EngineError> {
     let query = query.trim();
     let sort = if query.is_empty() { "trendingScore" } else { "downloads" };
     let mut params = vec![("sort", sort), ("direction", "-1"), ("limit", "30"),
-        ("expand[]", "gated"), ("expand[]", "downloads"), ("expand[]", "likes"), ("expand[]", "tags")];
+        ("expand[]", "gated"), ("expand[]", "downloads"), ("expand[]", "likes"), ("expand[]", "tags"), ("expand[]", "pipeline_tag")];
     if !query.is_empty() {
         params.insert(0, ("search", query));
     }
@@ -88,7 +92,7 @@ pub async fn search(client: &reqwest::Client, base: &str, token: Option<&str>, q
     let models: Vec<WireModel> = get_json(client, url, token).await?;
     Ok(models
         .into_iter()
-        .map(|m| HfModel { gguf: m.tags.iter().any(|t| t == "gguf"), gated: gated(&m.gated), id: m.id, downloads: m.downloads, likes: m.likes })
+        .map(|m| HfModel { gguf: m.tags.iter().any(|t| t == "gguf"), gated: gated(&m.gated), id: m.id, downloads: m.downloads, likes: m.likes, pipeline_tag: m.pipeline_tag })
         .collect())
 }
 
@@ -153,6 +157,7 @@ pub async fn model(client: &reqwest::Client, base: &str, token: Option<&str>, re
         sha: m.sha,
         downloads: m.downloads,
         likes: m.likes,
+        pipeline_tag: m.pipeline_tag,
     })
 }
 

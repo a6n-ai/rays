@@ -55,7 +55,7 @@ async fn search(State(st): State<Hf>, headers: HeaderMap, RawQuery(q): RawQuery)
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(axum::Json(serde_json::json!([
-        {"id": "Qwen/Qwen3-GGUF", "gated": "manual", "downloads": 5, "likes": 2, "tags": ["gguf", "text-generation"]},
+        {"id": "Qwen/Qwen3-GGUF", "gated": "manual", "downloads": 5, "likes": 2, "tags": ["gguf", "text-generation"], "pipeline_tag": "text-generation"},
         {"id": "org/plain", "gated": false, "downloads": 9, "likes": 0, "tags": ["safetensors"]}
     ])))
 }
@@ -66,7 +66,7 @@ async fn model(State(st): State<Hf>, headers: HeaderMap, Path((org, name)): Path
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(axum::Json(serde_json::json!({
-        "id": "org/m", "sha": "abc123", "gated": "auto", "downloads": 3, "likes": 1, "tags": [],
+        "id": "org/m", "sha": "abc123", "gated": "auto", "downloads": 3, "likes": 1, "tags": [], "pipeline_tag": "text-to-image",
         "siblings": [
             {"rfilename": "w.gguf", "size": 10, "lfs": {"sha256": "ff00", "size": 10}},
             {"rfilename": "README.md", "size": 5}
@@ -247,6 +247,8 @@ async fn search_parses_fields() {
     assert!(models[0].gguf);
     assert_eq!((models[0].downloads, models[0].likes), (5, 2));
     assert!(!models[1].gated && !models[1].gguf);
+    assert_eq!(models[0].pipeline_tag.as_deref(), Some("text-generation"));
+    assert_eq!(models[1].pipeline_tag, None);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -258,6 +260,7 @@ async fn model_parses_siblings() {
     let repo = sched.hf_model("org/m").await.unwrap();
     assert_eq!(repo.sha, "abc123");
     assert!(repo.gated);
+    assert_eq!(repo.pipeline_tag.as_deref(), Some("text-to-image"));
     assert_eq!(repo.files[0], HfFile { path: "w.gguf".into(), size: 10, sha256: Some("ff00".into()) });
     assert_eq!(repo.files[1], HfFile { path: "README.md".into(), size: 5, sha256: None });
 }
