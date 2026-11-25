@@ -50,7 +50,7 @@ export default defineConfig({
 					label: 'Getting started',
 					items: [
 						{ label: 'Overview', link: '/docs/', attrs: { 'data-icon': 'home' } },
-						{ label: 'Features', link: '/docs/features/', attrs: { 'data-icon': 'engine' } },
+						{ label: 'Feature overview', link: '/docs/features/', attrs: { 'data-icon': 'grid' } },
 						{ label: 'Start guide', link: '/docs/getting-started/', attrs: { 'data-icon': 'start' } },
 						{ label: 'Install', link: '/docs/install/', attrs: { 'data-icon': 'install' } },
 					],

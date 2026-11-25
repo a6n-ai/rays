@@ -12,6 +12,7 @@ import Cards from '../../../components/docs/Cards.astro';
 ## Popular
 
 <Cards
+	cols={4}
 	items={[
 		{ title: 'Getting started', description: 'Install Rays, download a file and turn on sorting', href: '/docs/getting-started/', icon: 'start' },
 		{ title: 'Sorter', description: 'File every new download into the right folder', href: '/docs/app/sorter/', icon: 'sorter' },
@@ -23,21 +24,24 @@ import Cards from '../../../components/docs/Cards.astro';
 ## Explore Rays
 
 <Cards
+	cols={3}
 	items={[
 		{ title: 'Install', description: 'DMG or Homebrew, updates and uninstalling', href: '/docs/install/', icon: 'install' },
 		{ title: 'Downloads', description: 'Paste links, split files, pause and resume', href: '/docs/app/downloads/', icon: 'download' },
+		{ title: 'Queues', description: 'Schedule when each queue of downloads runs', href: '/docs/app/queues/', icon: 'queues' },
+		{ title: 'Models', description: 'Search Hugging Face and download the quantization you need', href: '/docs/app/models/', icon: 'models' },
 		{ title: 'Browser extension', description: 'Download with Rays from Chrome and Firefox', href: '/docs/app/browser/', icon: 'browser' },
 		{ title: 'Settings', description: 'Every setting, tab by tab', href: '/docs/app/settings/', icon: 'settings' },
-		{ title: 'Troubleshooting', description: 'Common fixes and where Rays keeps files', href: '/docs/troubleshooting/', icon: 'help' },
-		{ title: 'Release notes', description: 'What changed in each version', href: '/releases/', icon: 'notes' },
 	]}
 />
 
-## Under the hood
+## Help and internals
 
 <Cards
+	cols={3}
 	items={[
-		{ title: 'How the engine works', description: 'One connection first, more only when they make the file faster', href: '/docs/engine/', icon: 'engine' },
-		{ title: 'Benchmarks', description: 'How each engine change was measured, and how to rerun it', href: '/docs/engine/#benchmarks', icon: 'chart' },
+		{ title: 'Troubleshooting', description: 'Common fixes and where Rays keeps files', href: '/docs/troubleshooting/', icon: 'help' },
+		{ title: 'How the engine works', description: 'One connection first, more only when they make the file faster, with every benchmark', href: '/docs/engine/', icon: 'engine' },
+		{ title: 'Release notes', description: 'What changed in each version', href: '/releases/', icon: 'notes' },
 	]}
 />

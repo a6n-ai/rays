@@ -3,11 +3,12 @@ import { svg } from './icons';
 
 interface Props {
 	items: { title: string; description: string; href: string; icon: string }[];
+	cols?: 2 | 3 | 4;
 }
-const { items } = Astro.props;
+const { items, cols = 3 } = Astro.props;
 ---
 
-<div class="cards not-content">
+<div class="cards not-content" style={`--cols:${cols}`}>
 	{
 		items.map((i) => (
 			<a class="card" href={i.href}>
@@ -29,6 +30,12 @@ const { items } = Astro.props;
 		grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr));
 		gap: 1rem;
 		margin-block: 1.25rem 2.5rem;
+	}
+	/* Full rows only: the column count follows the card count, so no row ends with empty slots. */
+	@media (min-width: 62rem) {
+		.cards {
+			grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+		}
 	}
 	.card {
 		display: grid;

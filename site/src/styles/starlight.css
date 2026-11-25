@@ -30,7 +30,7 @@
 }
 :root[data-theme='light'] {
 	--sl-color-accent-low: #fde3d2;
-	--sl-color-accent: #c2410c;
+	--sl-color-accent: #b03a0a;
 	--sl-color-accent-high: #6b2208;
 	--sl-color-white: #111214;
 	--sl-color-gray-1: #2a2b2e;
@@ -315,9 +315,11 @@ starlight-toc h2 {
 	}
 }
 
-/* Heading anchors stay faintly visible instead of opacity 0 until hover (they read as hidden text otherwise). */
+/* Heading anchors appear on hover or keyboard focus only, in a neutral grey, so they stop competing with the heading. */
 .sl-anchor-link {
-	opacity: 0.3;
+	color: var(--sl-color-gray-3);
+	opacity: 0;
+	transition: opacity 150ms;
 }
 .sl-anchor-link:hover,
 .sl-anchor-link:focus-visible,
@@ -337,7 +339,7 @@ starlight-toc h2 {
 	z-index: -1;
 	pointer-events: none;
 	background: var(--sl-color-accent);
-	opacity: 0.32;
+	opacity: 0.2;
 	-webkit-mask: url('/contours.svg') center / cover no-repeat, linear-gradient(#000 35%, transparent);
 	-webkit-mask-composite: source-in;
 	mask: url('/contours.svg') center / cover no-repeat, linear-gradient(#000 35%, transparent);
@@ -358,11 +360,11 @@ starlight-toc h2 {
 	content: '';
 	position: absolute;
 	inset: auto 0 0;
-	height: 240px;
+	height: 160px;
 	z-index: -1;
 	pointer-events: none;
 	background: var(--sl-color-accent);
-	opacity: 0.28;
+	opacity: 0.1;
 	-webkit-mask: url('/contours.svg') left bottom / 900px auto no-repeat, linear-gradient(transparent, #000 70%);
 	-webkit-mask-composite: source-in;
 	mask: url('/contours.svg') left bottom / 900px auto no-repeat, linear-gradient(transparent, #000 70%);
@@ -377,4 +379,56 @@ starlight-toc h2 {
 .sidebar-content a:hover::before {
 	transform: translateX(2px);
 	opacity: 1;
+}
+
+/* Contour art stays out of the way of small text on phones. */
+@media (max-width: 640px) {
+	.main-frame .content-panel:first-of-type::before {
+		opacity: 0.1;
+	}
+}
+
+/* Touch: the mobile "On this page" bar and menu button reach a 44px target. */
+@media (max-width: 899px), (pointer: coarse) {
+	mobile-starlight-toc summary,
+	starlight-toc summary {
+		min-height: 2.75rem;
+	}
+	.rh .logo {
+		min-height: 2.75rem;
+	}
+	.rh .search site-search button[data-open-modal] {
+		width: 2.75rem;
+		height: 2.75rem;
+	}
+	:root {
+		--sl-menu-button-size: 2.75rem;
+	}
+	.meta a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 2.75rem;
+	}
+}
+
+/* Release notes: the newest versions are open headings, older ones fold into one row each. */
+details.release {
+	border-top: 1px solid var(--sl-color-hairline);
+}
+details.release:last-of-type {
+	border-bottom: 1px solid var(--sl-color-hairline);
+}
+details.release > summary {
+	display: flex;
+	align-items: center;
+	min-height: 2.75rem;
+	color: var(--sl-color-white);
+	font-weight: 600;
+	cursor: pointer;
+}
+details.release > summary:hover {
+	color: var(--sl-color-accent-high);
+}
+details.release[open] > summary {
+	margin-bottom: 0.25rem;
 }
