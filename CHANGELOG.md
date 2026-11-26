@@ -2,7 +2,8 @@
 
 ## 0.1.27 (27 Nov 2026)
 
-- **Rays looks like System Settings.** Every page starts with a page card, then a folding **Settings** card with that page's own settings, then its content in cards. The sidebar has icon tiles, and where a match exists Rays uses the real macOS icon, such as iCloud, Reminders, Calendar or Software Update. Remove and uninstall actions are red text at the bottom of the page.
+- **Rays looks like System Settings.** Every page starts with a page card, then a folding **Settings** card with that page's own settings, then its content in cards. The sidebar has icon tiles: new Downloads, Sorter and Cloud tiles in the System Settings style, new Queues, Schedules and Speed test icons, the Hugging Face mark for Models, and the real macOS icon where one fits, such as Siri for AI or Stocks for Stats. Remove and uninstall actions are red text at the bottom of the page.
+- **New app icon.** A cloud of dots around a nucleus, on the Rays colours.
 - **Home.** The new top **Rays** row in the sidebar lists every page, with the version and a link to the docs.
 - **Navigation.** The toolbar has only back and forward buttons (⌘[ and ⌘]) and the page title. Activity, History, Files, Browse, Downloaded and Sorted files are rows with › arrows on their pages.
 - **No Settings window.** The sidebar has new **General**, **AI** and **Browsers** pages, and ⌘, opens General. General holds appearance (Light, Dark or Auto), accent colour (Multicolour or one of 8 colours), sidebar icon size, show in menu bar, the command line tool, updates and uninstall. Each other setting moved to its page: Downloads settings (save folder, copied links, notifications, downloads at once, parts, speed limit, unpack, same name) to Downloads, the Hugging Face token to Models, wake permission to Schedules and Queues, and queue defaults to Queues. Speed test settings are on the Speed test page.
