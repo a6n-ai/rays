@@ -462,7 +462,7 @@ private struct MoveRow: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(.blue)
                         .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                        .glassEffect(.regular.interactive(), in: .circle)
+                        .glassEffect(.regular, in: .circle)
                         .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                         .contentShape(Circle())
                 }
@@ -476,7 +476,7 @@ private struct MoveRow: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(.secondary)
                         .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                        .glassEffect(.regular.interactive(), in: .circle)
+                        .glassEffect(.regular, in: .circle)
                         .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                         .contentShape(Circle())
                 }

@@ -317,6 +317,8 @@ struct JobRow: View {
     }
 
     /// Plain style with an explicit glass circle, so the 28 pt glass is not padded by the glass button style.
+    /// Not `.interactive()`: interactive glass adds AppKit gesture recognizers, and in List rows (reused NSTableView
+    /// cells) those were freed under SwiftUI twice in 0.1.24-0.1.25 (crashes in NSGestureRecognizer detach/dealloc).
     private func primaryButton(_ primary: Primary) -> some View {
         Button { perform(primary) } label: {
             Image(systemName: primary.symbol)
@@ -325,7 +327,7 @@ struct JobRow: View {
                 // play.fill is optically left-heavy inside a circle.
                 .offset(x: primary == .resume ? 1 : 0)
                 .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffect(.regular, in: .circle)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                 .contentShape(Circle())
         }
@@ -341,7 +343,7 @@ struct JobRow: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.red)
                 .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffect(.regular, in: .circle)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                 .contentShape(Circle())
         }
@@ -359,7 +361,7 @@ struct JobRow: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.secondary)
                 .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffect(.regular, in: .circle)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                 .contentShape(Circle())
         }

@@ -144,7 +144,7 @@ struct QueueRow: View {
                 .foregroundStyle(primary.tint)
                 .offset(x: primary == .stop ? 0 : 1)
                 .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffect(.regular, in: .circle)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                 .contentShape(Circle())
         }
