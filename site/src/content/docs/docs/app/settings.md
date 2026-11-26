@@ -11,6 +11,7 @@ Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make
 - **Download folder**: where new downloads go. **Change…** picks a folder, **Reset** goes back to `~/Downloads`. Downloads already running finish where they started.
 - **Show in menu bar**: the Rays icon in the menu bar, with download progress and quick actions. While it is on, closing the window keeps Rays running.
 - **Offer copied download links**: when you copy a download link, Rays offers to download it in a notification.
+- **Notify when downloads finish**: on by default. Rays posts a notification when a download finishes or fails. Finished ones have **Open** and **Show in Finder**; failed ones have **Retry**. Downloads that end within a couple of seconds of each other are grouped, and more than three become one summary.
 - **Command line tool**: **Install** puts the `dl` command that ships inside Rays on your PATH; **Remove** takes it off. It never replaces another program named `dl`.
 - **Uninstall Rays…**: removes the sorter from every folder, the browser helpers and the `dl` command, then moves Rays to the Trash. **Uninstall and Delete Data** also removes history and settings. Only available when Rays is in Applications.
 - **Updates**: your version, **Check for Updates**, and whether Rays checks automatically. **Update** downloads the new version, checks it, replaces Rays and reopens it.

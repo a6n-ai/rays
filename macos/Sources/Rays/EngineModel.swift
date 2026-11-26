@@ -6,6 +6,7 @@ import Observation
 @Observable
 final class EngineModel {
     private(set) var jobs: [JobView] = []
+    private let notifier = DownloadNotifier()
     private(set) var startError: String?
     private(set) var notice: String?
     /// Bumped when the folders on disk may have changed, so the sidebar re-lists them.
@@ -450,6 +451,7 @@ final class EngineModel {
         case .upsert(let job):
             if job.isActive { runningSince[job.id] = runningSince[job.id] ?? Date() } else { runningSince[job.id] = nil }
             if let index = jobs.firstIndex(where: { $0.id == job.id }) {
+                if job.isFinished && !jobs[index].isFinished { notifier.note(job) }
                 jobs[index] = job
             } else {
                 jobs.append(job)
@@ -510,6 +512,7 @@ enum SettingsKey {
     static let sorterPath = "sorterPath"
     static let menuBar = "showsMenuBar"
     static let clipboard = "offersCopiedLinks"
+    static let notifyDone = "notifiesWhenDone"
     static let queueDefaultMaxRunning = "queueDefaultMaxRunning"
     static let queueDefaultSpeed = "queueDefaultSpeed"
     static let queueDefaultFinish = "queueDefaultFinish"

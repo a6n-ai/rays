@@ -78,6 +78,7 @@ private struct GeneralTab: View {
     @AppStorage(SettingsKey.sorterPath) private var sorterPath = Sorter.defaultPath
     @AppStorage(SettingsKey.menuBar) private var showsMenuBar = true
     @AppStorage(SettingsKey.clipboard) private var offersCopiedLinks = true
+    @AppStorage(SettingsKey.notifyDone) private var notifiesWhenDone = true
     let sorter: SorterModel
     @State private var folderError: String?
 
@@ -127,6 +128,14 @@ private struct GeneralTab: View {
                            title: "Offer copied download links",
                            hint: "When you copy a link to a file, like a .zip or .dmg, a notification offers to download it. macOS asks once to let Rays read copied links.") {
                     Toggle("Offer copied download links", isOn: $offersCopiedLinks)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+
+                SettingRow(symbol: "bell.badge", color: .orange,
+                           title: "Notify when downloads finish",
+                           hint: "A notification when a download finishes or fails, with buttons to open it, show it in Finder or retry. Many at once become one summary.") {
+                    Toggle("Notify when downloads finish", isOn: $notifiesWhenDone)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }

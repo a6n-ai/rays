@@ -82,11 +82,27 @@ final class ClipboardWatcher: NSObject, UNUserNotificationCenterDelegate {
             if response.actionIdentifier == QueueActions.cancelAction { await MainActor.run { QueueActions.shared.cancel() } }
             return
         }
+        if info.categoryIdentifier == DownloadNotifier.doneCategory || info.categoryIdentifier == DownloadNotifier.failedCategory {
+            guard let id = (info.userInfo["id"] as? NSNumber)?.uint64Value else { return }
+            await MainActor.run { handleDownload(id, action: response.actionIdentifier) }
+            return
+        }
         guard info.categoryIdentifier == Self.category,
               response.actionIdentifier == Self.download || response.actionIdentifier == UNNotificationDefaultActionIdentifier,
               let links = info.userInfo["links"] as? [String]
         else { return }
         await MainActor.run { model.add(links.joined(separator: "\n")) }
+    }
+
+    private func handleDownload(_ id: UInt64, action: String) {
+        guard let job = model.jobs.first(where: { $0.id == id }) else { return }
+        switch action {
+        case DownloadNotifier.retry: model.resume(id)
+        case DownloadNotifier.reveal: model.reveal(job)
+        case DownloadNotifier.open, UNNotificationDefaultActionIdentifier:
+            if job.isDone { model.open(job) } else { AppDelegate.showInDock() }
+        default: break
+        }
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
