@@ -54,8 +54,8 @@ struct SchedulesPage: View {
 
     private var heroSubtitle: String {
         nothingScheduled
-            ? "Nothing scheduled yet. Add a schedule to a queue below, or use New Schedule above."
-            : "Start queues at set times, optionally waiting for Wi-Fi, power or an idle Mac."
+            ? "Nothing scheduled yet. Use New Schedule."
+            : "Start queues at set times, on Wi-Fi, power or when idle."
     }
 
     private var list: some View {

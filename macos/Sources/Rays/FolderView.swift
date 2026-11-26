@@ -207,7 +207,7 @@ struct FolderView: View {
                     .lineLimit(1)
             }
         }
-        .font(.system(size: 13))
+        .font(.body)
         .padding(.horizontal, 14)
         .frame(height: 34)
         .glassEffect(.regular, in: .capsule)

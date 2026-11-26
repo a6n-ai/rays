@@ -96,7 +96,7 @@ private struct SpeedOverview: View {
         case .notEnoughData(let days, let needed)?:
             Section("Best time") {
                 EmptyState(symbol: "chart.bar", title: "Not enough data yet",
-                           message: "\(days) of \(needed) days. Rays learns from your downloads and speed tests.")
+                           message: "\(days) of \(needed) days of data.")
                     .frame(height: 220)
                 if model.speedSettings.nightPromptAnswered && !model.nightWeekActive {
                     HStack {
@@ -120,7 +120,7 @@ func trailingAxis(values: AxisMarkValues, format: ((AxisValue) -> String?)? = ni
         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
         AxisValueLabel {
             if let text = format?(value) ?? value.as(Double.self).map({ $0.formatted() }) {
-                Text(text).font(.caption).foregroundStyle(.secondary)
+                Text(text).font(.subheadline).foregroundStyle(.secondary)
             }
         }
     }
@@ -200,7 +200,7 @@ private struct SpeedHistoryTab: View {
     var body: some View {
         if shown.isEmpty {
             EmptyState(symbol: "clock.arrow.circlepath", title: "No speed history yet",
-                       message: "Run a test, or download something. Rays keeps 60 days.")
+                       message: "Run a test to start.")
         } else {
             List {
                 Section {
@@ -211,7 +211,7 @@ private struct SpeedHistoryTab: View {
                     }
                 } header: {
                     HStack {
-                        Text("History")
+                        Text("History").font(.headline).foregroundStyle(.primary)
                         Spacer()
                         controls(.menus)
                     }
@@ -276,7 +276,7 @@ private struct SpeedSettingsRows: View {
                 Button("Test at night for a week") { model.startNightWeek() }
             }
         }
-        SettingRow(title: "Speed history", hint: "Speed data stays on this Mac.") {
+        SettingRow(title: "Speed history") {
             Button("Clear speed history…", role: .destructive) { confirmClear = true }
         }
         .confirmationDialog("Clear speed history?", isPresented: $confirmClear, titleVisibility: .visible) {

@@ -120,7 +120,7 @@ struct SearchView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if isTracked {
                 Image(systemName: "arrow.down.circle")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.tint)
             }
             VStack(alignment: .trailing, spacing: 2) {

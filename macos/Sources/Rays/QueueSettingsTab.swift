@@ -20,7 +20,7 @@ struct QueueSettingsTab: View {
 
     var body: some View {
         SettingRow(title: "Wake permission",
-                   hint: "Rays can wake your Mac to start a scheduled queue. It asks for your administrator password once, to allow setting wake times and nothing else. Without it, keep your Mac awake and Rays running at the start time.",
+                   hint: "Lets a queue wake your Mac on time. Asks for your administrator password once. Without it, keep the Mac awake.",
                    status: installed ? .ok : .off) {
             HStack(spacing: 8) {
                 Text(installed ? "Set up" : "Not set up").foregroundStyle(.secondary)
@@ -46,7 +46,7 @@ struct QueueSettingsTab: View {
             }
             .cardRow(row(1), separatorInset: 0)
         }
-        SettingRow(title: "Simultaneous", hint: "Defaults apply to queues you create from now on. Run command and Shut down are set per queue.") {
+        SettingRow(title: "Simultaneous", hint: "Defaults for new queues.") {
             StepSlider(title: "Simultaneous", value: Binding(get: { shownRunning }, set: { defaultRunning = $0 }),
                        range: 0...max(cap, 1), lowLabel: "Same as Rays", highLabel: "\(max(cap, 1))") {
                 $0 == 0 ? "Auto" : "\($0)"

@@ -36,7 +36,7 @@ struct ShortcutsPage: View {
                 Section {
                     ForEach(actions) { action in
                         SettingRow(action.tile, title: action.title, hint: action.detail) {
-                            Text("\u{201C}\(action.phrase)\u{201D}").font(.caption).foregroundStyle(.secondary)
+                            Text("\u{201C}\(action.phrase)\u{201D}").font(.subheadline).foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
                     }

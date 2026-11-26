@@ -61,7 +61,7 @@ struct SorterView: View {
         return List {
             Section {
                 HeroCard(.sorter, title: "Sorter",
-                         subtitle: "Rays files new downloads into folders by what is inside them, using on-device AI.",
+                         subtitle: "Files new downloads into folders by what is inside them.",
                          learnMore: Self.docs) {
                     HeroActions {
                         Button("Add Folder…", action: chooseFolder)
@@ -92,11 +92,13 @@ struct SorterView: View {
                 DrillInRow(tile: .folder, title: "Sorted files", subtitle: "Browse what the sorter has filed") { nav.open("files") }
                     .cardRow(.only)
             }
-            Section("Watched folders") {
+            Section {
                 ForEach(Array(folderRows.enumerated()), id: \.element.id) { index, kind in
                     folderRow(kind)
                         .cardRow(CardRowBackground.position(index, of: folderRows.count))
                 }
+            } header: {
+                Text("Watched folders").font(.headline).foregroundStyle(.primary)
             }
             Section {
                 if moves.isEmpty {
@@ -114,7 +116,7 @@ struct SorterView: View {
                 }
             } header: {
                 HStack {
-                    Text("Recently sorted")
+                    Text("Recently sorted").font(.headline).foregroundStyle(.primary)
                     Spacer()
                     if !allRecent.isEmpty {
                         ListControls(status: .constant(""), kind: $recentKind, sorts: [.newest, .oldest, .name],

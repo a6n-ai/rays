@@ -80,7 +80,7 @@ struct ModelsView: View {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     HeroCard(.models, title: "Models",
-                             subtitle: "Find models on Hugging Face and download them to your AI Models folder.",
+                             subtitle: "Find models on Hugging Face and download them.",
                              learnMore: URL(string: "https://rays.a6n.ai/docs/app/models/")) {
                         HeroActions { Button("Open Folder") { AIModelsFolder.reveal(folder) } }
                     }

@@ -290,7 +290,7 @@ struct EmptyState: View {
         VStack(spacing: LayoutMetrics.gap) {
             GlassSymbol(systemName: symbol)
             Text(title)
-                .font(.title3.weight(.semibold))
+                .font(.headline)
                 .foregroundStyle(.primary)
             if let message {
                 Text(message)
@@ -343,7 +343,7 @@ struct WelcomeEmpty: View {
                     .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
                     .accessibilityHidden(true)
                 Text("Ready when you are")
-                    .font(.title2.weight(.semibold))
+                    .font(.headline)
                 Text("Add a link and Rays downloads it in parts, resumes if it stops, and files it when it's done.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -379,7 +379,7 @@ struct WelcomeEmpty: View {
             Text(title)
                 .font(.callout.weight(.semibold))
             Text(hint)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .frame(width: 140, height: 104)

@@ -17,7 +17,7 @@ struct ModelResultsList: View {
 
     var body: some View {
         if !cards.isEmpty {
-            Section("Top models") {
+            Section {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
                     ForEach(cards, id: \.id) { hit in
                         ModelCard(hit: hit, isSelected: selection == hit.id)
@@ -27,6 +27,8 @@ struct ModelResultsList: View {
                 .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
+            } header: {
+                Text("Top models").font(.headline).foregroundStyle(.primary)
             }
         }
         if !rows.isEmpty {

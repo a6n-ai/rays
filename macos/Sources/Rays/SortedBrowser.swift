@@ -115,7 +115,7 @@ struct SortedBrowserPage: View {
     @ViewBuilder private var content: some View {
         if let items {
             if items.isEmpty {
-                ContentUnavailableView("Empty", systemImage: "folder", description: Text("Nothing is in this folder yet."))
+                ContentUnavailableView("Empty", systemImage: "folder")
             } else {
                 SortedItemsView(items: items, layout: layout, order: order) { nav.open("sorted:" + $0.path(percentEncoded: false)) }
             }
@@ -184,12 +184,12 @@ private struct GridTile: View {
             Thumbnail(url: item.url, side: 48)
                 .frame(width: 60, height: 54)
             Text(item.name)
-                .font(.caption)
+                .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .truncationMode(.middle)
             Text(item.isFolder ? "Folder" : item.details)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .monospacedDigit()

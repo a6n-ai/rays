@@ -80,7 +80,7 @@ struct QueueListTab: View {
                 }
             } header: {
                 HStack {
-                    Text("Your queues")
+                    Text("Your queues").font(.headline).foregroundStyle(.primary)
                     Spacer()
                     ListControls(statuses: QueueFilter.queues, status: $status, kind: $kind, showsKind: false,
                                  sorts: [.name, .newest, .nextRun], sort: $sort, count: shown.count, page: $page, part: .menus)

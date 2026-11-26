@@ -163,7 +163,7 @@ struct AddBar: View {
                 Label(item.text, systemImage: item.symbol).labelStyle(.titleAndIcon)
             }
         }
-        .font(.caption)
+        .font(.subheadline)
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .padding(.horizontal, 12)

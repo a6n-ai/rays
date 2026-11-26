@@ -20,7 +20,7 @@ struct ModelCard: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if !parts.org.isEmpty {
-                        Text(parts.org).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(parts.org).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             }
@@ -29,7 +29,7 @@ struct ModelCard: View {
                 if hit.gguf { ModelCapsule(text: "GGUF") }
                 Spacer(minLength: 4)
                 Text("↓ \(hit.downloads.formatted(.number.notation(.compactName))) · ♥ \(hit.likes.formatted(.number.notation(.compactName)))")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .lineLimit(1)

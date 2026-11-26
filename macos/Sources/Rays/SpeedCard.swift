@@ -27,6 +27,6 @@ struct SpeedCard: View {
     }
 
     private func badge(_ text: String) -> some View {
-        Text(text).font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+        Text(text).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
     }
 }

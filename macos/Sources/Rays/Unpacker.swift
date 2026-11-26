@@ -67,7 +67,7 @@ struct UnpackSettingsRows: View {
 
     var body: some View {
         SettingRow(title: "Unpack archives when done",
-                   hint: "A finished .zip, .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz or .7z is unpacked into a folder next to it.") {
+                   hint: "Unpacks .zip, .tar and .7z into a folder next to it.") {
             Toggle("Unpack archives when done", isOn: $unpack)
                 .toggleStyle(.switch)
                 .labelsHidden()

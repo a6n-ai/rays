@@ -219,7 +219,7 @@ struct HomeRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Rays").font(.body.weight(.semibold))
-                Text("Version \(version)").font(.caption).foregroundStyle(.secondary)
+                Text("Version \(version)").font(.subheadline).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 2)

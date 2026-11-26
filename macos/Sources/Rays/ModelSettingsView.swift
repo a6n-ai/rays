@@ -6,7 +6,7 @@ struct ReplaceExistingRow: View {
     @AppStorage(SettingsKey.replaceExisting) private var replaceExisting = false
 
     var body: some View {
-        SettingRow(title: "If a file with the same name exists", hint: "Applies to every download. A replaced file goes to the Trash.") {
+        SettingRow(title: "If a file with the same name exists", hint: "A replaced file goes to the Trash.") {
             RadioChoice(title: "If a file with the same name exists",
                         selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) }),
                         choices: [false, true]) { Text($0 ? "Replace" : "Keep both") }
@@ -22,8 +22,8 @@ struct HuggingFaceTokenSection: View {
             Text("Hugging Face")
         } footer: {
             Text(HuggingFaceTokenRows.note)
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -31,7 +31,7 @@ struct HuggingFaceTokenSection: View {
 /// The token field and its error line. `card` lays it out as a settings-card row with the note under the title;
 /// otherwise it is bare rows for a Form section that shows the note as its footer.
 struct HuggingFaceTokenRows: View {
-    static let note = "Needed for gated and private models. Sent only to huggingface.co. Stored in Keychain."
+    static let note = "For gated and private models. Sent only to huggingface.co, kept in Keychain."
 
     var card = false
     @Environment(EngineModel.self) private var model

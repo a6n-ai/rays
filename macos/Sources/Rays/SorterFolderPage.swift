@@ -141,7 +141,7 @@ private struct CategoryRow: View {
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
@@ -180,7 +180,7 @@ struct SorterFilesTable: View {
             .overlay {
                 if items.isEmpty {
                     ContentUnavailableView("No folders yet", systemImage: "folder",
-                                           description: Text("Add a folder in Setup to see its sorted files here."))
+                                           description: Text("Add one in Sorter."))
                 }
             }
             .task(id: model.status?.folders.map(\.path)) {

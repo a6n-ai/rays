@@ -45,7 +45,7 @@ struct SortDelayRow: View {
 
     var body: some View {
         SettingRow(title: "Sort new files after",
-                   hint: "Rays waits this long after a file arrives, so you can open or move it first.") {
+                   hint: "Gives you time to open or move a file first.") {
             StepSlider(title: "Sort new files after",
                        value: Binding(
                            get: { SorterModel.waitChoices.firstIndex { $0.seconds == (sorter.status?.waitSeconds ?? 10) } ?? 0 },
@@ -63,7 +63,7 @@ struct RenameRow: View {
 
     var body: some View {
         SettingRow(title: "Rename files from their content",
-                   hint: "Off keeps every file's original name. Files are still sorted into folders.") {
+                   hint: "Off keeps original names. Files are still sorted.") {
             Toggle("Rename files from their content", isOn: Binding(
                 get: { sorter.status?.renameFiles ?? true },
                 set: { on in Task { await sorter.setRename(on) } }))

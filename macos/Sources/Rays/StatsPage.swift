@@ -50,7 +50,7 @@ struct StatsPage: View {
 
     private func figure(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.title2.weight(.semibold)).monospacedDigit()
+            Text(value).font(.title3.weight(.semibold)).monospacedDigit()
             Text(title).font(.callout).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

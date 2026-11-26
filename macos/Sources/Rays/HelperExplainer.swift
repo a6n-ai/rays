@@ -49,7 +49,7 @@ struct HelperExplainer: View {
             IconTile(tile, size: 40)
             Text(title).font(.callout.weight(.semibold))
             Text(caption)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

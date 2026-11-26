@@ -89,7 +89,7 @@ struct DownloadsView: View {
         } else if queue != nil && visible.isEmpty {
             if inQueue.isEmpty {
                 EmptyState(symbol: "tray", title: "No downloads in this queue",
-                           message: "Use Move to Queue on a download, or pick this queue when you add one.")
+                           message: "Use Move to Queue on a download.")
             } else {
                 EmptyState(symbol: "tray", title: "No downloads match")
             }
@@ -133,7 +133,7 @@ struct DownloadsView: View {
                 } header: {
                     if !model.jobs.isEmpty && model.startError == nil {
                         HStack {
-                            Text("Recent downloads")
+                            Text("Recent downloads").font(.headline).foregroundStyle(.primary)
                             Spacer()
                             ListControls(statuses: JobView.statuses, status: $status, kind: $kind, sort: $sort,
                                          count: matching.count, page: $page, removeMissing: {
@@ -160,7 +160,7 @@ struct DownloadsView: View {
     }
 
     private func settingsRow(_ row: some View, _ position: CardRowBackground.Position) -> some View {
-        row.padding(.vertical, 6).cardRow(position, separatorInset: 0)
+        row.cardRow(position, separatorInset: 0)
     }
 
     /// Plain text, not the glass empty states: this sits in a List row.

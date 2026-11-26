@@ -95,7 +95,7 @@ struct QueueIconPicker: View {
             HStack(spacing: 8) {
                 QueueTile(queue: queue)
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
             .frame(minHeight: 28)

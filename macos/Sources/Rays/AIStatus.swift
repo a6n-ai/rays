@@ -108,6 +108,7 @@ struct AIStatusRow: View {
                 .controlSize(.small)
             }
         }
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
     }
 }

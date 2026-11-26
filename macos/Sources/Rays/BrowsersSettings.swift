@@ -191,7 +191,7 @@ private struct RemoveAllHelpersRow: View {
 
     var body: some View {
         SettingRow(title: "Remove all helpers",
-                   hint: "Disconnects Rays from every browser. Nothing else in your browsers changes.") {
+                   hint: "Disconnects Rays from every browser.") {
             Button("Remove All Helpers", role: .destructive) { confirm = true }
                 .buttonStyle(.glass)
                 .confirmationDialog("Remove the Rays helper from all browsers?", isPresented: $confirm,

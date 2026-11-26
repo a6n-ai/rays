@@ -30,7 +30,7 @@ struct BucketsForm: View {
         Form {
             Section {
                 HeroCard(.cloud, title: "Cloud",
-                         subtitle: "Browse buckets on S3-compatible storage like folders, and download from them.",
+                         subtitle: "Browse S3-compatible buckets like folders and download from them.",
                          learnMore: URL(string: "https://rays.a6n.ai/docs/s3/")) {
                     HeroActions {
                         Button("Refresh") { Task { await model.loadCloudLogins(force: true) } }
@@ -105,9 +105,9 @@ struct BucketsForm: View {
                 .disabled(!canAdd)
                 .keyboardShortcut(.defaultAction)
         }
-        Text("Rays lists the bucket once to check the keys. The secret key is kept in your Keychain.")
-            .font(.footnote)
-            .foregroundStyle(.tertiary)
+        Text("The secret key is kept in your Keychain.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
     }
 
     private func detail(_ bucket: BucketConfig) -> String {
@@ -192,9 +192,9 @@ private struct AWSRows: View {
                         .disabled(adding != nil)
                 }
             }
-            Text("Rays asks the aws command for keys each time and keeps none. Only list and read access is used.")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
+            Text("Rays keeps no keys. Only list and read access is used.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
         .task(id: "\(profile)|\(model.awsFound[profile] == nil)") { await load() }
     }
@@ -251,7 +251,7 @@ private struct CloudflareRows: View {
                 Text("Cloudflare R2").font(.subheadline.weight(.semibold))
                 Text("Log in with cf auth login in Terminal to see your R2 buckets here.")
                     .foregroundStyle(.secondary)
-                Text(loadError).font(.footnote).foregroundStyle(.tertiary).lineLimit(2)
+                Text(loadError).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
             } else if let account {
                 Text("Cloudflare R2 · \(account.name)").font(.subheadline.weight(.semibold))
                 if let error { ErrorLine(text: error) }
@@ -266,9 +266,9 @@ private struct CloudflareRows: View {
                         .disabled(adding != nil)
                     }
                 }
-                Text("The first Add creates a read-only R2 token named \u{201C}Rays (read-only R2)\u{201D} in your Cloudflare account. Its key is kept in your Keychain.")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
+                Text("The first Add creates a read-only R2 token in your Cloudflare account.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }

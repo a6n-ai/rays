@@ -46,12 +46,14 @@ struct StepSlider: View {
                     Spacer()
                     Text(highLabel ?? "\(range.upperBound)")
                 }
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
             .frame(width: width)
             Text(display(value))
                 .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 22, alignment: .trailing)
         }

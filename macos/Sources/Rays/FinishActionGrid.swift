@@ -71,12 +71,12 @@ struct FinishActionGrid: View {
                     .font(.system(.body, design: .monospaced))
                     .textFieldStyle(.roundedBorder)
                 Text(command.trimmingCharacters(in: .whitespaces).isEmpty ? "Enter a command to run." : "Runs as your user account")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             if selected == .shutDown && shutDownDenied {
                 Text("Rays needs permission to shut down your Mac. Allow it in System Settings > Privacy & Security > Automation.")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }

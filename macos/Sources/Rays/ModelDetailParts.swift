@@ -33,7 +33,7 @@ struct ModelHeaderCard: View {
         HeroCard(kind.tile, title: hfNameParts(repo.id).name, subtitle: subtitle, caption: caption) {
             VStack(alignment: .trailing, spacing: 6) {
                 Text(byteText(total))
-                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                    .font(.title3.weight(.semibold).monospaced())
                     .foregroundStyle(fits ? Color.primary : Color.red)
                 if let freeBytes {
                     Capsule()
@@ -44,7 +44,7 @@ struct ModelHeaderCard: View {
                                 .fill(fits ? Color.accentColor : Color.red)
                                 .frame(width: 120 * min(1, freeBytes == 0 ? 1 : Double(total) / Double(freeBytes)))
                         }
-                    Text("\(byteText(freeBytes)) free").font(.caption).foregroundStyle(.secondary)
+                    Text("\(byteText(freeBytes)) free").font(.subheadline).foregroundStyle(.secondary)
                 }
                 if let url = URL(string: "https://huggingface.co/\(repo.id)") {
                     Button("Open on Hugging Face") { NSWorkspace.shared.open(url) }

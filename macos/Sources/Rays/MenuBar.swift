@@ -440,7 +440,7 @@ private struct MenuBarRow: View {
                         .progressViewStyle(.linear)
                         .controlSize(.small)
                 }
-                Text(status).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                Text(status).font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
             }
             Spacer(minLength: 4)
             Group {

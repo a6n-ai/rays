@@ -23,7 +23,7 @@ struct GrabSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
             Text("Links on this page").font(.headline)
-            Text(page).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            Text(page).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             content
             HStack {
                 Button("Cancel", role: .cancel) { dismiss() }
@@ -62,7 +62,7 @@ struct GrabSheet: View {
                 )) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(link.name).lineLimit(1).truncationMode(.middle)
-                        Text(link.url).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Text(link.url).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                 }
             }

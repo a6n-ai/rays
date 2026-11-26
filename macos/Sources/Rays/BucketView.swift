@@ -166,7 +166,7 @@ private struct CloudItems: View {
             if let error {
                 ContentUnavailableView("Couldn't list this bucket", systemImage: "exclamationmark.triangle", description: Text(error))
             } else if !loading && entries.isEmpty {
-                ContentUnavailableView("Empty", systemImage: "folder", description: Text("Nothing is in this folder yet."))
+                ContentUnavailableView("Empty", systemImage: "folder")
             } else if layout == .icons {
                 grid
             } else {
@@ -200,12 +200,12 @@ private struct CloudItems: View {
                         VStack(spacing: 6) {
                             icon(entry, side: entry.badge == nil ? 48 : 44).frame(width: 60, height: 54)
                             Text(entry.name)
-                                .font(.caption)
+                                .font(.subheadline)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .truncationMode(.middle)
                             Text(entry.badge != nil ? (entry.note ?? "") : entry.isFolder ? "Folder" : entry.size.map(byteText) ?? "")
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .monospacedDigit()
@@ -374,7 +374,7 @@ private struct CloudDownloads: View {
         let jobs = all.listed(status: status, kind: kind, sort: sort)
         if all.isEmpty {
             ContentUnavailableView("No cloud downloads yet", systemImage: "cloud",
-                                   description: Text("Download a file from Browse and it shows up here."))
+                                   description: Text("Files you download from a bucket show up here."))
         } else {
             List(Array(ListControls.page(jobs, page, pageSize)), id: \.id) { job in
                 JobRow(job: job)

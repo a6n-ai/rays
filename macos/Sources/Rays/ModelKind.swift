@@ -101,7 +101,7 @@ struct ModelCapsule: View {
 
     var body: some View {
         Text(text)
-            .font(.caption.weight(.semibold))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(tint ?? .secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

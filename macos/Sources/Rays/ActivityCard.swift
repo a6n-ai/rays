@@ -59,11 +59,11 @@ struct ActivityCard: View {
                         ? " · " + Duration.seconds(Double(left) / Double(bps))
                             .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .abbreviated, maximumUnitCount: 1)) + " left"
                         : ""
-                    Text(SpeedFormat.mbps(bps) + eta).font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                    Text(SpeedFormat.mbps(bps) + eta).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
                 }
                 ForEach(Array(shown), id: \.id) { job in row(job) }
                 if running.count > shown.count {
-                    Text("and \(running.count - shown.count) more").font(.caption).foregroundStyle(.secondary)
+                    Text("and \(running.count - shown.count) more").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -81,7 +81,7 @@ struct ActivityCard: View {
         return HStack(spacing: 6) {
             Image(nsImage: NSWorkspace.shared.icon(for: type)).resizable().frame(width: 16, height: 16)
             VStack(alignment: .leading, spacing: 2) {
-                Text(job.name).font(.caption).lineLimit(1).truncationMode(.middle)
+                Text(job.name).font(.subheadline).lineLimit(1).truncationMode(.middle)
                 if let fraction {
                     ProgressView(value: fraction).progressViewStyle(.linear).controlSize(.mini)
                 } else {
@@ -90,7 +90,7 @@ struct ActivityCard: View {
             }
             if let fraction {
                 Text(fraction, format: .percent.precision(.fractionLength(0)))
-                    .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                    .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                     .fixedSize()
                     .layoutPriority(1)
             }

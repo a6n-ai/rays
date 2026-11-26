@@ -214,7 +214,7 @@ struct UpdatePill: View {
                     .help("Download the new version, replace this one and reopen Rays")
                 }
                 Button { updater.dismissPill() } label: {
-                    Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                    Image(systemName: "xmark").font(.subheadline.weight(.bold)).foregroundStyle(.secondary)
                         .frame(width: 20, height: 20).contentShape(Circle())
                 }
                 .buttonStyle(.plain)

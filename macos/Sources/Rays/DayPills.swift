@@ -27,7 +27,7 @@ struct DayPills: View {
             }
             if mask == 0 {
                 Text("Pick at least one day")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.red)
             }
         }

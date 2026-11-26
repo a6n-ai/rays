@@ -32,7 +32,7 @@ struct HeroCard<Accessory: View>: View {
             HStack(spacing: LayoutMetrics.gap) {
                 IconTile(tile, size: TileSize.hero)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.body.weight(.semibold))
+                    Text(title).font(.headline)
                     texts(alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -49,7 +49,7 @@ struct HeroCard<Accessory: View>: View {
                 } else {
                     IconTile(tile, size: TileSize.heroLarge)
                 }
-                Text(title).font(.title2.bold())
+                Text(title).font(style == .home ? .title2.bold() : .headline)
                 texts(alignment: .center).multilineTextAlignment(.center)
                 accessory
             }
@@ -73,7 +73,7 @@ struct HeroCard<Accessory: View>: View {
     private func texts(alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 2) {
             description.font(.callout).lineLimit(2)
-            if let caption { Text(caption).font(.caption).foregroundStyle(.secondary) }
+            if let caption { Text(caption).font(.subheadline).foregroundStyle(.secondary) }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -119,7 +119,7 @@ struct CollapsibleSettingsCard<Content: View>: View {
                 IconTile(.general, size: TileSize.row)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Settings")
-                    if let summary { Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(1) }
+                    if let summary { Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(2) }
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
@@ -204,11 +204,11 @@ struct CardRow<Leading: View, Trailing: View>: View {
         HStack(spacing: 10) {
             leading.frame(width: TileSize.list, height: TileSize.list)
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).lineLimit(1).truncationMode(.middle)
+                Text(title).lineLimit(1).truncationMode(.middle).layoutPriority(1)
                 if let subtitle {
                     HStack(spacing: 6) {
                         if let status { StatusDot(status) }
-                        Text(subtitle).lineLimit(1).truncationMode(.middle)
+                        Text(subtitle).lineLimit(2).truncationMode(.middle).monospacedDigit()
                     }
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -328,6 +328,7 @@ struct SettingRow<Control: View>: View {
                 .controlSize(.small)
                 .toggleStyle(SettingSwitchStyle())
         }
+        .padding(.vertical, 6)
         .frame(minHeight: LayoutMetrics.cardRowMinHeight)
     }
 }

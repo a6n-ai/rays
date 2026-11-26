@@ -20,9 +20,9 @@ struct RemovalPillView: View {
                     .tint(tint)
                     .controlSize(.small)
                     .help("Undo (\u{2318}Z)")
-                Text("\u{2318}Z").font(.caption).foregroundStyle(.secondary)
+                Text("\u{2318}Z").font(.subheadline).foregroundStyle(.secondary)
                 Button { model.commitRemoval() } label: {
-                    Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                    Image(systemName: "xmark").font(.subheadline.weight(.bold)).foregroundStyle(.secondary)
                         .frame(width: 20, height: 20).contentShape(Circle())
                 }
                 .buttonStyle(.plain)
