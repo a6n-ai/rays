@@ -51,7 +51,7 @@ extension Tile {
     static let localModel = Tile(symbol: "shippingbox.fill", color: TilePalette.gray)
 }
 
-/// An app-icon-like square: gradient fill, white symbol at 44% of the tile.
+/// An app-icon-like square: gradient fill, white symbol at 50% of the tile.
 struct IconTile: View {
     let tile: Tile
     let size: CGFloat
@@ -63,7 +63,7 @@ struct IconTile: View {
 
     var body: some View {
         Image(systemName: tile.symbol)
-            .font(.system(size: (size * 0.44).rounded(), weight: .semibold))
+            .font(.system(size: (size * 0.5).rounded(), weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             .background(tile.color.gradient, in: .rect(cornerRadius: size * 0.225, style: .continuous))

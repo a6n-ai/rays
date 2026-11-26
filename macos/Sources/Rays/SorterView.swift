@@ -55,8 +55,6 @@ struct SorterView: View {
     }
 
     private static let docs = URL(string: "https://rays.a6n.ai/docs/app/sorter/")!
-    private static let cardInsets = EdgeInsets(top: 4, leading: LayoutMetrics.margin - 4, bottom: 4,
-                                               trailing: LayoutMetrics.margin - 4)
 
     private var recentList: some View {
         let moves = recentMoves
@@ -67,9 +65,7 @@ struct SorterView: View {
                 HeroCard(.sorter, title: "Sorter",
                          subtitle: "Rays files new downloads into folders by what is inside them, using on-device AI.",
                          learnMore: Self.docs)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(Self.cardInsets)
+                    .cardRow(.only)
             }
             if let error = model.error {
                 Section { ErrorLine(text: error).listRowBackground(Color.clear) }
@@ -77,8 +73,8 @@ struct SorterView: View {
             if model.loadFailed {
                 Section { ErrorLine(text: SorterModel.unavailableMessage).listRowBackground(Color.clear) }
             }
-            CollapsibleSettingsCard(page: "sorter") {
-                AIStatusRow().cardRow(.first)
+            CollapsibleSettingsCard(page: "sorter", summary: "On-device AI, delay, renaming") {
+                AIStatusRow().cardRow(.middle)
                 SortDelayRow(sorter: model).cardRow(.middle)
                 RenameRow(sorter: model).cardRow(.last)
             }
@@ -88,11 +84,11 @@ struct SorterView: View {
                         .cardRow(CardRowBackground.position(index, of: folderRows.count))
                 }
             }
-            Section("Recently sorted") {
+            Section {
                 if moves.isEmpty {
                     Text(allRecent.isEmpty ? "Nothing sorted yet" : "No sorted files match")
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardRowMinHeight)
                         .cardRow(.only)
                 } else {
                     ForEach(Array(shown.enumerated()), id: \.offset) { index, move in
@@ -100,6 +96,17 @@ struct SorterView: View {
                                 isSelected: recentSelection == index) { hide([move]) }
                             .contentShape(Rectangle())
                             .onTapGesture { recentSelection = index }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Recently sorted")
+                    Spacer()
+                    if !allRecent.isEmpty {
+                        ListControls(status: .constant(""), kind: $recentKind, sorts: [.newest, .oldest, .name],
+                                     sort: $recentSort, count: moves.count, page: $recentPage, removeMissing: {
+                            hide(allRecent.filter { !FileManager.default.fileExists(atPath: $0.to) })
+                        }, part: .menus)
                     }
                 }
             }
@@ -110,9 +117,7 @@ struct SorterView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             if !allRecent.isEmpty {
                 ListControls(status: .constant(""), kind: $recentKind, sorts: [.newest, .oldest, .name],
-                             sort: $recentSort, count: moves.count, page: $recentPage) {
-                    hide(allRecent.filter { !FileManager.default.fileExists(atPath: $0.to) })
-                }
+                             sort: $recentSort, count: moves.count, page: $recentPage, part: .paging)
             }
         }
     }
@@ -165,7 +170,7 @@ struct SorterView: View {
             }
             .padding(.vertical, 8)
         case .empty:
-            Text("No folders yet.").foregroundStyle(.secondary).frame(minHeight: LayoutMetrics.cardListRowHeight)
+            Text("No folders yet.").foregroundStyle(.secondary).frame(minHeight: LayoutMetrics.cardRowMinHeight)
         case .folder(let folder):
             NavigationLink(value: folder.path) {
                 CardRow(title: folder.name,
@@ -173,15 +178,19 @@ struct SorterView: View {
                         status: folder.needsUpdate ? .warning : folder.watching ? .ok : .off) {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: folder.path)).resizable().accessibilityHidden(true)
                 } trailing: {
-                    rowIcon("wand.and.stars", "Sort \(folder.name) now",
-                            tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary) {
-                        Task { await model.sortNow(folder) }
+                    Menu {
+                        Button("Sort now") { Task { await model.sortNow(folder) } }
+                            .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
+                        Button("Show in Finder") { NSWorkspace.shared.open(URL(filePath: folder.path)) }
+                        Divider()
+                        Button("Stop watching…", role: .destructive) { removing = folder }
+                    } label: {
+                        Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(.secondary)
                     }
-                    .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
-                    rowIcon("folder", "Show \(folder.name) in Finder", tint: .blue) {
-                        NSWorkspace.shared.open(URL(filePath: folder.path))
-                    }
-                    rowIcon("trash", "Remove \(folder.name) from the sorter", tint: .red) { removing = folder }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .accessibilityLabel("Actions for \(folder.name)")
                     CardChevron()
                 }
             }
@@ -192,7 +201,7 @@ struct SorterView: View {
                 .disabled(model.busy)
         case .removeAll:
             Button(role: .destructive) { confirmRemoveAll = true } label: {
-                Text("Remove Sorter…").frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+                Text("Remove Sorter…").frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardRowMinHeight)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.red)

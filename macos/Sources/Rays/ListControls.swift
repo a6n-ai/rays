@@ -43,11 +43,29 @@ struct ListControls: View {
     @Binding var page: Int
     /// Shown as a Remove Missing button: clears rows whose finished file was moved or deleted.
     var removeMissing: (() -> Void)? = nil
+    /// `.menus` goes in the list's section header, `.paging` stays above the page.
+    enum Part { case all, menus, paging }
+    var part = Part.all
 
     private var filtered: Bool { (showsKind && kind != .all) || (statuses.first.map { status != $0 } ?? false) }
 
     var body: some View {
         HStack(spacing: 10) {
+            if part != .paging { menus }
+            Spacer()
+            if part != .menus { PageBar(count: count, page: $page) }
+        }
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .padding(.horizontal, part == .menus ? 0 : LayoutMetrics.margin)
+        .padding(.vertical, part == .menus ? 0 : 6)
+        .onChange(of: kind) { _, _ in page = 0 }
+        .onChange(of: status) { _, _ in page = 0 }
+        .onChange(of: sort) { _, _ in page = 0 }
+    }
+
+    @ViewBuilder private var menus: some View {
             Menu {
                 if !statuses.isEmpty {
                     Picker("Status", selection: $status) {
@@ -78,17 +96,6 @@ struct ListControls: View {
                 Button(action: removeMissing) { Label("Remove Missing", systemImage: "trash.slash") }
                     .help("Remove finished downloads whose file was moved or deleted. Files that are still there stay.")
             }
-            Spacer()
-            PageBar(count: count, page: $page)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-        .padding(.horizontal, LayoutMetrics.margin)
-        .padding(.vertical, 6)
-        .onChange(of: kind) { _, _ in page = 0 }
-        .onChange(of: status) { _, _ in page = 0 }
-        .onChange(of: sort) { _, _ in page = 0 }
     }
 
     /// The items on the current page. `size` is the `Paging.key` setting, read with @AppStorage by the caller so the list redraws when it changes.

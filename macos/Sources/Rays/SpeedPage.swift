@@ -85,7 +85,7 @@ private struct SpeedOverview: View {
                         .tint(TilePalette.teal)
                 }
             }
-            CollapsibleSettingsCard(page: "speed") { SpeedSettingsRows() }
+            CollapsibleSettingsCard(page: "speed", summary: "Automatic tests", inForm: true) { SpeedSettingsRows() }
             if let test = model.lastTest, !test.saved, progress == nil {
                 Section { notice(model.unsavedReason, .warning) }
             }

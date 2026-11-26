@@ -16,7 +16,7 @@ struct QueueSettingsTab: View {
 
     private var count: Int { missing ? 5 : 4 }
 
-    private func row(_ index: Int) -> CardRowBackground.Position { CardRowBackground.position(index, of: count) }
+    private func row(_ index: Int) -> CardRowBackground.Position { CardRowBackground.position(index + 1, of: count + 1) }
 
     var body: some View {
         SettingRow(.wake, title: "Wake permission",

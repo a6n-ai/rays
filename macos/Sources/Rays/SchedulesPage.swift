@@ -57,18 +57,16 @@ struct SchedulesPage: View {
             Section {
                 HeroCard(.schedules, title: "Schedules", subtitle: heroSubtitle,
                          learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues#schedules"))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 4, leading: LayoutMetrics.margin - 4, bottom: 4, trailing: LayoutMetrics.margin - 4))
+                    .cardRow(.only)
             }
-            CollapsibleSettingsCard(page: "schedules") {
-                WakePermissionRow().cardRow(.only, separatorInset: TileSize.row + 10)
+            CollapsibleSettingsCard(page: "schedules", summary: "Wake permission") {
+                WakePermissionRow().cardRow(.last, separatorInset: TileSize.row + 10)
             }
             if shown.isEmpty {
                 Section {
                     Text("No schedules match")
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardRowMinHeight)
                         .cardRow(.only)
                 }
             }

@@ -70,11 +70,7 @@ struct DownloadsView: View {
                 VStack(spacing: 0) {
                     if !model.jobs.isEmpty && model.startError == nil {
                         ListControls(statuses: JobView.statuses, status: $status, kind: $kind, sort: $sort,
-                                     count: matching.count, page: $page) {
-                            for job in model.jobs where job.isDone && model.locate(job) == nil {
-                                model.remove(job.id, deletePartial: false)
-                            }
-                        }
+                                     count: matching.count, page: $page, part: .paging)
                     }
                 }
             }
@@ -106,12 +102,10 @@ struct DownloadsView: View {
                     Section {
                         HeroCard(.downloads, title: "Downloads", subtitle: subtitle.isEmpty ? "Everything you download, in one place." : subtitle,
                                  learnMore: URL(string: "https://rays.a6n.ai/docs/app/downloads/"))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 8, leading: LayoutMetrics.margin, bottom: 8, trailing: LayoutMetrics.margin))
+                            .cardRow(.only)
                     }
-                    CollapsibleSettingsCard(page: "downloads") {
-                        settingsRow(SaveFolderRow(sorter: sorter), .first)
+                    CollapsibleSettingsCard(page: "downloads", summary: "Save folder, notifications, limits") {
+                        settingsRow(SaveFolderRow(sorter: sorter), .middle)
                         settingsRow(CopiedLinksRow(), .middle)
                         settingsRow(NotifyRow(), .middle)
                         settingsRow(MaxRunningRow(), .middle)
@@ -130,6 +124,19 @@ struct DownloadsView: View {
                                    position: CardRowBackground.position(index, of: visible.count))
                                 .contentShape(Rectangle())
                                 .onTapGesture { select(job.id) }
+                        }
+                    }
+                } header: {
+                    if !model.jobs.isEmpty && model.startError == nil {
+                        HStack {
+                            Text("Recent downloads")
+                            Spacer()
+                            ListControls(statuses: JobView.statuses, status: $status, kind: $kind, sort: $sort,
+                                         count: matching.count, page: $page, removeMissing: {
+                                for job in model.jobs where job.isDone && model.locate(job) == nil {
+                                    model.remove(job.id, deletePartial: false)
+                                }
+                            }, part: .menus)
                         }
                     }
                 }

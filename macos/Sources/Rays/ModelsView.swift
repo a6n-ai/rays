@@ -123,6 +123,7 @@ struct ModelsView: View {
                              subtitle: "Find models on Hugging Face and download them to your AI Models folder.",
                              learnMore: URL(string: "https://rays.a6n.ai/docs/app/models/"))
                         .padding(.horizontal, 12)
+                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 10, style: .continuous))
                     searchField
                     ModelFilterBar(filter: $filter, ggufOnly: $ggufOnly)
                 }
@@ -130,9 +131,9 @@ struct ModelsView: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
             }
-            CollapsibleSettingsCard(page: "models") {
+            CollapsibleSettingsCard(page: "models", summary: "Models folder, Hugging Face token") {
                 AIModelsFolderRow(folder: folder)
-                    .cardRow(.first, separatorInset: TileSize.row + 10)
+                    .cardRow(.middle, separatorInset: TileSize.row + 10)
                 HuggingFaceTokenRows(card: true)
                     .cardRow(.last, separatorInset: TileSize.row + 10)
             }

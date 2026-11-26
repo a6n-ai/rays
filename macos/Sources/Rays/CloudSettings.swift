@@ -32,10 +32,9 @@ struct BucketsForm: View {
                 HeroCard(.cloud, title: "Cloud",
                          subtitle: "Browse buckets on S3-compatible storage like folders, and download from them.",
                          learnMore: URL(string: "https://rays.a6n.ai/docs/s3/"))
-                    .listRowBackground(Color.clear)
             }
 
-            CollapsibleSettingsCard(page: "cloud") {
+            CollapsibleSettingsCard(page: "cloud", summary: "Add a bucket, AWS, Cloudflare", startsOpen: model.buckets.isEmpty, inForm: true) {
                 addBucketRows
                 if !model.awsProfiles.isEmpty { AWSRows() }
                 CloudflareRows()

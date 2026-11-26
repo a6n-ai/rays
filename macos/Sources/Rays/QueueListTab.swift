@@ -17,7 +17,7 @@ struct QueueListTab: View {
     var body: some View {
         VStack(spacing: 0) {
             ListControls(statuses: QueueFilter.queues, status: $status, kind: $kind, showsKind: false,
-                         sorts: [.name, .newest, .nextRun], sort: $sort, count: shown.count, page: $page)
+                         sorts: [.name, .newest, .nextRun], sort: $sort, count: shown.count, page: $page, part: .paging)
             list
         }
         .confirmationDialog(
@@ -48,16 +48,14 @@ struct QueueListTab: View {
             Section {
                 HeroCard(.queues, title: "Queues", subtitle: "Group downloads and start them together, now or on a schedule.",
                          learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues"))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 4, leading: LayoutMetrics.margin - 4, bottom: 4, trailing: LayoutMetrics.margin - 4))
+                    .cardRow(.only)
             }
-            CollapsibleSettingsCard(page: "queues") { QueueSettingsTab() }
+            CollapsibleSettingsCard(page: "queues", summary: "Defaults for new queues") { QueueSettingsTab() }
             Section {
                 if queues.isEmpty {
                     Text("No queues match")
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardRowMinHeight)
                         .cardRow(.only)
                 }
                 ForEach(Array(queues.enumerated()), id: \.element.id) { index, queue in
@@ -65,6 +63,13 @@ struct QueueListTab: View {
                              isDirty: drafts.isDirty(queue.id), onDelete: { deleting = queue })
                         .contentShape(Rectangle())
                         .onTapGesture { open(queue.id) }
+                }
+            } header: {
+                HStack {
+                    Text("Your queues")
+                    Spacer()
+                    ListControls(statuses: QueueFilter.queues, status: $status, kind: $kind, showsKind: false,
+                                 sorts: [.name, .newest, .nextRun], sort: $sort, count: shown.count, page: $page, part: .menus)
                 }
             }
         }

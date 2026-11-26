@@ -38,7 +38,7 @@ struct HeroCard<Accessory: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 accessory
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 10)
         case .centered, .home:
             VStack(spacing: 6) {
                 if style == .home {
@@ -86,37 +86,52 @@ extension HeroCard where Accessory == EmptyView {
     }
 }
 
-/// A Section whose header row is "Settings" plus a chevron. Collapsed by default; the state persists in
-/// @AppStorage("settingsCard.<page>"). Toggling never animates (rows are inserted inside a List or Form).
+/// The first row of the settings card: a gray gear tile, "Settings", a one-line summary and a chevron that turns
+/// when open. Collapsed by default; the state persists in @AppStorage("settingsCard.<page>"). Its content rows follow
+/// in the same card (`.middle` and `.last` in a List; a Form draws its own card). Toggling never animates.
 struct CollapsibleSettingsCard<Content: View>: View {
     @AppStorage private var expanded: Bool
+    private let summary: String?
+    private let inForm: Bool
     private let content: Content
 
-    init(page: String, @ViewBuilder content: () -> Content) {
-        _expanded = AppStorage(wrappedValue: false, "settingsCard.\(page)")
+    init(page: String, summary: String? = nil, startsOpen: Bool = false, inForm: Bool = false,
+         @ViewBuilder content: () -> Content) {
+        _expanded = AppStorage(wrappedValue: startsOpen, "settingsCard.\(page)")
+        self.summary = summary
+        self.inForm = inForm
         self.content = content()
     }
 
     var body: some View {
         Section {
+            if inForm { header } else { header.cardRow(expanded ? .first : .only, separatorInset: TileSize.row + 10) }
             if expanded { content }
-        } header: {
-            Button {
-                withTransaction(Transaction(animation: nil)) { expanded.toggle() }
-            } label: {
-                HStack {
-                    Text("Settings")
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .rotationEffect(.degrees(expanded ? 90 : 0))
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
         }
         .transaction { $0.animation = nil }
+    }
+
+    private var header: some View {
+        Button {
+            withTransaction(Transaction(animation: nil)) { expanded.toggle() }
+        } label: {
+            HStack(spacing: 10) {
+                IconTile(.general, size: TileSize.row)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Settings")
+                    if let summary { Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(1) }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+            }
+            .frame(minHeight: summary == nil ? LayoutMetrics.cardRowMinHeight : LayoutMetrics.cardListRowHeight)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(expanded ? "Expanded" : "Collapsed")
     }
 }
 
@@ -203,7 +218,7 @@ struct CardRow<Leading: View, Trailing: View>: View {
             Spacer(minLength: 8)
             trailing
         }
-        .frame(minHeight: LayoutMetrics.cardListRowHeight)
+        .frame(minHeight: subtitle == nil ? LayoutMetrics.cardRowMinHeight : LayoutMetrics.cardListRowHeight)
         .contentShape(.rect)
     }
 }
