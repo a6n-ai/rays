@@ -124,11 +124,10 @@ struct MenuBarLabel: View {
             Image(nsImage: model.activeJobs.isEmpty ? Self.icon : Self.icon(badge: model.activeJobs.count))
                 .renderingMode(model.activeJobs.isEmpty ? .template : .original)
             if !model.activeJobs.isEmpty {
-                if model.totalSpeed > 0 {
-                    Text("\(byteText(model.totalSpeed))/s").monospacedDigit()
-                } else if let progress = model.overallProgress {
-                    Text(progress.formatted(.percent.precision(.fractionLength(0)))).monospacedDigit()
-                }
+                // Percentage first, the speed after it while bytes are moving.
+                let percent = model.overallProgress.map { $0.formatted(.percent.precision(.fractionLength(0))) }
+                let speed = model.totalSpeed > 0 ? "\(byteText(model.totalSpeed))/s" : nil
+                Text([percent, speed].compactMap { $0 }.joined(separator: "  ")).monospacedDigit()
             }
         }
         .accessibilityLabel(model.activeJobs.isEmpty ? "Rays" : "Rays, \(model.activeJobs.count) downloading")

@@ -67,6 +67,7 @@ struct IconTile: View {
         let shape = RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
         Image(systemName: tile.symbol)
             .symbolRenderingMode(.monochrome)
+            .imageScale(.medium)  // a sidebar List sets .large on row images, which would overfill the tile
             // Small tiles need a larger share to read, like System Settings; large tiles keep the base scale.
             .font(.system(size: (size * (tile.glyphScale + (size <= 24 ? 0.08 : 0))).rounded(), weight: .semibold))
             .foregroundStyle(.white)

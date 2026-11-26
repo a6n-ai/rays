@@ -209,11 +209,12 @@ struct SidebarLabel: View {
     }
 
     var body: some View {
-        Label {
-            Text(title)
-        } icon: {
+        // Not a Label: the sidebar resizes a Label's icon to the system sidebar icon size, which enlarges the glyph.
+        HStack(spacing: 8) {
             IconTile(tile, size: iconSize.tile)
+            Text(title)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
