@@ -115,7 +115,7 @@ struct ModelTile: View {
             .frame(width: size, height: size)
             .overlay {
                 Image(systemName: symbol)
-                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .font(.system(size: size * 0.44, weight: .semibold))
                     .foregroundStyle(.white)
             }
             .accessibilityHidden(true)

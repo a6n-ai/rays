@@ -55,32 +55,32 @@ struct SidebarView: View {
         VStack(spacing: 0) {
         List(selection: $selection) {
             Section {
-                SidebarLabel("Downloads", symbol: "arrow.down", color: .blue)
+                SidebarLabel("Downloads", symbol: "arrow.down", color: TilePalette.blue)
                     .activeDot(model.hasActivity)
                     .tag(Destination.downloads)
                 // Always shown, not a DisclosureGroup: a sidebar List ignores its saved expansion and can hide a selected child.
-                SidebarLabel("Models", symbol: "cube.fill", color: .purple)
+                SidebarLabel("Models", symbol: "cube.fill", color: TilePalette.purple)
                     .padding(.leading, 18)
                     .tag(Destination.models)
-                SidebarLabel("Sorter", symbol: "sparkles", color: .yellow)
+                SidebarLabel("Sorter", symbol: "sparkles", color: TilePalette.pink)
                     .tag(Destination.sorter)
-                SidebarLabel("Cloud", symbol: "cloud.fill", color: .cyan)
+                SidebarLabel("Cloud", symbol: "cloud.fill", color: TilePalette.sky)
                     .tag(Destination.cloud)
             } header: {
                 Text("Rays")
             }
             Section("Queues") {
-                SidebarLabel("Queues", symbol: "list.bullet", color: .orange)
+                SidebarLabel("Queues", symbol: "list.bullet", color: TilePalette.orange)
                     .activeDot(model.queuesRunning)
                     .tag(Destination.queues)
-                SidebarLabel("Schedules", symbol: "calendar", color: .red)
+                SidebarLabel("Schedules", symbol: "calendar", color: TilePalette.red)
                     .tag(Destination.schedules)
             }
             Section("Tools") {
                 SpeedCard().tag(Destination.speed)
-                SidebarLabel("Stats", symbol: "chart.bar.fill", color: .green)
+                SidebarLabel("Stats", symbol: "chart.bar.fill", color: TilePalette.green)
                     .tag(Destination.stats)
-                SidebarLabel("Shortcuts", symbol: "square.2.layers.3d.fill", color: .indigo)
+                SidebarLabel("Shortcuts", symbol: "square.2.layers.3d.fill", color: TilePalette.indigo)
                     .tag(Destination.shortcuts)
             }
             Section("Folders", isExpanded: $foldersExpanded) {
@@ -201,7 +201,7 @@ struct SidebarLabel: View {
             Text(title)
         } icon: {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 20, height: 20)
                 .background(color.gradient, in: .rect(cornerRadius: 5))

@@ -6,7 +6,7 @@ struct SpeedCard: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            SidebarLabel("Speed test", symbol: "gauge.with.dots.needle.67percent", color: .teal)
+            SidebarLabel("Speed test", symbol: "gauge.with.dots.needle.67percent", color: TilePalette.teal)
                 .layoutPriority(1)
             Spacer(minLength: 0)
             if let progress = model.speedProgress {

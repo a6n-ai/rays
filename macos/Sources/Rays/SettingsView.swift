@@ -31,7 +31,7 @@ struct SettingIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: 22, height: 22)
             .background(color, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
