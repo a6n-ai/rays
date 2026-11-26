@@ -18,7 +18,8 @@ import SiteNav from '../components/SiteNav.astro';
 			<SiteNav />
 
 			<section class="hero" aria-labelledby="hero-title">
-				<div class="headline">
+				<p class="release"><a href="/releases/"><b>New in 0.1.23</b> Links that keep working, Shortcuts and a Share menu</a></p>
+					<div class="headline">
 				<h1 id="hero-title">
 					<span class="sr-only">Rays, the download manager for Mac that sorts everything you download.</span>
 					<span aria-hidden="true" class="lead">File management for</span>
@@ -77,14 +78,6 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 						</dd>
 					</div>
 					<div>
-						<dt>Links that keep working</dt>
-						<dd>
-							Give a file a few mirrors and each connection uses the fastest; one that fails is dropped. When a link
-							expires halfway, paste a fresh one and Rays keeps the bytes it already has. Add a SHA-256 and the file
-							is checked when it lands.
-						</dd>
-					</div>
-					<div>
 						<dt>Cloud buckets too</dt>
 						<dd>
 							Browse Amazon S3, Cloudflare R2, Backblaze B2 or any S3-compatible bucket and download with the same engine.
@@ -100,6 +93,40 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 						<dd>Rays cleans the name the server suggests, so a file can never land outside your folder.</dd>
 					</div>
 				</dl>
+			</Passage>
+
+			<Passage title="Links that keep working" id="links">
+				<p>
+					Real downloads break: a link expires, a server goes down, a file arrives damaged. Rays has an answer for each,
+					so you do not start over.
+				</p>
+				<dl class="features">
+					<div>
+						<dt>Mirrors</dt>
+						<dd>
+							Put several links to the same file on one line, each from a different site. Each connection uses the
+							fastest, and a link that fails is dropped while the others carry on.
+						</dd>
+					</div>
+					<div>
+						<dt>Expired links</dt>
+						<dd>
+							When a link stops working partway, the download says <b>Link expired</b>. Paste a fresh one with <b>Update link…</b> and Rays keeps the bytes it already has. If it is a different file, Rays asks first.
+						</dd>
+					</div>
+					<div>
+						<dt>Checksums</dt>
+						<dd>Paste a SHA-256 next to a link. Rays checks the file when it finishes and deletes one that does not match.</dd>
+					</div>
+					<div>
+						<dt>Find links on a page</dt>
+						<dd>
+							Paste a web page link and Rays lists every file the page links to. Filter by type, pick what you want, then
+							download it or add it to a queue. <code>dl grab</code> does the same from Terminal.
+						</dd>
+					</div>
+				</dl>
+				<p class="more"><a href="/docs/app/downloads/">Read about adding links</a></p>
 			</Passage>
 
 			<Passage title="Rays measures, then adds connections" id="engine">
@@ -296,6 +323,30 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 						</a>
 					</section>
 				</div>
+				<dl class="features">
+					<div>
+						<dt>Shortcuts and Siri</dt>
+						<dd>
+							Add download, Start queue, Stop queue, Run speed test, Pause all, Resume all and Download copied link work in
+							Shortcuts, Spotlight and Siri with no setup.
+						</dd>
+					</div>
+					<div>
+						<dt>Share menu</dt>
+						<dd>Send links to Rays from Safari and other apps. They wait in the add bar until you press <b>Download</b>.</dd>
+					</div>
+					<div>
+						<dt>Notifications and activity</dt>
+						<dd>
+							A notification when downloads finish or fail, with <b>Open</b>, <b>Show in Finder</b> and <b>Retry</b>. A
+							dot and a card in the sidebar show what is downloading now.
+						</dd>
+					</div>
+					<div>
+						<dt>Undo</dt>
+						<dd>Removed a download or trashed a file by mistake? The pill at the top has <b>Undo</b>, or press ⌘Z.</dd>
+					</div>
+				</dl>
 				<p>Rays lives in your menu bar and Dock with progress at a glance, and keeps downloading after you close the window.</p>
 				<p>New version out? Click Update. Rays installs it and reopens.</p>
 			</Passage>
@@ -406,6 +457,27 @@ installer two: <mark>https://www.python.org/ftp/python/3.13.0/python-3.13.0-maco
 		letter-spacing: -0.035em;
 		overflow-wrap: break-word;
 		min-width: 0;
+	}
+	.release {
+		margin: 0;
+	}
+	.release a {
+		display: inline-flex;
+		flex-wrap: wrap;
+		gap: 4px 10px;
+		align-items: baseline;
+		min-height: 32px;
+		color: var(--muted);
+		font-size: var(--t-small);
+		text-decoration: none;
+	}
+	.release b {
+		color: var(--accent);
+		font-weight: 600;
+	}
+	.release a:hover,
+	.release a:focus-visible {
+		color: var(--ink);
 	}
 	.sub {
 		margin: 0;

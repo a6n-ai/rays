@@ -7,8 +7,8 @@ description: "How Rays speeds up downloads on Mac: parallel connections, automat
 
 The **+** button at the left of the add bar lists everything you can add: paste links, find links on a page, a cloud bucket, a Hugging Face model, and a checksum or mirror for a link. While you type, a line above the bar counts the links, checksums, mirrors and cloud links Rays found. The menu on the **Download** button picks the queue.
 
-- **Paste:** press **⌘L**, paste, and press **Return**. Paste as many links as you like, one per line, separated by commas or spaces, or a whole CSV. Rays picks out every `http://` and `https://` link and ignores the text around them. The bar shows how many it found, or **No link found**. To check a file, put its SHA-256 (64 hex characters) on the same line as its link, one link per line. A file that does not match fails with **Checksum didn't match** and is deleted, and a matching one shows **Checksum matched**.
-- **Find links on a page:** paste one web page link, open the menu on the download button and choose **Find links on page…**. Rays reads the page and lists the files it links to, all checked. Filter by type, uncheck what you do not want, then choose **Download now** or **Add to queue**. If the link is a file instead of a page, Rays says so.
+- **Paste:** press **⌘L**, paste, and press **Return**. Paste as many links as you like, one per line, separated by commas or spaces, or a whole CSV. Rays picks out every `http://` and `https://` link and ignores the text around them. The bar shows how many it found, or **No link found**. To check a file, see [Links that keep working](#links-that-keep-working).
+- **Find links on a page:** paste one web page link, open the menu on the download button and choose **Find links on page…** (in the **+** menu it is **Find links on a page…**). Rays reads the page and lists the files it links to, all checked. Filter by type, uncheck what you do not want, then choose **Download now** or **Add to queue**. If the link is a file instead of a page, Rays says so.
 - **Share menu:** in Safari, Finder or any app with a Share button, choose **Share** then **Rays** to put the selected links in the add bar in Rays. Press **Download** there to start them.
 - **Drop:** drag links, text that contains links, or `.webloc` files onto the window.
 - **Browser:** right-click a link and choose **Download with Rays** ([Browser extension](/docs/app/browser/)).
@@ -18,14 +18,10 @@ The **+** button at the left of the add bar lists everything you can add: paste 
 
 Downloads go to `~/Downloads` unless you choose another folder in **Settings > General**.
 
-## Shortcuts
-
-Rays adds actions to the Shortcuts app and to Spotlight: **Add download** (a link and an optional queue), **Start queue**, **Stop queue**, **Pause all downloads**, **Resume all downloads**, **Download copied link** (the link on the clipboard, or an error if there is none) and **Run speed test**, which returns the speed, for example `212 Mbps`. Unlike the Share menu, **Add download** starts the download at once, because you built the shortcut. **Run speed test** does not run on a hotspot or a network Rays cannot identify; run it from the Speed page and confirm there.
-
-Each of these also appears in the Shortcuts app and in Spotlight as a ready-made shortcut with no setup. Ready-made multi-step shortcuts you could import with one button are not offered, because macOS only imports signed shortcut files and signing needs an iCloud account.
-
-The **Shortcuts** page in the sidebar lists these actions with their Siri phrases, has a button that opens the Shortcuts app, and explains the other ways to send links to Rays.
-
+## Links that keep working
+- **Checksums.** Put a SHA-256 (64 hex characters) on the same line as a link, or choose **Add a checksum…** in the **+** menu, with one link per line. When the file finishes, Rays checks it. A file that does not match fails with **Checksum didn't match** and is deleted, and a matching one shows **Checksum matched**. `dl add --sha256` does the same from Terminal.
+- **Mirrors.** Paste several links on one line, separated by spaces, with the same file name at the end of each path and a different site (host) for each, and Rays treats them as one file with mirrors. Links on the same site with the same file name, such as `/2023/report.pdf` and `/2024/report.pdf`, stay separate downloads. The bar shows how many mirrors it found, and the download shows **N mirrors**. Rays splits the file across the fastest links and keeps going on the others if one fails. A mirror with a different size or no range support is ignored.
+- **Expired links.** If a link stops working partway (HTTP 403, 404 or 410), the download shows **Link expired** with an **Update link…** button. Paste a fresh link for the same file and Rays keeps the part already saved and carries on. If the new link reports a different size, Rays asks before starting the download over. A link to a web page is refused. **Update Link…** is also in the right-click menu of paused and failed downloads, and `dl relink ID URL` does the same from the terminal.
 ## How Rays downloads
 
 - **Start now, or queue it.** A download starts at once, in no queue. To run it later, pick a queue in the **Download** button's menu, or use **Move to Queue**. See [Queues and schedules](/docs/app/queues/).
@@ -34,14 +30,20 @@ The **Shortcuts** page in the sidebar lists these actions with their Siri phrase
 - **Retries.** Up to 5 automatic retries, waiting 2 seconds at first and up to a minute.
 - **Resume.** Pause a download, or quit Rays, and it continues later from the bytes already saved. While a file is downloading it is named `<name>.<id>.part` and renamed only when it is complete.
 - **Safe names.** Rays takes the name the server suggests and cleans it, so a file can never land outside your folder.
-- **Mirrors.** Paste several links on one line, separated by spaces, with the same file name at the end of each path and a different site (host) for each, and Rays treats them as one file with mirrors. Links on the same site with the same file name, such as `/2023/report.pdf` and `/2024/report.pdf`, stay separate downloads. The bar shows how many mirrors it found, and the download shows **N mirrors**. Rays splits the file across the fastest links and keeps going on the others if one fails. A mirror with a different size or no range support is ignored.
-- **Expired links.** If a link stops working partway (HTTP 403, 404 or 410), the download shows **Link expired** with an **Update link…** button. Paste a fresh link for the same file and Rays keeps the part already saved and carries on. If the new link reports a different size, Rays asks before starting the download over. A link to a web page is refused. **Update Link…** is also in the right-click menu of paused and failed downloads, and `dl relink ID URL` does the same from the terminal.
 - **Same name.** **Settings > Downloads > If a file with the same name exists** sets what happens to a file that is already there. **Keep both** (the default) saves the new file as `name (1).ext`. **Replace** moves the old file to the Trash once the new one finishes, so a failed download never costs you the old file. It replaces files you already had and files Rays downloaded earlier. Only two downloads of the same name that run at the same time keep both. The setting applies to every download. Some apps, like LM Studio, need a model's exact file names, so choose **Replace** if you re-download models into the same folder.
 
 ## Speed and limits
 
 - The toolbar's **Speed Limit** menu caps bandwidth for all downloads.
 - **Settings > Downloads** sets how many files download at once (1 to 10) and how many parts each file uses (1 to 16).
+
+## Shortcuts
+
+Rays adds actions to the Shortcuts app and to Spotlight: **Add download** (a link and an optional queue), **Start queue**, **Stop queue**, **Pause all downloads**, **Resume all downloads**, **Download copied link** (the link on the clipboard, or an error if there is none) and **Run speed test**, which returns the speed, for example `212 Mbps`. Unlike the Share menu, **Add download** starts the download at once, because you built the shortcut. **Run speed test** does not run on a hotspot or a network Rays cannot identify; run it from the Speed page and confirm there.
+
+Each of these also appears in the Shortcuts app and in Spotlight as a ready-made shortcut with no setup. Ready-made multi-step shortcuts you could import with one button are not offered, because macOS only imports signed shortcut files and signing needs an iCloud account.
+
+The **Shortcuts** page in the sidebar lists these actions with their Siri phrases, has a button that opens the Shortcuts app, and explains the other ways to send links to Rays.
 
 ## Activity in the sidebar
 
@@ -51,12 +53,15 @@ While a download is running, retrying, verifying or about to start, a dot appear
 
 - **Filter** by status (All, Active, Finished, Failed) or by type (Documents, Images, Video, Audio, Archives, Apps and installers, Other).
 - **Sort** by Newest first, Oldest first, Name or Largest first.
-- Lists show 50 items per page, with an icon for each file's type. When a list is longer than 25 items, a menu next to the page arrows sets 25, 50, 100 or 200 per page for every list in the app. The Sorter's recent moves, the Cloud downloads list and the other long lists use the same controls.
+- Every long list has pages, 50 items each by default, with an icon for each file's type. When a list is longer than 25 items, a menu next to the page arrows sets 25, 50, 100 or 200 per page for every list in the app. The Sorter's recent moves, the Cloud downloads list and the other long lists use the same controls.
 - The toolbar has three buttons in the middle on every page: **Recent downloads** first, the folder, and settings last.
 - Double-click a finished download to open it.
+- **Move to Trash** sits next to **Show in Finder** on a finished download.
 - **Remove Missing** clears finished downloads whose file was moved or deleted. Files that are still there stay.
-- **Undo.** Removing a download or moving it to the Trash shows a pill at the top of the window with **Undo** (or press Command-Z) for six seconds; Undo puts the file back where it was and brings the row back.
+- **Undo.** Removing a download or moving it to the Trash shows a pill at the top of the window with **Undo** (or press Command-Z) for six seconds; Undo puts the file back where it was and brings the row back. The pill is coloured by what happened: orange for the Trash, blue for a removed row, green for updates and red for errors.
 
+## Notifications
+Rays posts a notification when a download finishes or fails, with **Open**, **Show in Finder** or **Retry** on it. Downloads that end close together come as one summary. Turn this off with **Notify when downloads finish** in [Settings](/docs/app/settings/).
 ## In the Dock and menu bar
 
 - While files download, the Rays icon in the Dock shows the download speed, a progress bar and a red badge with how many are downloading. The badge needs **Badge application icon** on in **System Settings > Notifications > Rays**.

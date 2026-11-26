@@ -26,6 +26,7 @@ export const GROUPS: Group[] = [
 		short: ['Paste anything', 'Up to 16 connections per file', 'Resume after a crash', 'Speed limit', 'Safe names'],
 		items: [
 			{ icon: 'paste', title: 'Paste anything', text: 'Links one per line, separated by commas, a whole CSV or text with links in it. Drop links and .webloc files on the window.' },
+			{ icon: 'grid', title: 'The add bar and its + menu', text: 'The + menu lists everything you can add: links, links on a page, a cloud bucket, a Hugging Face model, and a checksum or mirror. A line above the bar shows what Rays found as you type.', href: '/docs/app/downloads/' },
 			{ icon: 'split', title: 'Smart splitting', text: 'Big files start on 4 connections and double, up to 16, only while each step makes the file faster.', href: '/docs/engine/' },
 			{ icon: 'resume', title: 'Pause, resume, quit', text: 'Downloads continue from the bytes already saved, after a pause, a quit or a crash.' },
 			{ icon: 'engine', title: 'Speed limit', text: 'Cap the speed and choose how many files download at once, from 1 to 10.' },
@@ -33,9 +34,11 @@ export const GROUPS: Group[] = [
 			{ icon: 'split', title: 'Mirrors', text: 'Give one file several links. Each connection uses the fastest, and a link that fails is dropped.', href: '/docs/app/downloads/' },
 			{ icon: 'resume', title: 'Expired links', text: 'When a link stops working partway, paste a fresh one and Rays continues from the bytes it has.', href: '/docs/app/downloads/' },
 			{ icon: 'verify', title: 'Checksums', text: 'Paste a SHA-256 next to a link and Rays checks the file when it finishes.', href: '/docs/app/downloads/' },
-			{ icon: 'share', title: 'Share menu', text: 'Send links to Rays from the Share menu in Safari and other apps.', href: '/docs/app/downloads/' },
+			{ icon: 'share', title: 'Share menu', text: 'Send links to Rays from the Share menu in Safari and other apps. They wait in the add bar until you press Download.', href: '/docs/app/downloads/' },
 			{ icon: 'link', title: 'Copied links', text: 'Copy a download link anywhere on your Mac and Rays offers to download it.' },
 			{ icon: 'filter', title: 'Filter and sort', text: 'Filter the list by status or type. Remove Missing clears finished downloads whose file is gone.' },
+			{ icon: 'grid', title: 'Pages everywhere', text: 'Every long list has pages, with 25, 50, 100 or 200 per page.', href: '/docs/app/downloads/' },
+			{ icon: 'refresh', title: 'Undo', text: 'After you remove a download or move it to the Trash, a pill at the top offers Undo, or press Command-Z.', href: '/docs/app/downloads/' },
 			{ icon: 'shield', title: 'Safe names', text: "The server's suggested name is cleaned, so a file can never land outside your folder." },
 			{ icon: 'share', title: 'Share', text: 'Send finished downloads with AirDrop or the Share menu, or drag them out of the window.' },
 		],
@@ -135,7 +138,7 @@ export const GROUPS: Group[] = [
 		short: ['MCP for AI assistants', 'Command line', 'Queues and model checks'],
 		items: [
 			{ icon: 'mcp', title: 'MCP for AI assistants', text: 'Assistants like Claude can add downloads to a queue, find the files on a page, list queues, start and stop them, and verify a model.', href: '/docs/mcp/' },
-			{ icon: 'grid', title: 'Shortcuts', text: 'Add a download, start or stop a queue, or run a speed test from Shortcuts and Siri.', href: '/docs/app/downloads/' },
+			{ icon: 'grid', title: 'Shortcuts, Spotlight and Siri', text: 'Seven actions with no setup: Add download, Start queue, Stop queue, Run speed test, Pause all, Resume all and Download copied link.', href: '/docs/app/downloads/' },
 			{ icon: 'terminal', title: 'Command line', text: 'Add downloads, work with queues, and sort or watch folders from Terminal.', href: '/docs/dl/' },
 		],
 	},
@@ -147,6 +150,7 @@ export const GROUPS: Group[] = [
 		summary: 'Free, open source and made for macOS 26.',
 		short: [],
 		items: [
+			{ icon: 'clock', title: 'Activity in the sidebar', text: 'A dot on Downloads while something downloads, and a card with the files, speed and time left.', href: '/docs/app/downloads/' },
 			{ icon: 'check', title: 'Notifications', text: 'A notification when downloads finish or fail, with Open, Show in Finder and Retry right on the notification.' },
 			{ icon: 'menubar', title: 'Menu bar and Dock', text: 'Show the download speed and a badge with the downloads running. Close the window and Rays keeps downloading.' },
 			{ icon: 'refresh', title: 'Updates itself', text: 'Click Update and Rays replaces itself and reopens.' },
