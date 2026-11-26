@@ -48,7 +48,7 @@ enum SystemIcon: Hashable {
 }
 
 extension Tile {
-    static let downloads = Tile(symbol: "arrow.down", color: TilePalette.blue, glyphScale: 0.52, system: .home("Downloads"))
+    static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5)
     static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5)
     static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .app("/System/Applications/Automator.app"))
     static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48)
