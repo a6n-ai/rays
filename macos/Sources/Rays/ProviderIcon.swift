@@ -4,10 +4,11 @@ import SwiftUI
 /// SF Symbols has no brand logos, so each provider gets a fitting symbol in its brand color.
 struct ProviderIcon: View {
     let provider: String
+    var size: CGFloat = TileSize.row
 
     var body: some View {
         let (symbol, color) = Self.style(provider)
-        IconTile(Tile(symbol: symbol, color: color))
+        IconTile(Tile(symbol: symbol, color: color), size: size)
     }
 
     static func style(_ provider: String) -> (String, Color) {

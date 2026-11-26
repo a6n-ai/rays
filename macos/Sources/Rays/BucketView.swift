@@ -7,7 +7,7 @@ enum CloudTab: String { case browse, buckets, downloads }
 /// The Cloud page: browse providers and buckets like Finder, manage buckets, and cloud downloads.
 struct CloudView: View {
     @Environment(EngineModel.self) private var model
-    @AppStorage("cloudTab") private var tab: CloudTab = .browse
+    @AppStorage("cloudTab") private var tab: CloudTab = .buckets
     /// "" is the top level, "p:<provider>" a provider's buckets, "b:<bucket>" inside a bucket.
     @AppStorage("cloudPlace") private var place = ""
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
@@ -28,10 +28,9 @@ struct CloudView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 ToolbarIconGroup {
-                    // Same order on every page: recent activity, the files, then settings.
-                    ForEach([(CloudTab.downloads, "clock.arrow.circlepath", "Cloud downloads"),
+                    ForEach([(CloudTab.buckets, "cloud", "Cloud"),
                              (CloudTab.browse, "folder", "Browse"),
-                             (CloudTab.buckets, "slider.horizontal.3", "Buckets")], id: \.0) { item in
+                             (CloudTab.downloads, "clock.arrow.circlepath", "Cloud downloads")], id: \.0) { item in
                         Button { tab = item.0 } label: {
                             ToolbarIcon(symbol: item.1, title: item.2, selected: shown == item.0)
                         }

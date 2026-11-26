@@ -18,15 +18,14 @@ extension SorterFolder {
     }
 }
 
-enum SorterTab: String { case setup, files, recent }
+enum SorterTab: String { case files, recent }
 
 struct SorterView: View {
     @State private var model: SorterModel
 
     @State private var confirmRemoveAll = false
-    @AppStorage("sorterTab") private var tab: SorterTab = .setup
+    @AppStorage("sorterTab") private var tab: SorterTab = .recent
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
-    @AppStorage("sorterShowFolders") private var showFolders = true
     @State private var removing: SorterFolder?
     @State private var recentKind = FileKind.all
     @State private var recentSort = ListSort.newest
@@ -55,31 +54,59 @@ struct SorterView: View {
         _model = State(initialValue: model ?? SorterModel())
     }
 
+    private static let docs = URL(string: "https://rays.a6n.ai/docs/app/sorter/")!
+    private static let cardInsets = EdgeInsets(top: 4, leading: LayoutMetrics.margin - 4, bottom: 4,
+                                               trailing: LayoutMetrics.margin - 4)
+
     private var recentList: some View {
         let moves = recentMoves
-        return Group {
-            if moves.isEmpty {
-                EmptyState(symbol: "tray", title: allRecent.isEmpty ? "Nothing sorted yet" : "No sorted files match")
-            } else {
-                // Same list as Downloads: inset style, hidden separators, rows that highlight on hover.
-                List {
-                    ForEach(Array(ListControls.page(moves, recentPage, pageSize).enumerated()), id: \.offset) { index, move in
-                        MoveRow(move: move, isSelected: recentSelection == index) { hide([move]) }
+        let shown = ListControls.page(moves, recentPage, pageSize)
+        let folderRows = folderRows
+        return List {
+            Section {
+                HeroCard(.sorter, title: "Sorter",
+                         subtitle: "Rays files new downloads into folders by what is inside them, using on-device AI.",
+                         learnMore: Self.docs)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(Self.cardInsets)
+            }
+            if let error = model.error {
+                Section { ErrorLine(text: error).listRowBackground(Color.clear) }
+            }
+            if model.loadFailed {
+                Section { ErrorLine(text: SorterModel.unavailableMessage).listRowBackground(Color.clear) }
+            }
+            CollapsibleSettingsCard(page: "sorter") {
+                AIStatusRow().cardRow(.first)
+                SortDelayRow(sorter: model).cardRow(.middle)
+                RenameRow(sorter: model).cardRow(.last)
+            }
+            Section("Watched folders") {
+                ForEach(Array(folderRows.enumerated()), id: \.element.id) { index, kind in
+                    folderRow(kind)
+                        .cardRow(CardRowBackground.position(index, of: folderRows.count))
+                }
+            }
+            Section("Recently sorted") {
+                if moves.isEmpty {
+                    Text(allRecent.isEmpty ? "Nothing sorted yet" : "No sorted files match")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+                        .cardRow(.only)
+                } else {
+                    ForEach(Array(shown.enumerated()), id: \.offset) { index, move in
+                        MoveRow(move: move, position: CardRowBackground.position(index, of: shown.count),
+                                isSelected: recentSelection == index) { hide([move]) }
                             .contentShape(Rectangle())
                             .onTapGesture { recentSelection = index }
-                            .listRowInsets(EdgeInsets(
-                                top: LayoutMetrics.rowSpacing / 2,
-                                leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
-                                bottom: LayoutMetrics.rowSpacing / 2,
-                                trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
-                            .listRowSeparator(.hidden)
                     }
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
-                .scrollEdgeEffectStyle(.soft, for: .all)
             }
         }
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .all)
         .safeAreaInset(edge: .top, spacing: 0) {
             if !allRecent.isEmpty {
                 ListControls(status: .constant(""), kind: $recentKind, sorts: [.newest, .oldest, .name],
@@ -88,6 +115,98 @@ struct SorterView: View {
                 }
             }
         }
+    }
+
+    private enum FolderRowKind: Identifiable {
+        case tempWarning, update, empty, folder(SorterFolder), add, quick(URL), removeAll
+
+        var id: String {
+            switch self {
+            case .tempWarning: "temp"
+            case .update: "update"
+            case .empty: "empty"
+            case .folder(let folder): "f:" + folder.path
+            case .add: "add"
+            case .quick(let url): "q:" + url.path(percentEncoded: false)
+            case .removeAll: "removeAll"
+            }
+        }
+    }
+
+    private var folderRows: [FolderRowKind] {
+        let folders = model.status?.folders ?? []
+        var rows: [FolderRowKind] = []
+        if Sorter.isTemporary(Bundle.main.bundlePath) {
+            rows.append(.tempWarning)
+        } else if !outdated.isEmpty {
+            rows.append(.update)
+        }
+        rows += folders.map(FolderRowKind.folder)
+        if folders.isEmpty { rows.append(.empty) }
+        rows.append(.add)
+        rows += quickFolders.map(FolderRowKind.quick)
+        if !folders.isEmpty { rows.append(.removeAll) }
+        return rows
+    }
+
+    @ViewBuilder private func folderRow(_ kind: FolderRowKind) -> some View {
+        switch kind {
+        case .tempWarning:
+            HStack(alignment: .top, spacing: 10) {
+                IconTile(.warning, size: TileSize.list)
+                Text("Move Rays to Applications, then open it from there. Folders watched from this copy stop sorting when it goes away.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 8)
+        case .update:
+            UpdateAllRow(count: outdated.count, busy: model.busy) {
+                Task { for folder in outdated { await model.update(folder) } }
+            }
+            .padding(.vertical, 8)
+        case .empty:
+            Text("No folders yet.").foregroundStyle(.secondary).frame(minHeight: LayoutMetrics.cardListRowHeight)
+        case .folder(let folder):
+            NavigationLink(value: folder.path) {
+                CardRow(title: folder.name,
+                        subtitle: folder.needsUpdate ? "Old copy, needs update" : folder.watching ? "Sorting new files" : "Paused",
+                        status: folder.needsUpdate ? .warning : folder.watching ? .ok : .off) {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: folder.path)).resizable().accessibilityHidden(true)
+                } trailing: {
+                    rowIcon("wand.and.stars", "Sort \(folder.name) now",
+                            tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary) {
+                        Task { await model.sortNow(folder) }
+                    }
+                    .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
+                    rowIcon("folder", "Show \(folder.name) in Finder", tint: .blue) {
+                        NSWorkspace.shared.open(URL(filePath: folder.path))
+                    }
+                    rowIcon("trash", "Remove \(folder.name) from the sorter", tint: .red) { removing = folder }
+                    CardChevron()
+                }
+            }
+        case .add:
+            addRow("Add Folder…", action: chooseFolder).disabled(model.busy || model.loadFailed)
+        case .quick(let url):
+            addRow("Add \(url.lastPathComponent)") { Task { await model.addFolder(url.path(percentEncoded: false)) } }
+                .disabled(model.busy)
+        case .removeAll:
+            Button(role: .destructive) { confirmRemoveAll = true } label: {
+                Text("Remove Sorter…").frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.red)
+            .disabled(model.busy)
+        }
+    }
+
+    private func addRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            CardRow(title: title) {
+                Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(.tint).accessibilityHidden(true)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     /// Only keys still in the sorter's recent list are kept, so the stored set can't grow forever.
@@ -104,126 +223,7 @@ struct SorterView: View {
     var body: some View {
         NavigationStack {
             Group {
-            if tab == .files {
-                SorterFilesTable(model: model)
-            } else if tab == .recent {
-                recentList
-            } else {
-            Form {
-                if tab == .setup {
-                    if let error = model.error {
-                        Section { ErrorLine(text: error) }
-                    }
-                    if model.loadFailed {
-                        Section { ErrorLine(text: SorterModel.unavailableMessage) }
-                    }
-
-                    Section("On-device AI") {
-                        AIStatusRow()
-                    }
-
-                    Section {
-                        Picker(selection: Binding(get: { model.status?.waitSeconds ?? 10 },
-                                                  set: { secs in Task { await model.setWait(secs) } })) {
-                            ForEach(SorterModel.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
-                        } label: {
-                            Label("Sort new files after", systemImage: "timer")
-                        }
-                        .pickerStyle(.menu)
-                        .disabled(model.busy || model.loadFailed)
-                    } footer: {
-                        Text("Rays waits this long after a file arrives, so you can open or move it first.")
-                    }
-
-                    Section {
-                        Toggle(isOn: Binding(get: { model.status?.renameFiles ?? true },
-                                             set: { on in Task { await model.setRename(on) } })) {
-                            Label("Rename files from their content", systemImage: "character.cursor.ibeam")
-                        }
-                        .toggleStyle(.switch)
-                        .disabled(model.busy || model.loadFailed)
-                    } footer: {
-                        Text("Off keeps every file's original name. Files are still sorted into folders.")
-                    }
-
-                    if Sorter.isTemporary(Bundle.main.bundlePath) {
-                        Section {
-                            Label("Move Rays to Applications, then open it from there. Folders watched from this copy stop sorting when it goes away.",
-                                  systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                    } else if !outdated.isEmpty {
-                        Section {
-                            UpdateAllRow(count: outdated.count, busy: model.busy) {
-                                Task { for folder in outdated { await model.update(folder) } }
-                            }
-                        }
-                    }
-                    Section(isExpanded: $showFolders) {
-                        ForEach(model.status?.folders ?? []) { folder in
-                            NavigationLink(value: folder.path) {
-                                HStack {
-                                    FolderRow(folder: folder)
-                                    Spacer(minLength: 8)
-                                    rowIcon("wand.and.stars", "Sort \(folderName(folder)) now",
-                                            tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary) {
-                                        Task { await model.sortNow(folder) }
-                                    }
-                                    .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
-                                    rowIcon("folder", "Show \(folderName(folder)) in Finder", tint: .blue) {
-                                        NSWorkspace.shared.open(URL(filePath: folder.path))
-                                    }
-                                    rowIcon("trash", "Remove \(folderName(folder)) from the sorter", tint: .red) {
-                                        removing = folder
-                                    }
-                                }
-                            }
-                        }
-                        if model.status?.folders.isEmpty == true {
-                            Text("No folders yet.").foregroundStyle(.secondary)
-                        }
-                        Button(action: chooseFolder) {
-                            Label("Add Folder…", systemImage: "plus.circle.fill")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.tint)
-                        .disabled(model.busy || model.loadFailed)
-                        ForEach(quickFolders, id: \.self) { url in
-                            Button { Task { await model.addFolder(url.path(percentEncoded: false)) } } label: {
-                                Label("Add \(url.lastPathComponent)", systemImage: "plus.circle.fill")
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.tint)
-                            .disabled(model.busy)
-                        }
-                    } header: {
-                        Text("Folders")
-                    }
-
-                    if !(model.status?.folders ?? []).isEmpty {
-                        Section {
-                            Button(role: .destructive) { confirmRemoveAll = true } label: {
-                                Text("Remove Sorter…").frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.red)
-                            .disabled(model.busy)
-                            .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
-                                                titleVisibility: .visible) {
-                                Button("Remove Sorter", role: .destructive) {
-                                    Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
-                                }
-                                Button("Cancel", role: .cancel) {}
-                            } message: {
-                                Text("Files already sorted stay where they are.")
-                            }
-                        }
-                    }
-                }
-            }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            }
+                if tab == .files { SorterFilesTable(model: model) } else { recentList }
             }
             .confirmationDialog("Remove \(removing.map { URL(filePath: $0.path).lastPathComponent } ?? "this folder") from the sorter?",
                                 isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
@@ -236,6 +236,15 @@ struct SorterView: View {
             } message: {
                 Text("Files already sorted stay where they are.")
             }
+            .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
+                                titleVisibility: .visible) {
+                Button("Remove Sorter", role: .destructive) {
+                    Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Files already sorted stay where they are.")
+            }
             .scrollContentBackground(.hidden)
             // Same title and toolbar skeleton as Downloads, so switching pages doesn't jump.
             .navigationTitle("Rays")
@@ -243,10 +252,8 @@ struct SorterView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     ToolbarIconGroup {
-                        // Same order on every page: recent activity, the files, then settings.
-                        ForEach([(SorterTab.recent, "clock.arrow.circlepath", "Recently sorted"),
-                                 (SorterTab.files, "folder", "Sorted files"),
-                                 (SorterTab.setup, "slider.horizontal.3", "Setup")], id: \.0) { item in
+                        ForEach([(SorterTab.recent, "clock.arrow.circlepath", "Sorter"),
+                                 (SorterTab.files, "folder", "Sorted files")], id: \.0) { item in
                             Button { tab = item.0 } label: {
                                 ToolbarIcon(symbol: item.1, title: item.2, selected: tab == item.0)
                             }
@@ -352,33 +359,9 @@ struct SorterView: View {
     }
 }
 
-private struct FolderRow: View {
-    let folder: SorterFolder
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: folder.path))
-                .resizable()
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(folder.name)
-                if folder.needsUpdate {
-                    Label("Old copy — needs update", systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout)
-                        .foregroundStyle(.orange)
-                } else {
-                    Text(folder.watching ? "Sorting new files" : "Paused")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
 private struct MoveRow: View {
     let move: SorterMove
+    var position: CardRowBackground.Position = .middle
     var isSelected = false
     var onRemove: () -> Void = {}
     @State private var isHovered = false
@@ -485,10 +468,8 @@ private struct MoveRow: View {
                 .accessibilityLabel("Remove \(move.file) from the list")
             }
         }
-        .frame(height: LayoutMetrics.rowHeight)
-        .padding(.horizontal, LayoutMetrics.hoverInset)
-        // In the row background, so hover fills the same full-width cell as the selection.
-        .listRowBackground(RowHighlight(selected: isSelected, hovered: isHovered))
+        .frame(minHeight: LayoutMetrics.cardListRowHeight)
+        .cardRow(position, selected: isSelected, hovered: isHovered, separatorInset: LayoutMetrics.iconSize + LayoutMetrics.gap)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         // Simultaneous, so the parent's single-click selection still fires.
