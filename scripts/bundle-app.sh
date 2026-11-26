@@ -76,14 +76,6 @@ for key in CFBundleShortVersionString CFBundleVersion; do
 done
 codesign --force -s "$identity" --entitlements macos/ShareExtension/RaysShare.entitlements "$appex"
 
-# Ready-made shortcuts: only signed files are bundled (Shortcuts refuses unsigned imports); the app shows setup steps otherwise.
-scripts/sign-shortcuts.sh || true
-shortcuts_src=build/shortcuts
-if compgen -G "macos/Resources/Shortcuts/signed/*.shortcut" >/dev/null; then shortcuts_src=macos/Resources/Shortcuts/signed; fi
-if compgen -G "$shortcuts_src/*.shortcut" >/dev/null; then
-  mkdir -p "$app/Contents/Resources/Shortcuts"
-  cp "$shortcuts_src"/*.shortcut "$app/Contents/Resources/Shortcuts/"
-fi
 codesign --force -s "$identity" "$app"
 
 du -sh "$app"
