@@ -89,6 +89,7 @@ struct JobRow: View {
             }
             moreButton
             if let primary { primaryButton(primary) }
+            if primary == .reveal { trashButton }
         }
         .frame(height: LayoutMetrics.rowHeight)
         .padding(.horizontal, LayoutMetrics.hoverInset)
@@ -330,6 +331,22 @@ struct JobRow: View {
         .buttonStyle(.plain)
         .help("\(primary.title) \(job.name)")
         .accessibilityLabel("\(primary.title) \(job.name)")
+    }
+
+    /// Next to Show in Finder on a finished download: the file goes to the Trash (recoverable there) and the row is removed.
+    private var trashButton: some View {
+        Button { model.removeAndTrash([job]) } label: {
+            Image(systemName: "trash.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.red)
+                .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("Move \(job.name) to the Trash")
+        .accessibilityLabel("Move \(job.name) to the Trash")
     }
 
     /// The context menu, shown on hover so Remove and Move to Trash are found without right-clicking.
