@@ -75,52 +75,41 @@ struct SortedBrowserPage: View {
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @AppStorage("sortedBrowserOrder") private var order: SortedOrder = .name
     @State private var items: [SortedItem]?
-    @State private var pushed: URL?
+    @Environment(NavHistory.self) private var nav
 
     var body: some View {
         content
+            .safeAreaInset(edge: .top, spacing: 0) { viewBar }
             .navigationTitle(folder.lastPathComponent)
             .navigationSubtitle(items.map { $0.count == 1 ? "1 item" : "\($0.count) items" } ?? "")
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    ToolbarIconGroup {
-                        ForEach(SortedLayout.allCases) { mode in
-                            Button { layout = mode } label: {
-                                ToolbarIcon(symbol: mode.symbol, title: mode.title, selected: layout == mode)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Show as \(mode.title.lowercased())")
-                        }
-                        Menu {
-                            Picker("Sort by", selection: $order) {
-                                ForEach(SortedOrder.allCases) { Text($0.rawValue).tag($0) }
-                            }
-                            .pickerStyle(.inline)
-                        } label: {
-                            ToolbarIcon(symbol: "arrow.up.arrow.down", title: "Sort by \(order.rawValue)")
-                        }
-                        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
-                        .disabled(layout == .table)
-                        .help("Sort by \(order.rawValue)")
-                    }
-                }
-                .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) {
-                    ToolbarIconGroup {
-                        Button { NSWorkspace.shared.open(folder) } label: {
-                            ToolbarIcon(symbol: "folder", title: "Show in Finder", tint: .blue)
-                        }
-                        .buttonStyle(.plain).help("Show \(folder.lastPathComponent) in Finder")
-                    }
-                }
-                .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
-            }
-            .navigationDestination(item: $pushed) { SortedBrowserPage(folder: $0) }
             .task(id: folder) {
                 let url = folder
                 items = await Task.detached { SortedItem.list(url) }.value
             }
+    }
+
+    private var viewBar: some View {
+        ViewBar {
+            Picker("Layout", selection: $layout) {
+                ForEach(SortedLayout.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            Menu {
+                Picker("Sort by", selection: $order) {
+                    ForEach(SortedOrder.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Label("Sort by \(order.rawValue)", systemImage: "arrow.up.arrow.down")
+            }
+            .menuStyle(.button)
+            .fixedSize()
+            .disabled(layout == .table)
+            Button { NSWorkspace.shared.open(folder) } label: { Label("Show in Finder", systemImage: "folder") }
+                .help("Show \(folder.lastPathComponent) in Finder")
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -128,7 +117,7 @@ struct SortedBrowserPage: View {
             if items.isEmpty {
                 ContentUnavailableView("Empty", systemImage: "folder", description: Text("Nothing is in this folder yet."))
             } else {
-                SortedItemsView(items: items, layout: layout, order: order) { pushed = $0 }
+                SortedItemsView(items: items, layout: layout, order: order) { nav.open("sorted:" + $0.path(percentEncoded: false)) }
             }
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)

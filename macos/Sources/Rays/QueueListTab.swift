@@ -4,7 +4,9 @@ import SwiftUI
 struct QueueListTab: View {
     let drafts: QueueDrafts
     let open: (UInt64) -> Void
+    let newQueue: () -> Void
     @Environment(EngineModel.self) private var model
+    @Environment(NavHistory.self) private var nav
     @State private var deleting: QueueView?
     @State private var status = "All"
     @State private var sort = ListSort.newest
@@ -47,10 +49,22 @@ struct QueueListTab: View {
         return List {
             Section {
                 HeroCard(.queues, title: "Queues", subtitle: "Group downloads and start them together, now or on a schedule.",
-                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues"))
-                    .cardRow(.only)
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues")) {
+                    HeroActions {
+                        Button("New Queue", action: newQueue)
+                        HeroMenu {
+                            Button("Start all queues", systemImage: "play.circle") { model.setAllQueues(running: true) }
+                            Button("Stop all queues", systemImage: "stop.circle") { model.setAllQueues(running: false) }
+                        }
+                    }
+                }
+                .cardRow(.only)
             }
             CollapsibleSettingsCard(page: "queues", summary: "Defaults for new queues") { QueueSettingsTab() }
+            Section {
+                DrillInRow(tile: .history, title: "Activity", subtitle: "Running now and recent runs") { nav.open("activity") }
+                    .cardRow(.only)
+            }
             Section {
                 if queues.isEmpty {
                     Text("No queues match")

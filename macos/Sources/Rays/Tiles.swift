@@ -48,6 +48,7 @@ extension Tile {
     static let rename = Tile(symbol: "character.cursor.ibeam", color: TilePalette.pink)
     static let watchedFolders = Tile(symbol: "folder.badge.gearshape", color: TilePalette.pink)
     static let warning = Tile(symbol: "exclamationmark.triangle.fill", color: TilePalette.orange)
+    static let history = Tile(symbol: "clock.arrow.circlepath", color: TilePalette.teal)
     static let localModel = Tile(symbol: "shippingbox.fill", color: TilePalette.gray)
 }
 

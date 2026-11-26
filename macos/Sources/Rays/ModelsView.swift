@@ -3,7 +3,7 @@ import SwiftUI
 /// Finds Hugging Face models and lists the ones already downloaded. The model settings sit in the Search page's settings card.
 struct ModelsView: View {
     @Environment(EngineModel.self) private var model
-    @AppStorage("modelsSection") private var section = ModelsSection.search
+    @Environment(NavHistory.self) private var nav
     @State private var sorter = SorterModel()
     @State private var query = ""
     @State private var selection: String?
@@ -18,8 +18,6 @@ struct ModelsView: View {
     /// Bumped by every search and open; a reply is used only if no newer request started meanwhile.
     @State private var request = 0
 
-    enum ModelsSection: String { case search, downloaded }
-
     private var text: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var folder: URL {
@@ -27,62 +25,24 @@ struct ModelsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch section {
-                case .search:
-                    searchList
-                case .downloaded:
-                    DownloadedModelsView(folder: folder)
-                }
-            }
-            .navigationTitle("Models")
-            .toolbar { if repo == nil { toolbar } }
-            .navigationDestination(item: $repo) { repo in
+        Group {
+            if nav.sub == "repo", let repo {
                 ModelDetailView(repo: repo, destinations: sorter.destinations).id(repo.id)
-                    .toolbar { toolbar }
+            } else if nav.sub == "downloaded" {
+                DownloadedModelsView(folder: folder)
+                    .navigationTitle("Downloaded Models")
+            } else {
+                searchList
+                    .navigationTitle("Models")
             }
         }
         .task { await sorter.refresh() }
         .task(id: query) { await search() }
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            ToolbarIconGroup {
-                ForEach([(ModelsSection.search, "magnifyingglass", "Search Hugging Face"),
-                         (ModelsSection.downloaded, "shippingbox", "Downloaded models")], id: \.0) { item in
-                    Button {
-                        section = item.0
-                        repo = nil
-                    } label: {
-                        ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
-                    }
-                    .buttonStyle(.plain)
-                    .help(item.2)
-                    .accessibilityAddTraits(section == item.0 ? .isSelected : [])
-                }
-            }
+        .onChange(of: repo) { _, new in
+            if new != nil && nav.sub != "repo" { nav.open("repo") }
+            if new == nil && nav.sub == "repo" { nav.replaceSub(nil) }
         }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) {
-            ToolbarIconGroup {
-                Button { AIModelsFolder.reveal(folder) } label: {
-                    ToolbarIcon(symbol: "folder", title: "Open AI Models folder", tint: .blue)
-                }
-                .buttonStyle(.plain)
-                .help("Open the AI Models folder in Finder")
-                if let repo, let url = URL(string: "https://huggingface.co/\(repo.id)") {
-                    Button { NSWorkspace.shared.open(url) } label: {
-                        ToolbarIcon(symbol: "globe", title: "Open on Hugging Face", tint: .teal)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Open \(repo.id) on Hugging Face")
-                }
-            }
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
+        .onChange(of: nav.sub) { _, new in if new != "repo" { repo = nil } }
     }
 
     private var searchField: some View {
@@ -121,7 +81,9 @@ struct ModelsView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HeroCard(.models, title: "Models",
                              subtitle: "Find models on Hugging Face and download them to your AI Models folder.",
-                             learnMore: URL(string: "https://rays.a6n.ai/docs/app/models/"))
+                             learnMore: URL(string: "https://rays.a6n.ai/docs/app/models/")) {
+                        HeroActions { Button("Open Folder") { AIModelsFolder.reveal(folder) } }
+                    }
                         .padding(.horizontal, 12)
                         .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 10, style: .continuous))
                     searchField
@@ -136,6 +98,12 @@ struct ModelsView: View {
                     .cardRow(.middle, separatorInset: TileSize.row + 10)
                 HuggingFaceTokenRows(card: true)
                     .cardRow(.last, separatorInset: TileSize.row + 10)
+            }
+            Section {
+                DrillInRow(tile: .modelsFolder, title: "Downloaded models", subtitle: "Models already in your AI Models folder") {
+                    nav.open("downloaded")
+                }
+                .cardRow(.only)
             }
             content
         }

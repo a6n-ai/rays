@@ -102,44 +102,25 @@ struct FolderView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .top) {
-            if embedded {
-                HStack(spacing: 8) {
-                    navButton("chevron.backward") { current = current.deletingLastPathComponent() }
-                        .disabled(atRoot)
-                        .help(atRoot ? "" : "Back to \(current.deletingLastPathComponent().lastPathComponent)")
-                        .accessibilityLabel("Back")
-                    pathBar
-                    Spacer()
-                }
-                .padding(.horizontal, LayoutMetrics.margin)
-                .padding(.vertical, 6)
-            }
-        }
-        .navigationTitle(embedded ? "Rays" : current.lastPathComponent)
-        .toolbar {
-            if !embedded {
-            ToolbarItem(placement: .navigation) {
-                HStack(spacing: 2) {
-                    navButton("chevron.backward", action: goBack)
-                        .help(atRoot ? "Back to Downloads list" : "Back to \(current.deletingLastPathComponent().lastPathComponent)")
-                        .accessibilityLabel(atRoot ? "Back to Downloads list" : "Back")
-                        .keyboardShortcut("[", modifiers: .command)
+            HStack(spacing: 8) {
+                navButton("chevron.up") { current = current.deletingLastPathComponent() }
+                    .disabled(atRoot)
+                    .keyboardShortcut(.upArrow, modifiers: .command)
+                    .help(atRoot ? "" : "Up to \(current.deletingLastPathComponent().lastPathComponent)")
+                    .accessibilityLabel("Up one folder")
+                if !embedded {
                     navButton("house", action: onClose)
+                        .keyboardShortcut("h", modifiers: [.command, .shift])
                         .help("Home: the Downloads list")
                         .accessibilityLabel("Home")
-                        .keyboardShortcut("h", modifiers: [.command, .shift])
                 }
-                .padding(3)
-                .glassEffect(.regular, in: .capsule)
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .principal) {
                 pathBar
+                Spacer()
             }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
-            }
+            .padding(.horizontal, LayoutMetrics.margin)
+            .padding(.vertical, 6)
         }
+        .navigationTitle(embedded ? "Downloads" : current.lastPathComponent)
         .onExitCommand(perform: goBack)
         .onChange(of: current, initial: true) { _, folder in
             selection = []

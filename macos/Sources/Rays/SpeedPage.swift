@@ -1,55 +1,17 @@
 import Charts
 import SwiftUI
 
-/// The Speed page: Overview (the test, its settings and the best time) and History, with its own toolbar like the other pages.
+/// The Speed page: the test, its settings and the best time, with History as a drill-in row.
 struct SpeedPage: View {
     @Environment(EngineModel.self) private var model
-    @AppStorage("speedSection") private var section = SpeedSection.overview
-
-    enum SpeedSection: String { case overview, history }
+    @Environment(NavHistory.self) private var nav
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch section {
-                case .overview: SpeedOverview()
-                case .history: SpeedHistoryTab()
-                }
-            }
-            .navigationTitle("Speed")
-            .toolbar { toolbar }
+        Group {
+            if nav.sub == "history" { SpeedHistoryTab() } else { SpeedOverview() }
         }
+        .navigationTitle(nav.sub == "history" ? "Speed History" : "Speed")
         .task { model.loadSpeedHistory() }
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            ToolbarIconGroup {
-                ForEach([(SpeedSection.overview, "gauge.with.dots.needle.67percent", "Overview"),
-                         (SpeedSection.history, "clock.arrow.circlepath", "History")], id: \.0) { item in
-                    Button { section = item.0 } label: {
-                        ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
-                    }
-                    .buttonStyle(.plain)
-                    .help(item.2)
-                    .accessibilityAddTraits(section == item.0 ? .isSelected : [])
-                }
-            }
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) {
-            ToolbarIconGroup {
-                Button { model.testing ? model.cancelSpeedTest() : model.requestSpeedTest() } label: {
-                    ToolbarIcon(symbol: model.testing ? "stop.fill" : "play.fill", title: model.testing ? "Stop test" : "Run test",
-                                tint: model.testing ? .red : .blue)
-                }
-                .buttonStyle(.plain)
-                .disabled(model.automaticTestRunning)
-                .help(model.testing ? "Stop the speed test" : "Run a speed test")
-            }
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
     }
 }
 
@@ -57,6 +19,7 @@ struct SpeedPage: View {
 
 private struct SpeedOverview: View {
     @Environment(EngineModel.self) private var model
+    @Environment(NavHistory.self) private var nav
 
     private var progress: SpeedProgress? { model.speedProgress }
 
@@ -77,8 +40,16 @@ private struct SpeedOverview: View {
         Form {
             Section {
                 HeroCard(.speed, title: "Speed test", subtitle: subtitle, caption: model.automaticTestRunning ? "Automatic test" : nil,
-                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/speed/"))
-                    .monospacedDigit()
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/speed/")) {
+                    HeroActions {
+                        Button(model.testing ? "Stop Test" : "Run Test") {
+                            model.testing ? model.cancelSpeedTest() : model.requestSpeedTest()
+                        }
+                        .disabled(model.automaticTestRunning)
+                        .help(model.testing ? "Stop the speed test" : "Run a speed test")
+                    }
+                }
+                .monospacedDigit()
                 if let progress {
                     ProgressView(value: Double(progress.elapsedMs), total: Double(max(progress.totalMs, 1)))
                         .progressViewStyle(.linear)
@@ -86,6 +57,9 @@ private struct SpeedOverview: View {
                 }
             }
             CollapsibleSettingsCard(page: "speed", summary: "Automatic tests", inForm: true) { SpeedSettingsRows() }
+            Section {
+                DrillInRow(tile: .history, title: "History", subtitle: "Every speed test and download sample") { nav.open("history") }
+            }
             if let test = model.lastTest, !test.saved, progress == nil {
                 Section { notice(model.unsavedReason, .warning) }
             }
@@ -219,26 +193,35 @@ private struct SpeedHistoryTab: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ListControls(statuses: ["All", "Speed tests", "Downloads"], status: $filter, kind: $kind, showsKind: false,
-                         sorts: [.newest, .fastest], sort: $sort, count: shown.count, page: $page)
-            if shown.isEmpty {
-                EmptyState(symbol: "clock.arrow.circlepath", title: "No speed history yet",
-                           message: "Run a test, or download something. Rays keeps 60 days.")
-            } else {
-                List {
-                    ForEach(ListControls.page(shown, page, pageSize).enumerated().map { (id: "\(page)-\($0.offset)", sample: $0.element) }, id: \.id) { entry in
-                        let (id, sample) = (entry.id, entry.sample)
-                        row(sample)
-                            .hoverHighlight()
-                            .rowStyle()
+        if shown.isEmpty {
+            EmptyState(symbol: "clock.arrow.circlepath", title: "No speed history yet",
+                       message: "Run a test, or download something. Rays keeps 60 days.")
+        } else {
+            List {
+                Section {
+                    let samples = Array(ListControls.page(shown, page, pageSize).enumerated())
+                    ForEach(samples.map { (id: "\(page)-\($0.offset)", index: $0.offset, sample: $0.element) }, id: \.id) { entry in
+                        row(entry.sample)
+                            .cardRow(CardRowBackground.position(entry.index, of: samples.count))
+                    }
+                } header: {
+                    HStack {
+                        Text("History")
+                        Spacer()
+                        controls(.menus)
                     }
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
-                .scrollEdgeEffectStyle(.soft, for: .all)
             }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+            .scrollEdgeEffectStyle(.soft, for: .all)
+            .safeAreaInset(edge: .top, spacing: 0) { controls(.paging) }
         }
+    }
+
+    private func controls(_ part: ListControls.Part) -> some View {
+        ListControls(statuses: ["All", "Speed tests", "Downloads"], status: $filter, kind: $kind, showsKind: false,
+                     sorts: [.newest, .fastest], sort: $sort, count: shown.count, page: $page, part: part)
     }
 
     private func row(_ sample: SpeedSample) -> some View {
@@ -261,7 +244,6 @@ private struct SpeedHistoryTab: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: LayoutMetrics.rowHeight)
-        .padding(.horizontal, LayoutMetrics.hoverInset)
         .accessibilityElement(children: .combine)
     }
 }

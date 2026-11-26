@@ -5,8 +5,8 @@ struct SchedulesPage: View {
     let isDropTargeted: Bool
     let drafts: QueueDrafts
     @Environment(EngineModel.self) private var model
+    @Environment(NavHistory.self) private var nav
     @AppStorage("queueSection") private var queueSection = QueueSection.downloads
-    @State private var selected: UInt64?
     @State private var status = "All"
     @State private var sort = ListSort.nextRun
     @State private var page = 0
@@ -23,32 +23,38 @@ struct SchedulesPage: View {
     private var nothingScheduled: Bool { !model.queues.contains { $0.config.schedule != nil } }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ListControls(statuses: QueueFilter.schedules, status: $status, kind: $kind, showsKind: false,
-                             sorts: [.nextRun, .name], sort: $sort, count: shown.count, page: $page)
+        Group {
+            if let id = openQueue {
+                QueuePage(queueId: id, isDropTargeted: isDropTargeted, drafts: drafts, onDeleted: { nav.replaceSub(nil) })
+            } else {
                 list
-            }
-            .navigationTitle("Schedules")
-            .alert("New queue with a schedule", isPresented: $naming) {
-                TextField("Name", text: $newName)
-                Button("Create", action: createScheduled)
-                    .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-                Button("Cancel", role: .cancel) { newName = Self.defaultName }
-            } message: {
-                Text("It runs every day at \(SchedulerTime.hhmm(SchedulerTime.defaultStart)).")
-            }
-            .toolbar { if selected == nil { toolbar } }
-            .navigationDestination(item: $selected) { id in
-                QueuePage(queueId: id, isDropTargeted: isDropTargeted, drafts: drafts, onDeleted: { selected = nil })
-                    .toolbar { toolbar }
+                    .safeAreaInset(edge: .top, spacing: 0) { controls(.paging) }
+                    .navigationTitle("Schedules")
             }
         }
+        .alert("New queue with a schedule", isPresented: $naming) {
+            TextField("Name", text: $newName)
+            Button("Create", action: createScheduled)
+                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button("Cancel", role: .cancel) { newName = Self.defaultName }
+        } message: {
+            Text("It runs every day at \(SchedulerTime.hhmm(SchedulerTime.defaultStart)).")
+        }
+    }
+
+    private var openQueue: UInt64? {
+        guard let sub = nav.sub, sub.hasPrefix("queue:") else { return nil }
+        return UInt64(sub.dropFirst("queue:".count))
+    }
+
+    private func controls(_ part: ListControls.Part) -> some View {
+        ListControls(statuses: QueueFilter.schedules, status: $status, kind: $kind, showsKind: false,
+                     sorts: [.nextRun, .name], sort: $sort, count: shown.count, page: $page, part: part)
     }
 
     private var heroSubtitle: String {
         nothingScheduled
-            ? "Nothing scheduled yet. Add a schedule to a queue below, or use + in the toolbar."
+            ? "Nothing scheduled yet. Add a schedule to a queue below, or use New Schedule above."
             : "Start queues at set times, optionally waiting for Wi-Fi, power or an idle Mac."
     }
 
@@ -56,8 +62,10 @@ struct SchedulesPage: View {
         List {
             Section {
                 HeroCard(.schedules, title: "Schedules", subtitle: heroSubtitle,
-                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues#schedules"))
-                    .cardRow(.only)
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues#schedules")) {
+                    HeroActions { Menu("New Schedule") { addMenu } }
+                }
+                .cardRow(.only)
             }
             CollapsibleSettingsCard(page: "schedules", summary: "Wake permission") {
                 WakePermissionRow().cardRow(.last, separatorInset: TileSize.row + 10)
@@ -68,13 +76,13 @@ struct SchedulesPage: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardRowMinHeight)
                         .cardRow(.only)
-                }
+                } header: { header("Schedules", controls: true) }
             }
             if !upcoming.isEmpty {
-                Section { ForEach(Array(upcoming.enumerated()), id: \.element.id) { scheduled($1, $0, of: upcoming.count) } } header: { header("Upcoming") }
+                Section { ForEach(Array(upcoming.enumerated()), id: \.element.id) { scheduled($1, $0, of: upcoming.count) } } header: { header("Upcoming", controls: true) }
             }
             if !paused.isEmpty {
-                Section { ForEach(Array(paused.enumerated()), id: \.element.id) { scheduled($1, $0, of: paused.count) } } header: { header("Paused") }
+                Section { ForEach(Array(paused.enumerated()), id: \.element.id) { scheduled($1, $0, of: paused.count) } } header: { header("Paused", controls: upcoming.isEmpty) }
             }
             if !unscheduled.isEmpty {
                 Section {
@@ -97,7 +105,7 @@ struct SchedulesPage: View {
                         }
                         .cardRow(CardRowBackground.position(index, of: unscheduled.count))
                     }
-                } header: { header("Not scheduled") }
+                } header: { header("Not scheduled", controls: upcoming.isEmpty && paused.isEmpty) }
             }
         }
         .listStyle(.inset)
@@ -106,8 +114,12 @@ struct SchedulesPage: View {
         .scrollEdgeEffectStyle(.soft, for: .all)
     }
 
-    private func header(_ title: String) -> some View {
-        Text(title).font(.headline).foregroundStyle(.primary).padding(.leading, LayoutMetrics.hoverInset)
+    private func header(_ title: String, controls showControls: Bool) -> some View {
+        HStack {
+            Text(title).font(.headline).foregroundStyle(.primary).padding(.leading, LayoutMetrics.hoverInset)
+            Spacer()
+            if showControls { controls(.menus) }
+        }
     }
 
     private func scheduled(_ queue: QueueView, _ index: Int, of count: Int) -> some View {
@@ -135,7 +147,7 @@ struct SchedulesPage: View {
 
     private func open(_ id: UInt64) {
         queueSection = .schedule
-        selected = id
+        nav.open("queue:\(id)")
     }
 
     private var dailySchedule: QueueSchedule? { SchedulerTime.schedule(for: .daily, keeping: nil) }
@@ -171,19 +183,5 @@ struct SchedulesPage: View {
             Divider()
         }
         Button("New queue with a schedule…") { naming = true }
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            ToolbarIconGroup {
-                Menu { addMenu } label: { ToolbarIcon(symbol: "plus", title: "New schedule") }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .menuIndicator(.hidden)
-                    .help("New schedule")
-            }
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
     }
 }

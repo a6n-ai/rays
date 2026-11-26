@@ -78,7 +78,6 @@ struct ShortcutsPage: View {
             .formStyle(.grouped)
             .buttonStyle(.glass)
             .navigationTitle("Shortcuts")
-            .toolbar { ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() } }
         }
     }
 

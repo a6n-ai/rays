@@ -13,7 +13,7 @@ struct BucketsForm: View {
     @State private var pathStyle = false
     @State private var adding = false
     @State private var error: String?
-    @AppStorage("cloudTab") private var cloudTab: CloudTab = .buckets
+    @Environment(NavHistory.self) private var nav
     @AppStorage("cloudPlace") private var cloudPlace = ""
 
     private var preset: ProviderPreset? { model.providers.first { $0.id == providerID } }
@@ -31,7 +31,12 @@ struct BucketsForm: View {
             Section {
                 HeroCard(.cloud, title: "Cloud",
                          subtitle: "Browse buckets on S3-compatible storage like folders, and download from them.",
-                         learnMore: URL(string: "https://rays.a6n.ai/docs/s3/"))
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/s3/")) {
+                    HeroActions {
+                        Button("Refresh") { Task { await model.loadCloudLogins(force: true) } }
+                            .help("Ask the aws and cf commands again")
+                    }
+                }
             }
 
             CollapsibleSettingsCard(page: "cloud", summary: "Add a bucket, AWS, Cloudflare", startsOpen: model.buckets.isEmpty, inForm: true) {
@@ -40,6 +45,12 @@ struct BucketsForm: View {
                 CloudflareRows()
             }
 
+            if !model.buckets.isEmpty {
+                Section {
+                    DrillInRow(tile: .cloud, title: "Browse", subtitle: "Open buckets like folders") { nav.open("browse") }
+                    DrillInRow(tile: .downloads, title: "Cloud downloads", subtitle: "Downloads from your buckets") { nav.open("downloads") }
+                }
+            }
             Section("Buckets") {
                 if model.buckets.isEmpty {
                     Text("No buckets yet. Open Settings above to add one, then browse it.")
@@ -51,7 +62,7 @@ struct BucketsForm: View {
                     } trailing: {
                         RowIcon("folder", "Browse \(bucket.name)", tint: .blue) {
                             cloudPlace = "b:" + bucket.name
-                            cloudTab = .browse
+                            nav.open("browse")
                         }
                         RowIcon("trash", "Remove \(bucket.name)", tint: .red) { remove(bucket.name) }
                     }

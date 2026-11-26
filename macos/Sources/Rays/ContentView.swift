@@ -12,6 +12,7 @@ struct ContentView: View {
     /// Links taken from the current drag. A browser drop can carry both a URL and a String for the same link.
     @State private var droppedLinks = Set<String>()
     @State private var query = ""
+    @State private var nav = NavHistory()
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -50,6 +51,7 @@ struct ContentView: View {
                     } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
                         destination = .folder(URL(filePath: path, directoryHint: .isDirectory))
                     }
+                    nav.visit(destination)
                 }
                 .onChange(of: model.pendingAdd) { _, new in if new != nil { destination = .downloads } }
                 .onChange(of: model.requestedDestination) { _, new in
@@ -58,6 +60,7 @@ struct ContentView: View {
                     model.requestedDestination = nil
                 }
                 .onChange(of: destination) { _, new in
+                    nav.visit(new)
                     switch new {
                     case .folder(let url)?: lastFolder = url.path(percentEncoded: false)
                     case .sorter?: lastFolder = "sorter"
@@ -77,6 +80,12 @@ struct ContentView: View {
                 }
         } detail: {
             detail
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        NavButtons { destination = $0.destination }
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                }
                 // Animations stay on the overlays: on `detail` they would animate the Lists' row diffs, which crashed
                 // inside AppKit's table updates (NSGestureRecognizer detach on a torn-down row, 0.1.24).
                 .overlay(alignment: .top) {
@@ -89,6 +98,7 @@ struct ContentView: View {
                         .animation(reduceMotion ? nil : .smooth, value: QueueActions.shared.countdown != nil)
                 }
         }
+        .environment(nav)
         .containerBackground(.thinMaterial, for: .window)
         .frame(minWidth: 640, idealWidth: 760, minHeight: 560, idealHeight: 720)
         .overlay {
@@ -185,57 +195,35 @@ struct ContentView: View {
     }
 }
 
-/// The speed limit, clear and open buttons. Shared by the Downloads list and the folder views.
-struct ToolbarActions: View {
+/// The Downloads hero's buttons: Clear Finished, and a ••• menu with the speed limit and the folder.
+struct DownloadsHeroActions: View {
     @Environment(EngineModel.self) private var model
-    @Environment(\.openSettings) private var openSettings
     @AppStorage(SettingsKey.speedLimit) private var speedLimit = 0
 
     private var hasFinished: Bool { model.jobs.contains(where: \.isDone) }
 
     var body: some View {
-        ToolbarIconGroup {
-            Menu {
-                speedMenuItems
-            } label: {
-                ToolbarIcon(
-                    symbol: speedLimit > 0 ? "tortoise" : "hare", title: speedLimit > 0 ? "Speed limited" : "No speed limit",
-                    tint: speedLimit > 0 ? .orange : .teal)
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .help(speedLimit > 0 ? "Speed limited to \(SpeedPreset.text(speedLimit))" : "Limit download speed")
-            Button(action: clearFinished) {
-                ToolbarIcon(symbol: "eraser", title: "Clear finished", tint: hasFinished ? .pink : .secondary)
-            }
-            .buttonStyle(.plain)
-            .disabled(!hasFinished)
-            .help("Remove finished downloads from the list. Files stay on disk.")
-            Button {
-                NSWorkspace.shared.open(EngineModel.downloadsURL)
-            } label: {
-                ToolbarIcon(symbol: "folder", title: "Open Downloads folder", tint: .blue)
-            }
-            .buttonStyle(.plain)
-            .help("Open the Downloads folder in Finder")
-        }
-    }
-
-    @ViewBuilder private var speedMenuItems: some View {
-        ForEach(SpeedPreset.all) { preset in
-            Button {
-                model.setSpeedLimit(preset.bytes)
-            } label: {
-                if preset.bytes == speedLimit {
-                    Label(preset.title, systemImage: "checkmark")
-                } else {
-                    Text(preset.title)
+        HeroActions {
+            Button("Clear Finished", action: clearFinished)
+                .disabled(!hasFinished)
+                .help("Remove finished downloads from the list. Files stay on disk.")
+            HeroMenu {
+                Menu(speedLimit > 0 ? "Speed limited to \(SpeedPreset.text(speedLimit))" : "Speed limit") {
+                    ForEach(SpeedPreset.all) { preset in
+                        Button {
+                            model.setSpeedLimit(preset.bytes)
+                        } label: {
+                            if preset.bytes == speedLimit {
+                                Label(preset.title, systemImage: "checkmark")
+                            } else {
+                                Text(preset.title)
+                            }
+                        }
+                    }
                 }
+                Button("Open Downloads Folder in Finder") { NSWorkspace.shared.open(EngineModel.downloadsURL) }
             }
         }
-        Divider()
-        Button("Settings…") { openSettings() }
     }
 
     private func clearFinished() {
@@ -332,20 +320,6 @@ private struct DropPanel: View {
     }
 }
 
-
-/// Round glass gear, the last item of every page's toolbar, mirroring the sidebar toggle on the left.
-/// It lives in the content toolbar: in the sidebar's toolbar it fought the sidebar search field for
-/// space and rebuilt the toolbar in a loop (100% CPU).
-struct SettingsToolbarButton: View {
-    @Environment(\.openSettings) private var openSettings
-
-    var body: some View {
-        Button { openSettings() } label: {
-            Label("Settings", systemImage: "gearshape")
-        }
-        .help("Settings (⌘,)")
-    }
-}
 
 extension Notification.Name {
     static let focusAddBar = Notification.Name("ai.a6n.rays.focusAddBar")

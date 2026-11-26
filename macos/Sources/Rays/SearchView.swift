@@ -72,7 +72,6 @@ struct SearchView: View {
             }
         }
         .navigationTitle("Search")
-        .toolbar { ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() } }
         .navigationSubtitle(total == 1 ? "1 result" : "\(total) results")
         .task(id: query) { await searchFiles() }
     }

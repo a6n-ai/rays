@@ -36,7 +36,6 @@ struct StatsPage: View {
             }
             .formStyle(.grouped)
             .navigationTitle("Stats")
-            .toolbar { ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() } }
         }
         .task(id: days) { stats = model.stats(days: UInt32(days)) }
     }

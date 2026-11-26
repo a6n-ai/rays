@@ -2,74 +2,46 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum CloudTab: String { case browse, buckets, downloads }
-
 /// The Cloud page: browse providers and buckets like Finder, manage buckets, and cloud downloads.
 struct CloudView: View {
     @Environment(EngineModel.self) private var model
-    @AppStorage("cloudTab") private var tab: CloudTab = .buckets
+    @Environment(NavHistory.self) private var nav
     /// "" is the top level, "p:<provider>" a provider's buckets, "b:<bucket>" inside a bucket.
     @AppStorage("cloudPlace") private var place = ""
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @State private var reload = 0
 
-    private var shown: CloudTab { model.buckets.isEmpty ? .buckets : tab }
+    /// "browse" and "downloads" are drill-ins from the buckets page; with no buckets there is only the page.
+    private var shown: String { model.buckets.isEmpty ? "buckets" : (nav.sub ?? "buckets") }
 
     var body: some View {
         Group {
             switch shown {
-            case .browse: CloudBrowser(place: $place, layout: layout, reload: reload)
-            case .buckets: BucketsForm()
-            case .downloads: CloudDownloads()
+            case "browse":
+                CloudBrowser(place: $place, layout: layout, reload: reload)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        ViewBar {
+                            Button { layout = layout == .table ? .icons : .table } label: {
+                                Label(layout == .table ? "Show as icons" : "Show as list",
+                                      systemImage: layout == .table ? "square.grid.2x2" : "list.bullet")
+                            }
+                            Button { reload += 1 } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                                .help("List this folder again")
+                        }
+                    }
+            case "downloads": CloudDownloads()
+            default: BucketsForm()
             }
         }
-        .navigationTitle("Rays")
+        .navigationTitle(shown == "browse" ? "Browse Cloud" : shown == "downloads" ? "Cloud Downloads" : "Cloud")
         .navigationSubtitle(subtitle)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                ToolbarIconGroup {
-                    ForEach([(CloudTab.buckets, "cloud", "Cloud"),
-                             (CloudTab.browse, "folder", "Browse"),
-                             (CloudTab.downloads, "clock.arrow.circlepath", "Cloud downloads")], id: \.0) { item in
-                        Button { tab = item.0 } label: {
-                            ToolbarIcon(symbol: item.1, title: item.2, selected: shown == item.0)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.buckets.isEmpty && item.0 != .buckets)
-                        .help(item.2)
-                        .accessibilityAddTraits(shown == item.0 ? .isSelected : [])
-                    }
-                }
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) {
-                ToolbarIconGroup {
-                    if shown == .browse {
-                        Button { layout = layout == .table ? .icons : .table } label: {
-                            ToolbarIcon(symbol: layout == .table ? "square.grid.2x2" : "list.bullet",
-                                        title: layout == .table ? "Show as icons" : "Show as list")
-                        }
-                        .buttonStyle(.plain)
-                        .help(layout == .table ? "Show as icons" : "Show as list")
-                    }
-                    Button {
-                        if shown == .buckets { Task { await model.loadCloudLogins(force: true) } } else { reload += 1 }
-                    } label: { ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh") }
-                        .buttonStyle(.plain)
-                        .disabled(shown == .downloads)
-                        .help(shown == .buckets ? "Ask the aws and cf commands again" : "List this folder again")
-                }
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
-        }
     }
 
     private var subtitle: String {
         switch shown {
-        case .browse: "Cloud"
-        case .buckets: model.buckets.count == 1 ? "Cloud: 1 bucket" : "Cloud: \(model.buckets.count) buckets"
-        case .downloads: "Cloud downloads"
+        case "browse": "Cloud"
+        case "downloads": "Cloud downloads"
+        default: model.buckets.count == 1 ? "Cloud: 1 bucket" : "Cloud: \(model.buckets.count) buckets"
         }
     }
 }

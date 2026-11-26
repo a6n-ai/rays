@@ -18,13 +18,11 @@ extension SorterFolder {
     }
 }
 
-enum SorterTab: String { case files, recent }
-
 struct SorterView: View {
     @State private var model: SorterModel
 
     @State private var confirmRemoveAll = false
-    @AppStorage("sorterTab") private var tab: SorterTab = .recent
+    @Environment(NavHistory.self) private var nav
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @State private var removing: SorterFolder?
     @State private var recentKind = FileKind.all
@@ -64,8 +62,20 @@ struct SorterView: View {
             Section {
                 HeroCard(.sorter, title: "Sorter",
                          subtitle: "Rays files new downloads into folders by what is inside them, using on-device AI.",
-                         learnMore: Self.docs)
-                    .cardRow(.only)
+                         learnMore: Self.docs) {
+                    HeroActions {
+                        Button("Add Folder…", action: chooseFolder)
+                            .disabled(model.busy || model.loadFailed)
+                            .help("Add a folder to sort")
+                        Button("Sort All Now") { Task { await sortAll() } }
+                            .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
+                            .help(AIReadinessStore.shared.value.isReady ? "Sort new files in every watched folder now" : AIReadinessStore.shared.value.title)
+                        HeroMenu {
+                            Button("Refresh") { Task { await model.refresh() } }
+                        }
+                    }
+                }
+                .cardRow(.only)
             }
             if let error = model.error {
                 Section { ErrorLine(text: error).listRowBackground(Color.clear) }
@@ -77,6 +87,10 @@ struct SorterView: View {
                 AIStatusRow().cardRow(.middle)
                 SortDelayRow(sorter: model).cardRow(.middle)
                 RenameRow(sorter: model).cardRow(.last)
+            }
+            Section {
+                DrillInRow(tile: .folder, title: "Sorted files", subtitle: "Browse what the sorter has filed") { nav.open("files") }
+                    .cardRow(.only)
             }
             Section("Watched folders") {
                 ForEach(Array(folderRows.enumerated()), id: \.element.id) { index, kind in
@@ -172,7 +186,7 @@ struct SorterView: View {
         case .empty:
             Text("No folders yet.").foregroundStyle(.secondary).frame(minHeight: LayoutMetrics.cardRowMinHeight)
         case .folder(let folder):
-            NavigationLink(value: folder.path) {
+            Button { nav.open("folder:" + folder.path) } label: {
                 CardRow(title: folder.name,
                         subtitle: folder.needsUpdate ? "Old copy, needs update" : folder.watching ? "Sorting new files" : "Paused",
                         status: folder.needsUpdate ? .warning : folder.watching ? .ok : .off) {
@@ -194,6 +208,7 @@ struct SorterView: View {
                     CardChevron()
                 }
             }
+            .buttonStyle(.plain)
         case .add:
             addRow("Add Folder…", action: chooseFolder).disabled(model.busy || model.loadFailed)
         case .quick(let url):
@@ -230,94 +245,59 @@ struct SorterView: View {
     private var watchedCount: Int { model.status?.folders.filter(\.watching).count ?? 0 }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if tab == .files { SorterFilesTable(model: model) } else { recentList }
-            }
-            .confirmationDialog("Remove \(removing.map { URL(filePath: $0.path).lastPathComponent } ?? "this folder") from the sorter?",
-                                isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
-                                titleVisibility: .visible) {
-                Button("Remove Folder", role: .destructive) {
-                    if let folder = removing { Task { await model.remove(folder) } }
-                    removing = nil
-                }
-                Button("Cancel", role: .cancel) { removing = nil }
-            } message: {
-                Text("Files already sorted stay where they are.")
-            }
-            .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
-                                titleVisibility: .visible) {
-                Button("Remove Sorter", role: .destructive) {
-                    Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Files already sorted stay where they are.")
-            }
-            .scrollContentBackground(.hidden)
-            // Same title and toolbar skeleton as Downloads, so switching pages doesn't jump.
-            .navigationTitle("Rays")
-            .navigationSubtitle(watchedCount == 1 ? "Sorter: 1 folder watched" : "Sorter: \(watchedCount) folders watched")
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    ToolbarIconGroup {
-                        ForEach([(SorterTab.recent, "clock.arrow.circlepath", "Sorter"),
-                                 (SorterTab.files, "folder", "Sorted files")], id: \.0) { item in
-                            Button { tab = item.0 } label: {
-                                ToolbarIcon(symbol: item.1, title: item.2, selected: tab == item.0)
-                            }
-                            .buttonStyle(.plain)
-                            .help(item.2)
-                            .accessibilityAddTraits(tab == item.0 ? .isSelected : [])
-                        }
-                    }
-                }
-                .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) {
-                    ToolbarIconGroup {
-                        Button(action: chooseFolder) {
-                            ToolbarIcon(symbol: "folder.badge.plus", title: "Add folder")
-                        }
-                        .buttonStyle(.plain)
-                        .help("Add a folder to sort")
-                        Button { Task { await sortAll() } } label: {
-                            ToolbarIcon(symbol: "wand.and.stars", title: "Sort all now",
-                                        tint: AIReadinessStore.shared.value.isReady ? .purple : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
-                        .help(AIReadinessStore.shared.value.isReady ? "Sort new files in every watched folder now" : AIReadinessStore.shared.value.title)
-                        if tab == .files {
+        Group {
+            if let sub = nav.sub, sub.hasPrefix("folder:") {
+                SorterFolderPage(model: model, path: String(sub.dropFirst("folder:".count)))
+            } else if let sub = nav.sub, sub.hasPrefix("sorted:") {
+                SortedBrowserPage(folder: URL(filePath: String(sub.dropFirst("sorted:".count)), directoryHint: .isDirectory))
+            } else if nav.sub == "files" {
+                SorterFilesTable(model: model)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        ViewBar {
                             Button { layout = layout == .table ? .icons : .table } label: {
-                                ToolbarIcon(symbol: layout == .table ? "square.grid.2x2" : "list.bullet",
-                                            title: layout == .table ? "Show as icons" : "Show as list")
+                                Label(layout == .table ? "Show as icons" : "Show as list",
+                                      systemImage: layout == .table ? "square.grid.2x2" : "list.bullet")
                             }
-                            .buttonStyle(.plain)
-                            .help(layout == .table ? "Show as icons" : "Show as list")
+                            Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                                .help("Check folders and recent activity again")
                         }
-                        Button { Task { await model.refresh() } } label: {
-                            ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh")
-                        }
-                        .buttonStyle(.plain)
-                        .help("Check folders and recent activity again")
                     }
-                }
-                .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
+                    .navigationTitle("Sorted Files")
+            } else {
+                recentList
+                    .navigationTitle("Sorter")
             }
-            .navigationDestination(for: URL.self) { url in SortedBrowserPage(folder: url) }
-            .navigationDestination(for: String.self) { path in
-                SorterFolderPage(model: model, path: path)
+        }
+        .confirmationDialog("Remove \(removing.map { URL(filePath: $0.path).lastPathComponent } ?? "this folder") from the sorter?",
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                            titleVisibility: .visible) {
+            Button("Remove Folder", role: .destructive) {
+                if let folder = removing { Task { await model.remove(folder) } }
+                removing = nil
             }
-            .task {
-                while !Task.isCancelled {
-                    await model.refresh()
-                    try? await Task.sleep(for: .seconds(30))
-                }
+            Button("Cancel", role: .cancel) { removing = nil }
+        } message: {
+            Text("Files already sorted stay where they are.")
+        }
+        .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
+                            titleVisibility: .visible) {
+            Button("Remove Sorter", role: .destructive) {
+                Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                Task { await model.refresh() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Files already sorted stay where they are.")
+        }
+        .scrollContentBackground(.hidden)
+        .navigationSubtitle(watchedCount == 1 ? "Sorter: 1 folder watched" : "Sorter: \(watchedCount) folders watched")
+        .task {
+            while !Task.isCancelled {
+                await model.refresh()
+                try? await Task.sleep(for: .seconds(30))
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.refresh() }
         }
     }
 

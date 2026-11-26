@@ -5,7 +5,7 @@ struct SorterFolderPage: View {
     let model: SorterModel
     let path: String
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(NavHistory.self) private var nav
     @State private var confirmingRemoval = false
     @AppStorage("sorterShowDestinations") private var showDestinations = false
 
@@ -21,6 +21,20 @@ struct SorterFolderPage: View {
         let readiness = AIReadinessStore.shared.value
         let categories = model.status?.categories ?? []
         return Form {
+            Section {
+                HeroCard(.folder, title: folder.name, subtitle: URL(filePath: folder.path).tildePath) {
+                    HeroActions {
+                        Button("Sort Now") { Task { await model.sortNow(folder) } }
+                            .disabled(model.busy || model.loadFailed || !readiness.isReady)
+                            .help(readiness.isReady ? "Sort new files in \(folder.name) now" : readiness.title)
+                        Button("Show in Finder") { NSWorkspace.shared.open(URL(filePath: folder.path)) }
+                            .help("Show \(folder.name) in Finder")
+                        HeroMenu {
+                            Button("Refresh") { Task { await model.refresh() } }
+                        }
+                    }
+                }
+            }
             if let error = model.error {
                 Section { ErrorLine(text: error) }
             }
@@ -78,31 +92,6 @@ struct SorterFolderPage: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .navigationTitle(folder.name)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                ToolbarIconGroup {
-                    Button { Task { await model.sortNow(folder) } } label: {
-                        ToolbarIcon(symbol: "wand.and.stars", title: "Sort now",
-                                    tint: readiness.isReady ? .purple : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(model.busy || model.loadFailed || !readiness.isReady)
-                    .help(readiness.isReady ? "Sort new files in \(folder.name) now" : readiness.title)
-                    Button { NSWorkspace.shared.open(URL(filePath: folder.path)) } label: {
-                        ToolbarIcon(symbol: "folder", title: "Show in Finder", tint: .blue)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Show \(folder.name) in Finder")
-                    Button { Task { await model.refresh() } } label: {
-                        ToolbarIcon(symbol: "arrow.clockwise", title: "Refresh")
-                    }
-                    .buttonStyle(.plain)
-                    .help("Check this folder again")
-                }
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
-        }
         .confirmationDialog(
             "Stop sorting \(folder.name)?",
             isPresented: $confirmingRemoval,
@@ -111,7 +100,7 @@ struct SorterFolderPage: View {
             Button("Remove Folder", role: .destructive) {
                 Task {
                     await model.remove(folder)
-                    if model.error == nil { dismiss() }
+                    if model.error == nil { nav.replaceSub(nil) }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -186,19 +175,18 @@ private struct CategoryRow: View {
 struct SorterFilesTable: View {
     let model: SorterModel
 
+    @Environment(NavHistory.self) private var nav
     @AppStorage("sortedBrowserLayout") private var layout: SortedLayout = .finderDefault
     @State private var items: [SortedItem] = []
-    @State private var pushed: URL?
 
     var body: some View {
-        SortedItemsView(items: items, layout: layout) { pushed = $0 }
+        SortedItemsView(items: items, layout: layout) { nav.open("sorted:" + $0.path(percentEncoded: false)) }
             .overlay {
                 if items.isEmpty {
                     ContentUnavailableView("No folders yet", systemImage: "folder",
                                            description: Text("Add a folder in Setup to see its sorted files here."))
                 }
             }
-            .navigationDestination(item: $pushed) { SortedBrowserPage(folder: $0) }
             .task(id: model.status?.folders.map(\.path)) {
                 let paths = (model.status?.folders ?? []).map { URL(filePath: $0.path) }
                 items = await Task.detached {

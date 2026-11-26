@@ -7,7 +7,7 @@ struct DownloadsView: View {
     let isDropTargeted: Bool
     /// nil is every download; a queue id shows only that queue, with its header.
     var queue: UInt64? = nil
-    @AppStorage("downloadsSection") private var section = DownloadsSection.recent
+    @Environment(NavHistory.self) private var nav
     @State private var status = "All"
     @State private var kind = FileKind.all
     @State private var sort = ListSort.newest
@@ -20,8 +20,7 @@ struct DownloadsView: View {
 
     @State private var sorter = SorterModel()
 
-    /// The same two pages on every view: recent activity, then the files. A stored "settings" falls back to recent.
-    enum DownloadsSection: String { case recent, files }
+    private enum DownloadsSection { case recent, files }
 
     private var inQueue: [JobView] { model.jobs.filter { queue == nil || $0.queueId == queue } }
     private var queueView: QueueView? { model.queues.first { $0.id == queue } }
@@ -31,15 +30,14 @@ struct DownloadsView: View {
     private var selectedJobs: [JobView] { model.jobs.filter { selection.contains($0.id) } }
 
     var body: some View {
-        pageView(queue == nil ? section : .recent)
+        pageView(queue == nil && nav.sub == "files" ? .files : .recent)
             .safeAreaInset(edge: .top) { ExtensionBanner() }
             .safeAreaInset(edge: .bottom) {
                 AddBar(isTargeted: isDropTargeted, defaultQueue: queue ?? 0)
                     .disabled(model.startError != nil)
             }
-            .navigationTitle(queueView?.config.name ?? "Rays")
+            .navigationTitle(queueView?.config.name ?? "Downloads")
             .navigationSubtitle(subtitle)
-            .toolbar { toolbar }
             .onAppear { watcher.watch(EngineModel.downloadsURL) { model.foldersChanged() } }
             .onDisappear { watcher.stop() }
             .confirmationDialog(
@@ -101,7 +99,7 @@ struct DownloadsView: View {
                 if queue == nil {
                     Section {
                         HeroCard(.downloads, title: "Downloads", subtitle: subtitle.isEmpty ? "Everything you download, in one place." : subtitle,
-                                 learnMore: URL(string: "https://rays.a6n.ai/docs/app/downloads/"))
+                                 learnMore: URL(string: "https://rays.a6n.ai/docs/app/downloads/")) { DownloadsHeroActions() }
                             .cardRow(.only)
                     }
                     CollapsibleSettingsCard(page: "downloads", summary: "Save folder, notifications, limits") {
@@ -113,6 +111,12 @@ struct DownloadsView: View {
                         settingsRow(SpeedLimitRow(), .middle)
                         settingsRow(UnpackSettingsRows(), .middle)
                         settingsRow(ReplaceExistingRow(), .last)
+                    }
+                }
+                if queue == nil {
+                    Section {
+                        DrillInRow(tile: .folder, title: "Files", subtitle: "Browse the Downloads folder") { nav.open("files") }
+                            .cardRow(.only)
                     }
                 }
                 Section {
@@ -166,30 +170,6 @@ struct DownloadsView: View {
             .frame(maxWidth: .infinity, minHeight: 120)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        if queue == nil {
-            ToolbarItem(placement: .principal) {
-                ToolbarIconGroup {
-                    ForEach([(DownloadsSection.recent, "clock.arrow.circlepath", "Recent downloads"),
-                             (DownloadsSection.files, "folder", "Downloads folder")], id: \.0) { item in
-                        Button { section = item.0 } label: {
-                            ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
-                        }
-                        .buttonStyle(.plain)
-                        .help(item.2)
-                        .accessibilityAddTraits(section == item.0 ? .isSelected : [])
-                    }
-                }
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) {
-                ToolbarActions()
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
-        }
     }
 
     private var subtitle: String {
