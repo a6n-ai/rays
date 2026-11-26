@@ -1,12 +1,12 @@
 import Charts
 import SwiftUI
 
-/// The Speed page: Overview (the test and the best time), History and Settings, with its own toolbar like the other pages.
+/// The Speed page: Overview (the test, its settings and the best time) and History, with its own toolbar like the other pages.
 struct SpeedPage: View {
     @Environment(EngineModel.self) private var model
     @AppStorage("speedSection") private var section = SpeedSection.overview
 
-    enum SpeedSection: String { case overview, history, settings }
+    enum SpeedSection: String { case overview, history }
 
     var body: some View {
         NavigationStack {
@@ -14,7 +14,6 @@ struct SpeedPage: View {
                 switch section {
                 case .overview: SpeedOverview()
                 case .history: SpeedHistoryTab()
-                case .settings: SpeedSettingsTab()
                 }
             }
             .navigationTitle("Speed")
@@ -27,8 +26,7 @@ struct SpeedPage: View {
         ToolbarItem(placement: .principal) {
             ToolbarIconGroup {
                 ForEach([(SpeedSection.overview, "gauge.with.dots.needle.67percent", "Overview"),
-                         (SpeedSection.history, "clock.arrow.circlepath", "History"),
-                         (SpeedSection.settings, "slider.horizontal.3", "Settings")], id: \.0) { item in
+                         (SpeedSection.history, "clock.arrow.circlepath", "History")], id: \.0) { item in
                     Button { section = item.0 } label: {
                         ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
                     }
@@ -76,52 +74,35 @@ private struct SpeedOverview: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
-            header
-            if let progress {
-                ProgressView(value: Double(progress.elapsedMs), total: Double(max(progress.totalMs, 1)))
-                    .progressViewStyle(.linear)
-                    .tint(.teal)
-                    .padding(.horizontal, LayoutMetrics.margin)
-            }
-            ScrollView {
-                VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
-                    if let test = model.lastTest, !test.saved, progress == nil {
-                        Text(model.unsavedReason)
-                            .font(.callout)
-                            .foregroundStyle(.orange)
-                    }
-                    if let error = model.speedError { Text(error).font(.callout).foregroundStyle(.red) }
-                    if !model.liveSamples.isEmpty { LiveChart(samples: model.liveSamples) }
-                    Text("Best time").font(.headline).padding(.top, 4)
-                    recommendation
+        Form {
+            Section {
+                HeroCard(.speed, title: "Speed test", subtitle: subtitle, caption: model.automaticTestRunning ? "Automatic test" : nil,
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/speed/"))
+                    .monospacedDigit()
+                if let progress {
+                    ProgressView(value: Double(progress.elapsedMs), total: Double(max(progress.totalMs, 1)))
+                        .progressViewStyle(.linear)
+                        .tint(TilePalette.teal)
                 }
-                .frame(maxWidth: 640, alignment: .leading)
-                .padding(.horizontal, LayoutMetrics.margin)
-                .padding(.bottom, LayoutMetrics.margin)
-                .frame(maxWidth: .infinity)
             }
+            CollapsibleSettingsCard(page: "speed") { SpeedSettingsRows() }
+            if let test = model.lastTest, !test.saved, progress == nil {
+                Section { notice(model.unsavedReason, .warning) }
+            }
+            if let error = model.speedError { Section { notice(error, .error) } }
+            if !model.liveSamples.isEmpty {
+                Section { ChartCard<Int, _>("Speed during the test") { LiveChart(samples: model.liveSamples) } }
+            }
+            bestTime
         }
+        .formStyle(.grouped)
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: LayoutMetrics.gap) {
-            IconTile(.speed, size: TileSize.hero)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Speed test").font(.title2.weight(.semibold))
-                Text(subtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                if model.automaticTestRunning {
-                    Text("Automatic test").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
+    private func notice(_ text: String, _ kind: StatusDot.Kind) -> some View {
+        HStack(spacing: 6) {
+            StatusDot(kind)
+            Text(text).font(.callout).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, LayoutMetrics.margin)
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .combine)
     }
 
     /// The network the last test ran on, if its sample is still in the history.
@@ -129,22 +110,39 @@ private struct SpeedOverview: View {
         model.speedHistory.first { $0.source == .test && $0.at == test.at }?.network
     }
 
-    @ViewBuilder private var recommendation: some View {
+    @ViewBuilder private var bestTime: some View {
         switch model.bestTime {
         case .window(let start, let end, _, let days, _)?:
-            Text("Usually fastest \(SchedulerTime.hhmm(start))–\(SchedulerTime.hhmm(end)) · \(days) days")
-                .foregroundStyle(.secondary)
-            HourlyChart(hourly: model.hourly, start: Int(start), end: Int(end))
+            Section {
+                ChartCard<Int, _>("Best time") { HourlyChart(hourly: model.hourly, start: Int(start), end: Int(end)) }
+                Text("Usually fastest \(SchedulerTime.hhmm(start))–\(SchedulerTime.hhmm(end)) · \(days) days")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
         case .notEnoughData(let days, let needed)?:
-            EmptyState(symbol: "chart.bar", title: "Not enough data yet",
-                       message: "\(days) of \(needed) days. Rays learns from your downloads and speed tests.")
-                .frame(height: 220)
-            if model.speedSettings.nightPromptAnswered && !model.nightWeekActive {
-                Button("Test at night for a week") { model.startNightWeek() }
-                    .frame(maxWidth: .infinity)
+            Section("Best time") {
+                EmptyState(symbol: "chart.bar", title: "Not enough data yet",
+                           message: "\(days) of \(needed) days. Rays learns from your downloads and speed tests.")
+                    .frame(height: 220)
+                if model.speedSettings.nightPromptAnswered && !model.nightWeekActive {
+                    Button("Test at night for a week") { model.startNightWeek() }
+                        .frame(maxWidth: .infinity)
+                }
             }
         case nil:
             EmptyView()
+        }
+    }
+}
+
+/// The Y axis of every chart in a card: trailing side, hairline grid, small secondary labels.
+@AxisContentBuilder
+func trailingAxis(values: AxisMarkValues, format: ((AxisValue) -> String?)? = nil) -> some AxisContent {
+    AxisMarks(position: .trailing, values: values) { value in
+        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+        AxisValueLabel {
+            if let text = format?(value) ?? value.as(Double.self).map({ $0.formatted() }) {
+                Text(text).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }
@@ -158,13 +156,14 @@ private struct LiveChart: View {
             ForEach(Array(samples.enumerated()), id: \.offset) { _, point in
                 let x = Double(point.ms) / 1000
                 let y = Double(point.bps) * 8 / 1_000_000
-                AreaMark(x: .value("Seconds", x), y: .value("Mb/s", y)).foregroundStyle(Color.teal.opacity(0.15))
-                LineMark(x: .value("Seconds", x), y: .value("Mb/s", y)).foregroundStyle(Color.teal)
+                AreaMark(x: .value("Seconds", x), y: .value("Mb/s", y)).foregroundStyle(TilePalette.teal.opacity(0.15))
+                LineMark(x: .value("Seconds", x), y: .value("Mb/s", y)).foregroundStyle(TilePalette.teal)
             }
         }
-        .chartYAxis { AxisMarks(values: .automatic(desiredCount: 3)) }
+        .chartYAxis { trailingAxis(values: .automatic(desiredCount: 3)) }
         .chartXAxisLabel("seconds")
-        .frame(height: 120)
+        .chartYAxisLabel("Mb/s", position: .trailing)
+        .transaction { $0.animation = nil }
         .accessibilityLabel("Speed over the test")
     }
 }
@@ -179,7 +178,8 @@ private struct HourlyChart: View {
             ForEach(Array(hourly.enumerated()), id: \.offset) { hour, bps in
                 if let bps {
                     BarMark(x: .value("Hour", hour), y: .value("Mb/s", Double(bps) * 8 / 1_000_000))
-                        .foregroundStyle(hourInWindow(hour, start: start, end: end) ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(TilePalette.teal.opacity(hourInWindow(hour, start: start, end: end) ? 1 : 0.3))
+                        .cornerRadius(2)
                 }
             }
         }
@@ -190,8 +190,9 @@ private struct HourlyChart: View {
                 AxisValueLabel { if let hour = value.as(Int.self) { Text(String(format: "%02d", hour)) } }
             }
         }
-        .chartYAxisLabel("Mb/s")
-        .frame(height: 180)
+        .chartYAxis { trailingAxis(values: .automatic) }
+        .chartYAxisLabel("Mb/s", position: .trailing)
+        .transaction { $0.animation = nil }
         .accessibilityLabel("Typical speed by hour of day")
     }
 }
@@ -265,40 +266,32 @@ private struct SpeedHistoryTab: View {
     }
 }
 
-// MARK: Settings
+// MARK: Settings card
 
-private struct SpeedSettingsTab: View {
+private struct SpeedSettingsRows: View {
     @Environment(EngineModel.self) private var model
     @State private var confirmClear = false
 
     var body: some View {
-        Form {
-            Section {
-                Toggle("Test automatically every 3 hours",
-                       isOn: Binding(get: { model.speedSettings.autoTests }, set: { model.setAutoTests($0) }))
-            } footer: {
-                Text("Uses about 50 to 200 MB per test").font(.footnote).foregroundStyle(.tertiary)
-            }
-            Section {
-                LabeledContent("Night tests") {
-                    if let until = model.speedSettings.nightUntil, model.nightWeekActive {
-                        HStack {
-                            Text("On until " + Date(timeIntervalSince1970: TimeInterval(until)).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                                .foregroundStyle(.secondary)
-                            Button("Stop night tests") { model.stopNightWeek() }
-                        }
-                    } else {
-                        Button("Test at night for a week") { model.startNightWeek() }
-                    }
+        SettingRow(.speed, title: "Test automatically every 3 hours", hint: "Uses about 50 to 200 MB per test") {
+            Toggle("Test automatically every 3 hours",
+                   isOn: Binding(get: { model.speedSettings.autoTests }, set: { model.setAutoTests($0) }))
+                .labelsHidden()
+        }
+        SettingRow(.schedules, title: "Night tests") {
+            if let until = model.speedSettings.nightUntil, model.nightWeekActive {
+                HStack {
+                    Text("On until " + Date(timeIntervalSince1970: TimeInterval(until)).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                        .foregroundStyle(.secondary)
+                    Button("Stop night tests") { model.stopNightWeek() }
                 }
-            }
-            Section {
-                Button("Clear speed history…", role: .destructive) { confirmClear = true }
-            } footer: {
-                Text("Speed data stays on this Mac.").font(.footnote).foregroundStyle(.tertiary)
+            } else {
+                Button("Test at night for a week") { model.startNightWeek() }
             }
         }
-        .formStyle(.grouped)
+        SettingRow(.trash, title: "Speed history", hint: "Speed data stays on this Mac.") {
+            Button("Clear speed history…", role: .destructive) { confirmClear = true }
+        }
         .confirmationDialog("Clear speed history?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Clear", role: .destructive) { model.clearSpeedHistory() }
             Button("Cancel", role: .cancel) {}
