@@ -33,7 +33,6 @@ struct ActivityTab: View {
             } header: { header("History") }
         }
         .listStyle(.inset)
-        .tint(.gray)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .all)
         .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: model.runs.count, page: $page, padded: true) }

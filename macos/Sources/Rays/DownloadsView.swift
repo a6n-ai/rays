@@ -145,7 +145,6 @@ struct DownloadsView: View {
                 }
             }
             .listStyle(.inset)
-            .tint(.gray)
             .scrollContentBackground(.hidden)
             .scrollEdgeEffectStyle(.soft, for: .all)
             .focusable()

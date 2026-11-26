@@ -110,7 +110,6 @@ struct ModelsView: View {
             content
         }
         .listStyle(.inset)
-        .tint(.gray)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .all)
         .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: rest.count, page: $page, padded: true) }

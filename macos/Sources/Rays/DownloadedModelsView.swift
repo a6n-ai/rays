@@ -119,7 +119,6 @@ struct DownloadedModelsView: View {
                     }
                 }
                 .listStyle(.inset)
-                .tint(.gray)
                 .scrollContentBackground(.hidden)
                 .scrollEdgeEffectStyle(.soft, for: .all)
                 .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: models.count, page: $page, padded: true) }

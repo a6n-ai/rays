@@ -88,7 +88,6 @@ struct QueueListTab: View {
             }
         }
         .listStyle(.inset)
-        .tint(.gray)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .all)
     }

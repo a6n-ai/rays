@@ -92,7 +92,6 @@ struct ModelDetailView: View {
             }
         }
         .listStyle(.inset)
-        .tint(.gray)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .all)
         .navigationTitle(hfNameParts(repo.id).name)
