@@ -25,6 +25,7 @@ pub const RETRY_WAITS: [u64; 5] = [2, 5, 15, 30, 60];
 
 /// A connection that sends nothing for this long counts as a failed attempt.
 const STALL: Duration = Duration::from_secs(30);
+const MIRROR_PROBE: Duration = Duration::from_secs(10);
 /// Smaller files are never split; no segment is smaller than `MIN_SEGMENT`.
 const MIN_SPLIT: u64 = 4 << 20;
 const MIN_SEGMENT: u64 = 1 << 20;
@@ -1047,24 +1048,33 @@ async fn run_split(
     finish(env).await
 }
 
-/// Asks each mirror for the first byte and keeps those that answer a range with the job's size. The job keeps only
-/// those, so a mirror that fails the probe is not tried again. shortcut: a mirror's ETag is not compared, only its size.
+/// Asks every mirror at once for the first byte and keeps those that answer a range with the job's size. A mirror
+/// that fails is skipped for this run only; the job keeps its list. shortcut: a mirror's ETag is not compared, only its size.
 async fn probe_mirrors(env: &Env, cancel: &mut watch::Receiver<bool>) -> Result<Vec<String>, Stop> {
     let (mirrors, total) = with_job(&env.live, |j| (j.mirrors.clone(), j.total));
     let Some(total) = total.filter(|_| !mirrors.is_empty()) else { return Ok(Vec::new()) };
-    let mut kept = Vec::new();
-    for url in mirrors {
-        let req = env.get(&url).header(RANGE, "bytes=0-0");
-        let ok = match or_cancel(cancel, tokio::time::timeout(STALL, req.send())).await? {
-            Ok(Ok(resp)) => resp.status().as_u16() == 206 && content_range_total(&resp) == Some(total),
-            _ => false,
-        };
-        if ok {
-            kept.push(url);
+    // Mirrors are rejected on s3:// jobs at add time; one loaded from an older store would be signed as the primary.
+    if with_job(&env.live, |j| j.url.starts_with("s3://")) {
+        return Ok(Vec::new());
+    }
+    let mut set = tokio::task::JoinSet::new();
+    for (i, url) in mirrors.iter().enumerate() {
+        let req = env.get(url).header(RANGE, "bytes=0-0");
+        set.spawn(async move {
+            let ok = match tokio::time::timeout(MIRROR_PROBE, req.send()).await {
+                Ok(Ok(resp)) => resp.status().as_u16() == 206 && content_range_total(&resp) == Some(total),
+                _ => false,
+            };
+            (i, ok)
+        });
+    }
+    let mut good = vec![false; mirrors.len()];
+    while let Some(done) = or_cancel(cancel, set.join_next()).await? {
+        if let Ok((i, true)) = done {
+            good[i] = true;
         }
     }
-    with_job(&env.live, |j| j.mirrors = kept.clone());
-    Ok(kept)
+    Ok(mirrors.into_iter().zip(good).filter_map(|(url, ok)| ok.then_some(url)).collect())
 }
 
 /// Starts segment `idx` on a new task and lists its stop signal.

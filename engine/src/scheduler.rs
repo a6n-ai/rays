@@ -20,6 +20,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
+/// The error `relink` returns when the new link is a different file and no restart was asked for.
+pub const DIFFERENT_FILE: &str = "The new link is a different file";
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(2);
 /// How often queues re-check their windows.
 const QUEUE_TICK: Duration = Duration::from_secs(30);
@@ -477,17 +479,23 @@ impl Scheduler {
         let results = urls
             .into_iter()
             .map(|url| {
-                let sum = sums.next().flatten().map(|h| h.trim().to_ascii_lowercase());
+                let (sum, name, mut mirrors) = (sums.next().flatten().map(|h| h.trim().to_ascii_lowercase()), fixed.next().flatten(), extra.next().unwrap_or_default());
                 if sum.as_deref().is_some_and(|h| h.len() != 64 || !h.bytes().all(|c| c.is_ascii_hexdigit())) {
                     return AddResult { url, id: None, error: Some("sha256 must be 64 hex characters".to_owned()) };
                 }
-                let mut mirrors = extra.next().unwrap_or_default();
-                mirrors.retain(|m| m != &url);
-                mirrors.dedup();
+                let mut seen = vec![url.clone()];
+                mirrors.retain(|m| {
+                    let new = !seen.contains(m);
+                    seen.push(m.clone());
+                    new
+                });
+                if url.starts_with("s3://") && !mirrors.is_empty() {
+                    return AddResult { url, id: None, error: Some("mirrors are not supported for s3 links".to_owned()) };
+                }
                 if let Some(bad) = mirrors.iter().find_map(|m| self.check_url(m).err()) {
                     return AddResult { url, id: None, error: Some(format!("mirror: {bad}")) };
                 }
-                self.add_one(url, dir.clone(), fixed.next().flatten(), sum, mirrors, queue_id)
+                self.add_one(url, dir.clone(), name, sum, mirrors, queue_id)
             })
             .collect();
         self.refresh();
@@ -613,8 +621,9 @@ impl Scheduler {
     }
 
     /// Points a paused, failed or queued job at a new link and queues it. The `.part` is kept when the new link
-    /// reports the same size (and the same ETag when both links have one); otherwise the download restarts.
-    pub async fn relink(self: &Arc<Self>, id: JobId, url: &str) -> Result<(), EngineError> {
+    /// reports the same size (and the same ETag when both links have one). A different file is refused with
+    /// `DIFFERENT_FILE` unless `restart` is set, which deletes the `.part` and starts over.
+    pub async fn relink(self: &Arc<Self>, id: JobId, url: &str, restart: bool) -> Result<(), EngineError> {
         let invalid = |msg: String| EngineError::InvalidUrl { msg };
         self.check_url(url).map_err(invalid)?;
         let live = self.find(id).ok_or_else(|| invalid("no such download".into()))?;
@@ -634,6 +643,9 @@ impl Scheduler {
             return Err(io(format!("the new link answered HTTP {}", status.as_u16())));
         }
         let header = |name| resp.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
+        if header(reqwest::header::CONTENT_TYPE).is_some_and(|t| t.trim_start().to_ascii_lowercase().starts_with("text/html")) {
+            return Err(io("That link is a web page, not the file".into()));
+        }
         let new_total = header(reqwest::header::CONTENT_RANGE)
             .and_then(|v| v.rsplit('/').next()?.parse::<u64>().ok())
             .or_else(|| if status.as_u16() == 200 { resp.content_length() } else { None });
@@ -643,9 +655,16 @@ impl Scheduler {
         if !idle(&job.state) {
             return Err(invalid("the download started while its link was being checked".into()));
         }
-        let same_size = job.total == new_total || job.total.is_none();
-        let same_etag = job.etag.is_none() || new_etag.is_none() || job.etag == new_etag;
-        if !(same_size && same_etag) {
+        let etag_conflict = job.etag.is_some() && new_etag.is_some() && job.etag != new_etag;
+        let same = match job.total {
+            Some(_) => job.total == new_total && !etag_conflict,
+            None => job.etag.is_some() && job.etag == new_etag,
+        };
+        let has_bytes = job.done > 0 || job.part_path.exists();
+        if !same && has_bytes && !restart {
+            return Err(io(DIFFERENT_FILE.into()));
+        }
+        if !same {
             let _ = std::fs::remove_file(&job.part_path);
             job.segments.clear();
             job.done = 0;

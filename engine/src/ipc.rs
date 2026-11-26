@@ -106,7 +106,7 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
                 .collect(),
             ..Default::default()
         },
-        Ok(Request::Relink { id, url }) => done(sched.relink(id, &url).await),
+        Ok(Request::Relink { id, url, restart }) => done(sched.relink(id, &url, restart).await),
         Ok(Request::Grab { url }) => match sched.grab_links(&url).await {
             Ok(links) => Response { ok: true, grabbed: links.into_iter().map(|l| GrabLine { url: l.url, name: l.name, kind: l.kind }).collect(), ..Default::default() },
             Err(e) => Response { error: Some(e.to_string()), ..Default::default() },

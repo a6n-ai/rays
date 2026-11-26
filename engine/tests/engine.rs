@@ -122,6 +122,9 @@ fn serve(mut sock: TcpStream, data: &[u8], stalling: bool) {
         "HTTP/1.1 200 OK\r\n".to_string()
     };
     reply += &format!("Content-Length: {}\r\nETag: \"v1\"\r\nConnection: close\r\n", data.len() - start);
+    if path.starts_with("/html/") {
+        reply += "Content-Type: text/html\r\n";
+    }
     if ranges {
         reply += "Accept-Ranges: bytes\r\n";
     }
@@ -243,9 +246,9 @@ fn add_downloads_file_with_matching_sha() {
     engine.shutdown();
 }
 
-fn relink(engine: &Engine, id: JobId, url: String) -> Result<(), EngineError> {
+fn relink(engine: &Engine, id: JobId, url: String, restart: bool) -> Result<(), EngineError> {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("test runtime");
-    rt.block_on(engine.relink(id, url))
+    rt.block_on(engine.relink(id, url, restart))
 }
 
 /// A job stalled after `STALL_AT` bytes on `origin`, paused, with its bytes on disk.
@@ -266,7 +269,7 @@ fn relink_with_the_same_size_keeps_the_bytes_and_resumes() {
     let engine = start(config(root.path(), 2));
     let (id, kept) = paused_with_bytes(&engine, &old);
     assert!(kept > 0);
-    relink(&engine, id, new.url("/file/x.bin")).expect("relink");
+    relink(&engine, id, new.url("/file/x.bin"), false).expect("relink");
     let v = view(&engine, id).unwrap();
     assert_eq!(v.done, kept);
     assert_eq!(v.url, new.url("/file/x.bin"));
@@ -276,7 +279,7 @@ fn relink_with_the_same_size_keeps_the_bytes_and_resumes() {
 }
 
 #[test]
-fn relink_with_a_different_size_restarts() {
+fn relink_with_a_different_size_needs_a_restart() {
     setup();
     let old = Origin::start();
     let other = payload_of(SIZE + 4096);
@@ -285,11 +288,36 @@ fn relink_with_a_different_size_restarts() {
     let engine = start(config(root.path(), 2));
     let (id, kept) = paused_with_bytes(&engine, &old);
     assert!(kept > 0);
-    relink(&engine, id, new.url("/file/x.bin")).expect("relink");
+    let part = std::fs::read_dir(root.path().join("downloads")).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "part")).expect("a .part");
+    let err = relink(&engine, id, new.url("/file/x.bin"), false).expect_err("different file is refused");
+    assert!(err.to_string().contains("The new link is a different file"), "{err}");
+    assert!(part.exists());
+    let v = view(&engine, id).unwrap();
+    assert_eq!((v.done, v.url.as_str(), &v.state), (kept, old.url("/file/x.bin").as_str(), &JobState::Paused));
+    assert!(relink(&engine, id, new.url("/html/x.bin"), true).unwrap_err().to_string().contains("web page"));
+    relink(&engine, id, new.url("/file/x.bin"), true).expect("relink with restart");
     assert!(view(&engine, id).unwrap().done < kept);
     let path = wait_done(&engine, id);
     assert_eq!(sha_of(&path), sha(&other));
-    assert!(relink(&engine, id, new.url("/file/x.bin")).is_err(), "a finished job cannot be relinked");
+    assert!(relink(&engine, id, new.url("/file/x.bin"), true).is_err(), "a finished job cannot be relinked");
+    engine.shutdown();
+}
+
+#[test]
+fn add_with_keeps_names_aligned_and_dedupes_mirrors() {
+    setup();
+    let origin = Origin::start();
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let url = |n: &str| origin.url(&format!("/file/{n}.bin"));
+    let (m1, m2) = (url("m1"), url("m2"));
+    let mirrors = vec![vec![], vec![m2.clone(), m1.clone(), m2.clone(), url("b"), m1.clone()]];
+    let names = vec![Some("first.bin".to_owned()), Some("second.bin".to_owned())];
+    let r = engine.add_with(vec![url("a"), url("b")], None, names, vec![Some("xyz".into()), None], mirrors, None);
+    assert!(r[0].id.is_none());
+    let id = r[1].id.expect("second accepted");
+    assert_eq!(view(&engine, id).unwrap().mirrors, 2, "order-preserving unique, primary dropped");
+    assert_eq!(view(&engine, id).unwrap().name, "second.bin", "the first url's name is not shifted onto the second");
     engine.shutdown();
 }
 
@@ -601,7 +629,7 @@ fn mirror_takes_over_when_the_primary_fails() {
     let id = r[0].id.expect("url accepted");
     let path = wait_done(&engine, id);
     assert_eq!(sha_of(&path), sha(&big_payload()));
-    assert_eq!(view(&engine, id).unwrap().mirrors, 1, "the mirror with another size is dropped");
+    assert_eq!(view(&engine, id).unwrap().mirrors, 2, "the job keeps its mirrors even when one fails the probe");
     // Control: without a mirror the same flaky primary fails the job.
     let alone = add_one(&engine, primary.url("/flaky/alone.bin"));
     let deadline = Instant::now() + WAIT;

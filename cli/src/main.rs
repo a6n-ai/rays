@@ -17,7 +17,8 @@ const USAGE: &str = "usage:
   dl list                       list downloads (also: dl --list)
   dl add [--queue NAME|ID] [--best-time] [--sha256 HEX] URL [--mirror URL]...
                                 download links into a queue (default: Main), or the Best time queue
-  dl relink ID URL              give a paused or failed download a new link and resume it
+  dl relink ID URL [--restart]  give a paused or failed download a new link and resume it;
+                                --restart starts over if the new link is a different file
   dl grab URL [--json]          list the downloadable files linked from a web page, one URL per line
   dl queues [--json]            list queues with state, next start and job counts
   dl queue start|stop|run NAME|ID
@@ -268,7 +269,9 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
             }
             Ok(Request::Add { urls, queue, best_time, sha256, mirrors })
         }
-        [c, id, url] if c == "relink" => Ok(Request::Relink { id: id.parse().map_err(|_| "relink takes a download id and a URL")?, url: url.clone() }),
+        [c, id, url, rest @ ..] if c == "relink" && matches!(rest, [] | [_]) && rest.iter().all(|f| f == "--restart") => {
+            Ok(Request::Relink { id: id.parse().map_err(|_| "relink takes a download id and a URL")?, url: url.clone(), restart: !rest.is_empty() })
+        }
         [c, url] if c == "grab" && !url.starts_with('-') => Ok(Request::Grab { url: url.clone() }),
         [c, url, f] if c == "grab" && f == "--json" && !url.starts_with('-') => Ok(Request::Grab { url: url.clone() }),
         [c] if c == "speed" => Ok(Request::Speed),
@@ -500,7 +503,8 @@ mod tests {
         assert_eq!(queue_command(&args(&["queue", "run", "Night"])).unwrap(), Request::QueueRunNow { queue: QueueRef::Name("Night".into()) });
         assert_eq!(queue_command(&args(&["queue", "stop", "2"])).unwrap(), Request::QueueStop { queue: QueueRef::Id(2) });
         assert!(queue_command(&args(&["queue", "delete", "2"])).is_err());
-        assert_eq!(queue_command(&args(&["relink", "7", "https://x/f"])).unwrap(), Request::Relink { id: 7, url: "https://x/f".into() });
+        assert_eq!(queue_command(&args(&["relink", "7", "https://x/f"])).unwrap(), Request::Relink { id: 7, url: "https://x/f".into(), restart: false });
+        assert_eq!(queue_command(&args(&["relink", "7", "https://x/f", "--restart"])).unwrap(), Request::Relink { id: 7, url: "https://x/f".into(), restart: true });
         assert!(queue_command(&args(&["relink", "x", "https://x/f"])).is_err());
         assert_eq!(queue_command(&args(&["grab", "https://x/p", "--json"])).unwrap(), Request::Grab { url: "https://x/p".into() });
         assert!(queue_command(&args(&["grab"])).is_err());

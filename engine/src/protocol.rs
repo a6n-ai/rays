@@ -23,7 +23,13 @@ pub enum Request {
     },
     List,
     /// Gives a paused or failed download a new link and queues it.
-    Relink { id: u64, url: String },
+    Relink {
+        id: u64,
+        url: String,
+        /// Start over when the new link is a different file.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        restart: bool,
+    },
     /// Lists the downloadable files linked from a web page.
     Grab { url: String },
     Queues,

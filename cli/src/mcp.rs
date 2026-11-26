@@ -100,10 +100,10 @@ fn tools() -> Value {
         },
         {
             "name": "relink",
-            "description": "Give a paused or failed download (for example one that failed with Link expired) a new link and queue it. The partial file is kept when the new link reports the same size, otherwise the download restarts.",
+            "description": "Give a paused or failed download (for example one that failed with Link expired) a new link and queue it. The partial file is kept when the new link reports the same size. A different file is refused with \"The new link is a different file\" unless restart is true, which deletes the partial file and starts over.",
             "inputSchema": {
                 "type": "object",
-                "properties": { "id": { "type": "integer", "description": "Download id from list_downloads." }, "url": { "type": "string" } },
+                "properties": { "id": { "type": "integer", "description": "Download id from list_downloads." }, "url": { "type": "string" }, "restart": { "type": "boolean", "description": "Start over if the new link is a different file. Default false." } },
                 "required": ["id", "url"]
             }
         },
@@ -233,7 +233,7 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
             reply_text(ask(&Request::SpeedTest { force }))
         }
         "relink" => match (args.get("id").and_then(Value::as_u64), args.get("url").and_then(Value::as_str)) {
-            (Some(id), Some(url)) => reply_text(ask(&Request::Relink { id, url: url.to_owned() })),
+            (Some(id), Some(url)) => reply_text(ask(&Request::Relink { id, url: url.to_owned(), restart: args.get("restart").and_then(Value::as_bool).unwrap_or(false) })),
             _ => Err("id and url are required".into()),
         },
         "best_time" => reply_text(ask(&Request::Speed)),

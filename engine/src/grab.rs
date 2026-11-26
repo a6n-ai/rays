@@ -73,6 +73,7 @@ struct Refs {
 fn scan(html: &str) -> Refs {
     let mut refs = Refs::default();
     let mut rest = html;
+    let lower = html.to_ascii_lowercase();
     while let Some(i) = rest.find('<') {
         rest = &rest[i + 1..];
         if let Some(r) = rest.strip_prefix("!--") {
@@ -89,7 +90,7 @@ fn scan(html: &str) -> Refs {
             "img" | "source" | "video" | "audio" | "embed" => "src",
             "script" | "style" => {
                 let close = format!("</{name}");
-                rest = rest.to_ascii_lowercase().find(&close).map_or("", |p| &rest[p..]);
+                rest = lower[html.len() - rest.len()..].find(&close).map_or("", |p| &rest[p..]);
                 continue;
             }
             _ => continue,

@@ -218,9 +218,9 @@ impl Engine {
     }
 
     /// Gives a paused or failed job a new link and queues it; see `Scheduler::relink`.
-    pub async fn relink(&self, id: JobId, url: String) -> Result<(), EngineError> {
+    pub async fn relink(&self, id: JobId, url: String, restart: bool) -> Result<(), EngineError> {
         let sched = Arc::clone(&self.sched);
-        self.rt.spawn(async move { sched.relink(id, &url).await }).await.map_err(join_error)?
+        self.rt.spawn(async move { sched.relink(id, &url, restart).await }).await.map_err(join_error)?
     }
     /// Files linked from a web page; fails with "That link is a file, not a page" when the link is a file.
     pub async fn grab_links(&self, page_url: String) -> Result<Vec<crate::grab::GrabbedLink>, EngineError> {
