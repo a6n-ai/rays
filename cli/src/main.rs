@@ -3,7 +3,7 @@ mod framing;
 mod mcp;
 mod sorter;
 
-use dl_engine::protocol::{BestTimeLine, QueueRef, Request, Response, SpeedLine, SpeedTestLine};
+use dl_engine::protocol::{BestTimeLine, QueueRef, Request, Response, SpeedLine, SpeedTestLine, StatsLine};
 use serde_json::{Value, json};
 use std::error::Error;
 use std::io::{BufRead, BufReader, Write};
@@ -25,6 +25,7 @@ const USAGE: &str = "usage:
                                 start, stop or run a queue now
   dl speed                      last speed test and the best time of day to download
   dl speed test [--force]       run a speed test now (--force also on a metered link)
+  dl stats [--days N]           totals of downloads finished in the last N days (default 30)
   dl verify MODEL_FOLDER        check a Hugging Face model download against its record
   dl sort [FOLDER] [--all] [--dry-run] [--projects]
                                 sort FOLDER into category folders (default ~/Downloads)
@@ -99,7 +100,7 @@ fn main() -> ExitCode {
         }
         [a] if a == "mcp" => return mcp::serve(),
         [a] if a == "--list" || a == "list" => Request::List,
-        [cmd, ..] if ["add", "relink", "grab", "queues", "queue", "verify", "speed"].contains(&cmd.as_str()) => match queue_command(&args) {
+        [cmd, ..] if ["add", "relink", "grab", "queues", "queue", "verify", "speed", "stats"].contains(&cmd.as_str()) => match queue_command(&args) {
             Ok(req) => req,
             Err(e) => {
                 eprintln!("dl: {e}");
@@ -157,6 +158,12 @@ fn main() -> ExitCode {
         }
         return ExitCode::SUCCESS;
     }
+    if let Some(stats) = &reply.stats {
+        for line in stats_lines(stats) {
+            println!("{line}");
+        }
+        return ExitCode::SUCCESS;
+    }
     if let Some(test) = &reply.speed_test {
         println!("{}", speed_test_line(test));
         return ExitCode::SUCCESS;
@@ -205,6 +212,25 @@ fn speed_lines(s: &SpeedLine, now: i64) -> Vec<String> {
         BestTimeLine::NotEnoughData { days, needed } => format!("not enough data: {days} of {needed} days"),
     };
     vec![last, best]
+}
+
+/// Lines for `dl stats`: totals, speed, top sites, then one line per day.
+fn stats_lines(s: &StatsLine) -> Vec<String> {
+    let mut out = vec![format!("{} in {} files", megabytes(s.total_bytes), s.total_files)];
+    if let (Some(avg), Some(peak)) = (s.avg_bps, s.peak_bps) {
+        out.push(format!("speed average {} Mb/s, peak {} Mb/s", mbps(avg), mbps(peak)));
+    }
+    out.extend(s.top_hosts.iter().map(|h| format!("{}\t{} files\t{}", h.host, h.files, megabytes(h.bytes))));
+    out.extend(s.per_day.iter().map(|d| {
+        let day = jiff::Timestamp::from_second(d.day).map_or_else(|_| d.day.to_string(), |t| jiff::tz::TimeZone::system().to_datetime(t).strftime("%Y-%m-%d").to_string());
+        format!("{day}\t{} files\t{}", d.files, megabytes(d.bytes))
+    }));
+    out
+}
+
+fn megabytes(bytes: u64) -> String {
+    let m = bytes as f64 / 1_000_000.0;
+    if m >= 1000.0 { format!("{:.2} GB", m / 1000.0) } else { format!("{m:.1} MB") }
 }
 
 fn speed_test_line(t: &SpeedTestLine) -> String {
@@ -274,6 +300,11 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
         }
         [c, url] if c == "grab" && !url.starts_with('-') => Ok(Request::Grab { url: url.clone() }),
         [c, url, f] if c == "grab" && f == "--json" && !url.starts_with('-') => Ok(Request::Grab { url: url.clone() }),
+        [c] if c == "stats" => Ok(Request::Stats { days: 30 }),
+        [c, f, n] if c == "stats" && f == "--days" => match n.parse() {
+            Ok(days) if days > 0 => Ok(Request::Stats { days }),
+            _ => Err("--days takes a whole number of days".into()),
+        },
         [c] if c == "speed" => Ok(Request::Speed),
         [c, t] if c == "speed" && t == "test" => Ok(Request::SpeedTest { force: false }),
         [c, t, f] if c == "speed" && t == "test" && f == "--force" => Ok(Request::SpeedTest { force: true }),
@@ -472,6 +503,9 @@ mod tests {
             queue_command(&args(&["add", "--best-time", "https://a/x"])).unwrap(),
             Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: true, sha256: vec![], mirrors: vec![] }
         );
+        assert_eq!(queue_command(&args(&["stats"])).unwrap(), Request::Stats { days: 30 });
+        assert_eq!(queue_command(&args(&["stats", "--days", "7"])).unwrap(), Request::Stats { days: 7 });
+        assert!(queue_command(&args(&["stats", "--days", "0"])).is_err());
         assert_eq!(queue_command(&args(&["speed"])).unwrap(), Request::Speed);
         assert_eq!(queue_command(&args(&["speed", "test"])).unwrap(), Request::SpeedTest { force: false });
         assert_eq!(queue_command(&args(&["speed", "test", "--force"])).unwrap(), Request::SpeedTest { force: true });

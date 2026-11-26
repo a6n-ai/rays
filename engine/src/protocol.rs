@@ -35,6 +35,11 @@ pub enum Request {
     Queues,
     /// The last speed test and the best time of day to download.
     Speed,
+    /// Totals of downloads finished in the last `days` days.
+    Stats {
+        #[serde(default = "default_days")]
+        days: u32,
+    },
     #[serde(rename = "speed_test")]
     SpeedTest {
         #[serde(default)]
@@ -131,7 +136,38 @@ pub struct Response {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed_test: Option<SpeedTestLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stats: Option<StatsLine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+fn default_days() -> u32 {
+    30
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct StatsLine {
+    pub total_bytes: u64,
+    pub total_files: u64,
+    /// Oldest first; `day` is unix seconds at local midnight.
+    pub per_day: Vec<StatsDay>,
+    pub top_hosts: Vec<StatsHost>,
+    pub avg_bps: Option<u64>,
+    pub peak_bps: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct StatsDay {
+    pub day: i64,
+    pub bytes: u64,
+    pub files: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct StatsHost {
+    pub host: String,
+    pub bytes: u64,
+    pub files: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -284,6 +320,8 @@ mod tests {
     #[test]
     fn speed_requests_round_trip() {
         round(Request::Speed, r#"{"op":"speed"}"#);
+        round(Request::Stats { days: 7 }, r#"{"op":"stats","days":7}"#);
+        assert_eq!(serde_json::from_str::<Request>(r#"{"op":"stats"}"#).unwrap(), Request::Stats { days: 30 });
         round(Request::SpeedTest { force: false }, r#"{"op":"speed_test","force":false}"#);
         round(Request::SpeedTest { force: true }, r#"{"op":"speed_test","force":true}"#);
         let r: Request = serde_json::from_str(r#"{"op":"speed_test"}"#).unwrap();

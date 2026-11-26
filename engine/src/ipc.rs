@@ -120,6 +120,21 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             }),
             ..Default::default()
         },
+        Ok(Request::Stats { days }) => match sched.stats(days) {
+            Ok(s) => Response {
+                ok: true,
+                stats: Some(protocol::StatsLine {
+                    total_bytes: s.total_bytes,
+                    total_files: s.total_files,
+                    per_day: s.per_day.into_iter().map(|d| protocol::StatsDay { day: d.day, bytes: d.bytes, files: d.files }).collect(),
+                    top_hosts: s.top_hosts.into_iter().map(|h| protocol::StatsHost { host: h.host, bytes: h.bytes, files: h.files }).collect(),
+                    avg_bps: s.avg_bps,
+                    peak_bps: s.peak_bps,
+                }),
+                ..Default::default()
+            },
+            Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
+        },
         Ok(Request::SpeedTest { force }) => match speedtest::run(sched, speedtest::DEFAULT_BASE, speedtest::DEFAULT_MS, force, &std::sync::atomic::AtomicBool::new(false)).await {
             Ok(result) => Response { ok: true, speed_test: Some(speed_test_line(result)), ..Default::default() },
             Err(e) => Response { error: Some(e.to_string()), ..Default::default() },

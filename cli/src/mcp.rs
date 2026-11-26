@@ -198,6 +198,15 @@ fn tools() -> Value {
             }
         },
         {
+            "name": "stats",
+            "description": "Totals of downloads finished in the last N days that are still in the Rays list: bytes and files overall and per local day, the top sites, and average and peak speed.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "days": { "type": "integer", "minimum": 1, "default": 30, "description": "How many days back, counting today." } }
+            },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "best_time",
             "description": "The last speed test and the fastest 4 hours of the day to download over the last 28 days (local time, with typical speed and confidence), or how many days of data are still needed.",
             "inputSchema": { "type": "object", "properties": {} },
@@ -237,6 +246,7 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
             _ => Err("id and url are required".into()),
         },
         "best_time" => reply_text(ask(&Request::Speed)),
+        "stats" => reply_text(ask(&Request::Stats { days: args.get("days").and_then(Value::as_u64).map_or(30, |d| d.clamp(1, 3650) as u32) })),
         "list_queues" => reply_text(ask(&Request::Queues)),
         "start_queue" => queue_req(args, |queue| Request::QueueStart { queue }).and_then(|req| reply_text(ask(&req))),
         "stop_queue" => queue_req(args, |queue| Request::QueueStop { queue }).and_then(|req| reply_text(ask(&req))),
@@ -374,6 +384,7 @@ mod tests {
                 "sorter_status",
                 "sort_folder",
                 "speed_test",
+                "stats",
                 "best_time"
             ]
         );

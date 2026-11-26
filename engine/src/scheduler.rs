@@ -1683,6 +1683,12 @@ impl Scheduler {
             .collect())
     }
 
+    pub fn stats(&self, days: u32) -> Result<crate::stats::Stats, EngineError> {
+        let midnights = crate::stats::local_midnights(self.now().date(), days.clamp(1, 3650), &jiff::tz::TimeZone::system());
+        let start = midnights.first().copied().unwrap_or_default();
+        Ok(crate::stats::compute(&self.store.finished_since(start)?, &midnights, &self.store.samples_since(start)?))
+    }
+
     pub fn best_time(&self) -> BestTime {
         speed::best_window(&self.local_samples().unwrap_or_default(), 4)
     }
