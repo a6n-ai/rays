@@ -26,7 +26,7 @@ struct JobRow: View {
             case .resume: "Resume"
             case .retry: "Retry"
             case .reveal: "Show in Finder"
-            case .removeFromList: "Remove from List"
+            case .removeFromList: "Remove from list"
             }
         }
 
@@ -70,7 +70,7 @@ struct JobRow: View {
                     if job.linkExpired { Button("Update link…") { askForLink() }.buttonStyle(.link).font(.callout) }
                     slowHint
                 }
-                .padding(.leading, TileSize.list + 10)
+                .padding(.leading, TileSize.list + 12)
                 .padding(.bottom, 10)
             }
         }
@@ -115,26 +115,9 @@ struct JobRow: View {
         }
     }
 
-    private var trailing: some View {
-        HStack(spacing: 4) {
-            if job.isDone, let url = model.locate(job) {
-                ShareLink(item: url) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .opacity(isHovered ? 1 : 0)
-                .help("Share or AirDrop \(job.name)")
-                .accessibilityLabel("Share \(job.name)")
-            }
-            moreButton
-            if let primary { primaryButton(primary) }
-            if primary == .reveal { trashButton }
-            if primary == .retry { removeButton }
-        }
+    /// One plain symbol button; everything else is in the context menu.
+    @ViewBuilder private var trailing: some View {
+        if let primary { primaryButton(primary) }
     }
 
     private var subtitle: String {
@@ -312,76 +295,18 @@ struct JobRow: View {
         }
     }
 
-    /// Plain style with an explicit glass circle, so the 28 pt glass is not padded by the glass button style.
-    /// Not `.interactive()`: interactive glass adds AppKit gesture recognizers, and in List rows (reused NSTableView
-    /// cells) those were freed under SwiftUI twice in 0.1.24-0.1.25 (crashes in NSGestureRecognizer detach/dealloc).
+    /// Plain borderless symbol, no glass: interactive glass in List rows crashed in NSGestureRecognizer detach (0.1.24-0.1.25).
     private func primaryButton(_ primary: Primary) -> some View {
         Button { perform(primary) } label: {
             Image(systemName: primary.symbol)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(primary.tint)
-                // play.fill is optically left-heavy inside a circle.
-                .offset(x: primary == .resume ? 1 : 0)
-                .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular, in: .circle)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                .contentShape(Circle())
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .help("\(primary.title) \(job.name)")
         .accessibilityLabel("\(primary.title) \(job.name)")
-    }
-
-    /// Next to Show in Finder on a finished download: the file goes to the Trash (recoverable there) and the row is removed.
-    private var trashButton: some View {
-        Button { model.removeAndTrash([job]) } label: {
-            Image(systemName: "trash.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.red)
-                .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular, in: .circle)
-                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .help("Move \(job.name) to the Trash")
-        .accessibilityLabel("Move \(job.name) to the Trash")
-    }
-
-    /// Next to Retry on a failed download, so it can be cleared without the menu. Same path as the menu's Remove.
-    private var removeButton: some View {
-        Button {
-            if job.hasPartial { confirmRemove = true } else { model.removeUndoable([job]) }
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.secondary)
-                .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular, in: .circle)
-                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .help("Remove \(job.name) from the list")
-        .accessibilityLabel("Remove \(job.name) from the list")
-    }
-
-    /// The context menu, shown on hover so Remove and Move to Trash are found without right-clicking.
-    private var moreButton: some View {
-        Menu { menu } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.secondary)
-                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                .contentShape(Circle())
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .opacity(isHovered ? 1 : 0)
-        .help("More actions")
-        .accessibilityLabel("More actions for \(job.name)")
     }
 
     private func askForLink() {
@@ -447,7 +372,7 @@ struct JobRow: View {
         Button(role: .destructive) {
             if job.hasPartial { confirmRemove = true } else { model.removeUndoable([job]) }
         } label: {
-            Label(job.hasPartial ? "Remove…" : "Remove from List", systemImage: "minus.circle")
+            Label(job.hasPartial ? "Remove…" : "Remove from list", systemImage: "minus.circle")
         }
         if model.locate(job) != nil {
             Button(role: .destructive) { model.removeAndTrash([job]) } label: {

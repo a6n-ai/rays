@@ -74,9 +74,9 @@ struct RowIcon: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 15))
                 .foregroundStyle(tint)
-                .frame(width: 26, height: 24)
+                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)

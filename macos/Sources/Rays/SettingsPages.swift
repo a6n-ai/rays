@@ -13,9 +13,18 @@ struct GeneralPage: View {
             }
             Section {
                 SettingRow(title: "Appearance") { AppearancePicker() }
-                SettingRow(title: "Accent colour") { AccentPicker() }
+            }
+            Section("Theme") {
+                SettingRow(title: "Colour") { AccentPicker() }
+            }
+            Section("Windows") {
                 SettingRow(title: "Sidebar icon size") {
-                    RadioChoice(title: "Sidebar icon size", selection: $iconSize, choices: SidebarIconSize.allCases) { Text($0.title) }
+                    Picker("Sidebar icon size", selection: $iconSize) {
+                        ForEach(SidebarIconSize.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .fixedSize()
                 }
             }
             Section {
@@ -51,7 +60,7 @@ private struct AppearancePicker: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ForEach(AppearanceChoice.allCases) { choice in
+            ForEach([AppearanceChoice.light, .dark, .system]) { choice in
                 let selected = appearance == choice
                 Button { appearance = choice } label: {
                     VStack(spacing: 4) {
@@ -117,32 +126,33 @@ private struct AppearanceThumbnail: View {
     }
 }
 
-/// Round swatches with the chosen name under them. Multicolour follows the system accent.
+/// Round swatches; the chosen one shows a ring and its name underneath. Multicolour follows the system accent.
 private struct AccentPicker: View {
     @AppStorage(AccentChoice.key) private var choice = AccentChoice.multicolor
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            HStack(spacing: 6) {
-                ForEach(AccentChoice.allCases) { accent in
-                    let selected = choice == accent
-                    Button { choice = accent } label: {
-                        swatch(accent)
-                            .frame(width: 18, height: 18)
-                            .padding(3)
-                            .overlay {
-                                Circle().strokeBorder(accent.color ?? .secondary, lineWidth: 2).opacity(selected ? 1 : 0)
-                            }
-                            .contentShape(.circle)
-                    }
-                    .buttonStyle(.plain)
-                    .help(accent.title)
-                    .accessibilityLabel(accent.title)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
+        HStack(spacing: 6) {
+            ForEach(AccentChoice.allCases) { accent in
+                let selected = choice == accent
+                Button { choice = accent } label: {
+                    swatch(accent)
+                        .frame(width: 18, height: 18)
+                        .padding(3)
+                        .overlay {
+                            Circle().strokeBorder(accent.color ?? .secondary, lineWidth: 2).opacity(selected ? 1 : 0)
+                        }
+                        .contentShape(.circle)
                 }
+                .buttonStyle(.plain)
+                .overlay(alignment: .bottom) {
+                    if selected { Text(accent.title).font(.subheadline).foregroundStyle(.secondary).fixedSize().offset(y: 20) }
+                }
+                .help(accent.title)
+                .accessibilityLabel(accent.title)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
-            Text(choice.title).font(.subheadline).foregroundStyle(.secondary)
         }
+        .padding(.bottom, 18)
     }
 
     @ViewBuilder private func swatch(_ accent: AccentChoice) -> some View {

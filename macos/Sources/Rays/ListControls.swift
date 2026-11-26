@@ -65,37 +65,38 @@ struct ListControls: View {
         .onChange(of: sort) { _, _ in page = 0 }
     }
 
+    /// One icon menu: status and type filters, the sort order, and Remove missing. Checkmarks show the current choices.
     @ViewBuilder private var menus: some View {
-            Menu {
-                if !statuses.isEmpty {
-                    Picker("Status", selection: $status) {
-                        ForEach(statuses, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                }
-                if showsKind {
-                    Picker("Type", selection: $kind) {
-                        ForEach(FileKind.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                }
-            } label: {
-                Label(filtered ? "Filtered" : "Filter", systemImage: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-            }
-            .fixedSize()
-            Menu {
-                Picker("Sort", selection: $sort) {
-                    ForEach(sorts) { Text($0.rawValue).tag($0) }
+        Menu {
+            if !statuses.isEmpty {
+                Picker("Status", selection: $status) {
+                    ForEach(statuses, id: \.self) { Text($0).tag($0) }
                 }
                 .pickerStyle(.inline)
-            } label: {
-                Label(sort.rawValue, systemImage: "arrow.up.arrow.down")
             }
-            .fixedSize()
+            if showsKind {
+                Picker("Type", selection: $kind) {
+                    ForEach(FileKind.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
+            Picker("Sort", selection: $sort) {
+                ForEach(sorts) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.inline)
             if let removeMissing {
-                Button(action: removeMissing) { Label("Remove missing", systemImage: "trash.slash") }
-                    .help("Remove finished downloads whose file was moved or deleted. Files that are still there stay.")
+                Divider()
+                Button("Remove missing", systemImage: "trash.slash", action: removeMissing)
             }
+        } label: {
+            Image(systemName: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                .font(.system(size: 15))
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Filter and sort. Now: \(sort.rawValue)")
+        .accessibilityLabel("Filter and sort")
+        .accessibilityValue(sort.rawValue)
     }
 
     /// The items on the current page. `size` is the `Paging.key` setting, read with @AppStorage by the caller so the list redraws when it changes.

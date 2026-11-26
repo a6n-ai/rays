@@ -103,7 +103,6 @@ struct ContentView: View {
                 }
         }
         .environment(nav)
-        .containerBackground(.thinMaterial, for: .window)
         .frame(minWidth: 640, idealWidth: 760, minHeight: 560, idealHeight: 720)
         .overlay {
             if isDropTargeted {
@@ -180,6 +179,8 @@ struct ContentView: View {
                     DownloadsView(isDropTargeted: isDropTargeted)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.pageBackground)
             .id(destination)
             .transition(.opacity)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: destination)
@@ -402,4 +403,11 @@ struct WelcomeEmpty: View {
                 .accessibilityElement(children: .combine)
         }
     }
+}
+
+extension Color {
+    /// A light gray page in light mode, so white cards stand out like System Settings; near black in dark mode so cards stay visible.
+    static let pageBackground = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua ? NSColor(white: 0.93, alpha: 1) : NSColor(white: 0.08, alpha: 1)
+    })
 }

@@ -81,7 +81,6 @@ struct SortedBrowserPage: View {
         content
             .safeAreaInset(edge: .top, spacing: 0) { viewBar }
             .navigationTitle(folder.lastPathComponent)
-            .navigationSubtitle(items.map { $0.count == 1 ? "1 item" : "\($0.count) items" } ?? "")
             .task(id: folder) {
                 let url = folder
                 items = await Task.detached { SortedItem.list(url) }.value

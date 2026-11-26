@@ -201,9 +201,9 @@ struct CardRow<Leading: View, Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             leading.frame(width: TileSize.list, height: TileSize.list)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title).lineLimit(1).truncationMode(.middle).layoutPriority(1)
                 if let subtitle {
                     HStack(spacing: 6) {
@@ -218,6 +218,7 @@ struct CardRow<Leading: View, Trailing: View>: View {
             Spacer(minLength: 8)
             trailing
         }
+        .padding(.vertical, 8)
         .frame(minHeight: subtitle == nil ? LayoutMetrics.cardRowMinHeight : LayoutMetrics.cardListRowHeight)
         .contentShape(.rect)
     }
@@ -241,7 +242,7 @@ extension View {
     /// the row (the system separator ignores the card edge), inset past the 32pt icon, none under the last row.
     /// Never glass, never per-row.
     func cardRow(_ position: CardRowBackground.Position, selected: Bool = false, hovered: Bool = false,
-                 separatorInset: CGFloat = TileSize.list + 10) -> some View {
+                 separatorInset: CGFloat = TileSize.list + 12) -> some View {
         let last = position == .last || position == .only
         return self
             .overlay(alignment: .bottom) {

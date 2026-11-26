@@ -62,6 +62,7 @@ struct SorterView: View {
             Section {
                 HeroCard(.sorter, title: "Sorter",
                          subtitle: "Files new downloads into folders by what is inside them.",
+                         caption: watchedCount == 1 ? "1 folder watched" : "\(watchedCount) folders watched",
                          learnMore: Self.docs) {
                     HeroActions {
                         Button("Add folder…", action: chooseFolder)
@@ -126,6 +127,12 @@ struct SorterView: View {
                     }
                 }
             }
+            if !(model.status?.folders ?? []).isEmpty {
+                Section {
+                    DestructiveButton(title: "Remove sorter…") { confirmRemoveAll = true }
+                        .disabled(model.busy)
+                }
+            }
         }
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
@@ -139,7 +146,7 @@ struct SorterView: View {
     }
 
     private enum FolderRowKind: Identifiable {
-        case tempWarning, update, empty, folder(SorterFolder), add, quick(URL), removeAll
+        case tempWarning, update, empty, folder(SorterFolder), add, quick(URL)
 
         var id: String {
             switch self {
@@ -149,7 +156,6 @@ struct SorterView: View {
             case .folder(let folder): "f:" + folder.path
             case .add: "add"
             case .quick(let url): "q:" + url.path(percentEncoded: false)
-            case .removeAll: "removeAll"
             }
         }
     }
@@ -166,7 +172,6 @@ struct SorterView: View {
         if folders.isEmpty { rows.append(.empty) }
         rows.append(.add)
         rows += quickFolders.map(FolderRowKind.quick)
-        if !folders.isEmpty { rows.append(.removeAll) }
         return rows
     }
 
@@ -215,9 +220,6 @@ struct SorterView: View {
             addRow("Add folder…", action: chooseFolder).disabled(model.busy || model.loadFailed)
         case .quick(let url):
             addRow("Add \(url.lastPathComponent)") { Task { await model.addFolder(url.path(percentEncoded: false)) } }
-                .disabled(model.busy)
-        case .removeAll:
-            DestructiveButton(title: "Remove Sorter…") { confirmRemoveAll = true }
                 .disabled(model.busy)
         }
     }
@@ -287,7 +289,6 @@ struct SorterView: View {
             Text("Files already sorted stay where they are.")
         }
         .scrollContentBackground(.hidden)
-        .navigationSubtitle(watchedCount == 1 ? "Sorter: 1 folder watched" : "Sorter: \(watchedCount) folders watched")
         .task {
             while !Task.isCancelled {
                 await model.refresh()
@@ -355,7 +356,7 @@ private struct MoveRow: View {
     private static let relative = RelativeDateTimeFormatter()
 
     var body: some View {
-        HStack(alignment: .center, spacing: LayoutMetrics.gap) {
+        HStack(alignment: .center, spacing: 12) {
             Image(nsImage: NSWorkspace.shared.icon(for: UTType(filenameExtension: URL(filePath: move.file).pathExtension) ?? .data))
                 .resizable()
                 .frame(width: LayoutMetrics.iconSize, height: LayoutMetrics.iconSize)
@@ -368,95 +369,53 @@ private struct MoveRow: View {
                     }
                 }
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(move.file)
-                    .font(.body.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(move.file)
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        Image(systemName: exists ? "folder" : "questionmark.folder").font(.system(size: 12))
-                        Text(exists ? placeText : "Moved or deleted since").truncationMode(.middle)
-                    }
-                    // A static string: `Text(date, style: .relative)` redraws every second, which keeps the CPU awake.
-                    Text(Self.relative.localizedString(for: Date(timeIntervalSince1970: move.time), relativeTo: .now))
+                HStack(spacing: 4) {
+                    Image(systemName: exists ? "folder" : "questionmark.folder").font(.subheadline)
+                    Text(exists ? placeText : "Moved or deleted since").truncationMode(.middle)
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // A static string: `Text(date, style: .relative)` redraws every second, which keeps the CPU awake.
+            Text(Self.relative.localizedString(for: Date(timeIntervalSince1970: move.time), relativeTo: .now))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
             if exists {
-            Button(action: revert) {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0)
-            .help("Move back to \(URL(filePath: move.from).lastPathComponent)")
-            .accessibilityLabel("Move \(move.file) back")
-            ShareLink(item: url) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .opacity(isHovered ? 1 : 0)
-            .help("Share or AirDrop \(move.file)")
-            .accessibilityLabel("Share \(move.file)")
-            }
-            Menu { menu } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                    .contentShape(Circle())
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .opacity(isHovered ? 1 : 0)
-            .help("More actions")
-            .accessibilityLabel("More actions for \(move.file)")
-            if exists {
-                // The recommended action, always visible, as on a finished download.
                 Button(action: reveal) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.blue)
-                        .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                        .glassEffect(.regular, in: .circle)
+                    Image(systemName: "folder")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
                         .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                        .contentShape(Circle())
+                        .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .help("Show \(move.file) in Finder")
                 .accessibilityLabel("Show \(move.file) in Finder")
             } else {
-                // Gone since it was sorted: the only useful action left, as on a missing download.
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 15))
                         .foregroundStyle(.secondary)
-                        .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                        .glassEffect(.regular, in: .circle)
                         .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                        .contentShape(Circle())
+                        .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .help("Remove \(move.file) from the list")
                 .accessibilityLabel("Remove \(move.file) from the list")
             }
         }
+        .padding(.vertical, 8)
         .frame(minHeight: LayoutMetrics.cardListRowHeight)
-        .cardRow(position, selected: isSelected, hovered: isHovered, separatorInset: LayoutMetrics.iconSize + LayoutMetrics.gap)
+        .cardRow(position, selected: isSelected, hovered: isHovered, separatorInset: LayoutMetrics.iconSize + 12)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         // Simultaneous, so the parent's single-click selection still fires.
@@ -472,7 +431,7 @@ private struct MoveRow: View {
 
     @ViewBuilder private var menu: some View {
         if exists { fileActions }
-        Button(role: .destructive, action: onRemove) { Label("Remove from List", systemImage: "minus.circle") }
+        Button(role: .destructive, action: onRemove) { Label("Remove from list", systemImage: "minus.circle") }
     }
 
     @ViewBuilder private var fileActions: some View {

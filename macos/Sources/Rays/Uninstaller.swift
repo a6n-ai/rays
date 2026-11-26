@@ -49,13 +49,8 @@ struct UninstallSection: View {
 
     var body: some View {
         Section {
-            Button {
-                confirm = true
-            } label: {
-                Text(working ? "Uninstalling…" : "Uninstall Rays…").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Uninstaller.canUninstall ? .red : .secondary)
+            DestructiveButton(title: working ? "Uninstalling…" : "Uninstall Rays…") { confirm = true }
+                .opacity(Uninstaller.canUninstall ? 1 : 0.5)
             .disabled(!Uninstaller.canUninstall || working)
             .help(Uninstaller.canUninstall ? "Remove Rays from this Mac" : "Only a copy in Applications can uninstall itself.")
             .confirmationDialog("Uninstall Rays?", isPresented: $confirm, titleVisibility: .visible) {

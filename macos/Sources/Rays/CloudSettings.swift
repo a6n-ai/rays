@@ -60,12 +60,12 @@ struct BucketsForm: View {
                     CardRow(title: bucket.name, subtitle: detail(bucket)) {
                         ProviderIcon(provider: bucket.provider, size: TileSize.list)
                     } trailing: {
-                        RowIcon("folder", "Browse \(bucket.name)", tint: .blue) {
+                        RowIcon("folder", "Browse \(bucket.name)", tint: .secondary) {
                             cloudPlace = "b:" + bucket.name
                             nav.open("browse")
                         }
-                        RowIcon("trash", "Remove \(bucket.name)", tint: .red) { remove(bucket.name) }
                     }
+                    .contextMenu { Button("Remove bucket", role: .destructive) { remove(bucket.name) } }
                 }
             }
         }

@@ -90,13 +90,15 @@ struct DestructiveButton: View {
     let title: String
     let action: () -> Void
 
+    /// At the very bottom of a page, outside every card, the way System Settings places "Reset…" and "Remove…".
     var body: some View {
-        HStack {
-            Spacer()
-            Button(title, role: .destructive, action: action)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .foregroundStyle(.red)
-        }
+        Button(title, role: .destructive, action: action)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .foregroundStyle(.red)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 20)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }

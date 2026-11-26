@@ -92,12 +92,10 @@ struct SchedulesPage: View {
                         } trailing: {
                             Button { addSchedule(to: queue) } label: {
                                 Image(systemName: "calendar.badge.plus")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.tint)
-                                    .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                                    .glassEffect(.regular, in: .circle)
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(.secondary)
                                     .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                                    .contentShape(Circle())
+                                    .contentShape(.rect)
                             }
                             .buttonStyle(.plain)
                             .help("Add schedule to \(queue.config.name)")

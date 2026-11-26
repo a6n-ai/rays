@@ -34,15 +34,6 @@ struct CloudView: View {
             }
         }
         .navigationTitle(shown == "browse" ? "Browse Cloud" : shown == "downloads" ? "Cloud Downloads" : "Cloud")
-        .navigationSubtitle(subtitle)
-    }
-
-    private var subtitle: String {
-        switch shown {
-        case "browse": "Cloud"
-        case "downloads": "Cloud downloads"
-        default: model.buckets.count == 1 ? "Cloud: 1 bucket" : "Cloud: \(model.buckets.count) buckets"
-        }
     }
 }
 

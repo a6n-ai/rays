@@ -37,7 +37,6 @@ struct DownloadsView: View {
                     .disabled(model.startError != nil)
             }
             .navigationTitle(queueView?.config.name ?? "Downloads")
-            .navigationSubtitle(subtitle)
             .onAppear { watcher.watch(EngineModel.downloadsURL) { model.foldersChanged() } }
             .onDisappear { watcher.stop() }
             .confirmationDialog(

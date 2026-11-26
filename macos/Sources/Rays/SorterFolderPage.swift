@@ -80,9 +80,10 @@ struct SorterFolderPage: View {
             }
 
             Section {
-                DestructiveButton(title: "Remove Folder…") { confirmingRemoval = true }
-                .disabled(model.busy)
+                DestructiveButton(title: "Remove folder…") { confirmingRemoval = true }
+                    .disabled(model.busy)
             }
+            .listRowBackground(Color.clear)
         }
         .formStyle(.grouped)
         .toggleStyle(SettingSwitchStyle())

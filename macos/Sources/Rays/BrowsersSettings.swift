@@ -17,9 +17,6 @@ struct BrowsersPage: View {
                     Button("Check again") { model.refresh() }
                         .buttonStyle(.glass)
                 }
-                if model.states.contains(where: { $0.helper != .missing }) {
-                    RemoveAllHelpersRow(model: model)
-                }
                 HelperExplainer()
             }
             if model.loaded && model.states.isEmpty {
@@ -39,6 +36,9 @@ struct BrowsersPage: View {
             }
             ForEach(model.others) { other in
                 Section { OtherBrowserRow(browser: other) }
+            }
+            if model.states.contains(where: { $0.helper != .missing }) {
+                Section { RemoveAllHelpersRow(model: model) }
             }
         }
         .formStyle(.grouped)
@@ -192,17 +192,14 @@ private struct RemoveAllHelpersRow: View {
     @State private var confirm = false
 
     var body: some View {
-        SettingRow(title: "Remove all helpers",
-                   hint: "Disconnects Rays from every browser.") {
-            Button("Remove all helpers", role: .destructive) { confirm = true }
-                .buttonStyle(.glass)
-                .confirmationDialog("Remove the Rays helper from all browsers?", isPresented: $confirm,
-                                    titleVisibility: .visible) {
-                    Button("Remove all helpers", role: .destructive) { model.removeAllHelpers() }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Download with Rays stops working in your browsers until you install the helpers again.")
-                }
-        }
+        DestructiveButton(title: "Remove all helpers…") { confirm = true }
+            .help("Disconnects Rays from every browser.")
+            .confirmationDialog("Remove the Rays helper from all browsers?", isPresented: $confirm,
+                                titleVisibility: .visible) {
+                Button("Remove all helpers", role: .destructive) { model.removeAllHelpers() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Download with Rays stops working in your browsers until you install the helpers again.")
+            }
     }
 }

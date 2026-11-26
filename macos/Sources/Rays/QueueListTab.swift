@@ -135,7 +135,6 @@ struct QueueRow: View {
                 }
                 if let trailing { trailing }
                 if let badge = queue.badge, queue.state != .open { QueueBadgePill(badge: badge) }
-                if onDelete != nil { moreMenu }
                 Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
                     .toggleStyle(.switch)
                     .labelsHidden()
@@ -172,36 +171,15 @@ struct QueueRow: View {
     private var primaryButton: some View {
         Button { perform(primary) } label: {
             Image(systemName: primary.symbol)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(primary.tint)
-                .offset(x: primary == .stop ? 0 : 1)
-                .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
-                .glassEffect(.regular, in: .circle)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
                 .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                .contentShape(Circle())
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .disabled(primary == .run && isDirty)
         .help("\(primary.title) \(queue.config.name)")
         .accessibilityLabel("\(primary.title) \(queue.config.name)")
-    }
-
-    private var moreMenu: some View {
-        Menu { actions } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.secondary)
-                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                .contentShape(Circle())
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .opacity(isHovered ? 1 : 0)
-        .allowsHitTesting(isHovered)
-        .help("More")
-        .accessibilityLabel("More actions for \(queue.config.name)")
     }
 
     @ViewBuilder private var actions: some View {
