@@ -59,6 +59,8 @@ export default defineConfig({
 					label: 'Using Rays',
 					items: [
 						{ label: 'Downloads', link: '/docs/app/downloads/', attrs: { 'data-icon': 'download' } },
+						{ label: 'Add downloads', link: '/docs/app/add-links/', attrs: { 'data-icon': 'paste' } },
+						{ label: 'Shortcuts and Share menu', link: '/docs/app/shortcuts/', attrs: { 'data-icon': 'share' } },
 						{ label: 'Queues', link: '/docs/app/queues/', attrs: { 'data-icon': 'queues' } },
 						{ label: 'Speed test', link: '/docs/app/speed/', attrs: { 'data-icon': 'speed' } },
 						{ label: 'How the engine works', link: '/docs/engine/', attrs: { 'data-icon': 'engine' } },
