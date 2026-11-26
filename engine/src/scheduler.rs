@@ -641,11 +641,11 @@ impl Scheduler {
             return Err(invalid("pause the download before changing its link".into()));
         }
         let target = self.sign_for(url).map_err(invalid)?.map_or_else(|| url.to_owned(), |sign| sign());
-        let mut req = self.client.get(&target).header(reqwest::header::RANGE, "bytes=0-0");
-        for h in download::headers_for(&lock(&live.job), url) {
-            req = req.header(h.name, h.value);
-        }
-        let probe = req.send();
+        let (req, saved) = {
+            let job = lock(&live.job);
+            (download::job_request(&self.client, &job, url, &target).header(reqwest::header::RANGE, "bytes=0-0"), job.headers.clone())
+        };
+        let probe = download::send_following(req, &saved);
         let io = |msg: String| EngineError::Io { msg };
         let resp = tokio::time::timeout(Duration::from_secs(15), probe)
             .await
@@ -1088,6 +1088,8 @@ impl Scheduler {
                     Outcome::Done(path) => {
                         job.state = JobState::Done { path: path.to_string_lossy().into_owned() };
                         job.final_path = Some(path);
+                        // Saved headers are secrets: gone from memory and the row once the file is here.
+                        job.headers.clear();
                     }
                     Outcome::Failed(reason) => job.state = JobState::Failed { reason },
                     Outcome::Paused => {

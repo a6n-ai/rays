@@ -67,6 +67,8 @@ impl Store {
         let mut conn = Connection::open(data_dir.join("queue.db"))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "busy_timeout", 2000)?;
+        // Cleared header values are overwritten on disk, not left in free pages.
+        conn.pragma_update(None, "secure_delete", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
             let tx = conn.transaction()?;

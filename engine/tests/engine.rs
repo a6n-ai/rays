@@ -111,6 +111,16 @@ fn serve(mut sock: TcpStream, data: &[u8], stalling: bool, log: &Mutex<Vec<Strin
     let text = String::from_utf8_lossy(&head).to_lowercase();
     log.lock().unwrap().push(text.clone());
     let path = text.split_whitespace().nth(1).unwrap_or("/").to_string();
+    if let Some(rest) = path.strip_prefix("/to/") {
+        // /to/PORT/path: a redirect to another origin on this machine.
+        let (port, tail) = rest.split_once('/').unwrap_or((rest, ""));
+        let _ = sock.write_all(format!("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{port}/{tail}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes());
+        return;
+    }
+    if let Some(tail) = path.strip_prefix("/same/") {
+        let _ = sock.write_all(format!("HTTP/1.1 302 Found\r\nLocation: /{tail}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes());
+        return;
+    }
     let ranges = !path.starts_with("/noranges/");
     let from = text
         .lines()
@@ -727,4 +737,69 @@ fn headers_survive_a_restart_and_ride_the_resume() {
     assert!(after.iter().any(|h| h.contains("range: bytes=")), "segments were requested: {after:?}");
     assert!(after.iter().all(|h| h.contains("x-token: s3cret")), "resume requests carry the header: {after:?}");
     engine.shutdown();
+}
+
+fn key() -> Vec<HttpHeader> {
+    vec![HttpHeader { name: "X-Api-Key".into(), value: "k3y".into() }]
+}
+
+#[test]
+fn headers_do_not_follow_a_redirect_to_another_origin() {
+    setup();
+    let (first, second) = (Origin::start(), Origin::start());
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let link = first.url(&format!("/to/{}/file/x.bin", second.addr.port()));
+    let r = engine.add_with(vec![link], None, vec![None], vec![], vec![], vec![key()], None);
+    let path = wait_done(&engine, r[0].id.expect("url accepted"));
+    assert_eq!(sha_of(&path), sha(&payload()));
+    assert!(first.requests().iter().all(|h| h.contains("x-api-key: k3y")));
+    let got = second.requests();
+    assert!(!got.is_empty() && got.iter().all(|h| !h.contains("x-api-key")), "the other origin never sees it: {got:?}");
+    engine.shutdown();
+}
+
+#[test]
+fn headers_stay_on_a_same_origin_redirect() {
+    setup();
+    let origin = Origin::start();
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let r = engine.add_with(vec![origin.url("/same/file/x.bin")], None, vec![None], vec![], vec![], vec![key()], None);
+    wait_done(&engine, r[0].id.expect("url accepted"));
+    let got = origin.requests();
+    assert!(got.len() >= 2 && got.iter().all(|h| h.contains("x-api-key: k3y")), "{got:?}");
+    engine.shutdown();
+}
+
+fn raw_headers(root: &Path) -> Vec<String> {
+    let conn = rusqlite::Connection::open(root.join("data").join("queue.db")).expect("open db");
+    let mut q = conn.prepare("SELECT headers FROM jobs ORDER BY id").expect("prepare");
+    q.query_map([], |r| r.get::<_, String>(0)).expect("query").map(|r| r.unwrap()).collect()
+}
+
+#[test]
+fn finished_jobs_drop_their_headers_and_paused_ones_keep_them() {
+    setup();
+    let origin = Origin::start();
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let done = engine.add_with(vec![origin.url("/file/x.bin")], None, vec![None], vec![], vec![], vec![token()], None)[0].id.unwrap();
+    wait_done(&engine, done);
+    assert!(!view(&engine, done).unwrap().has_headers);
+    let slow = Origin::start_big();
+    slow.set_stall(true);
+    let paused = engine.add_with(vec![slow.url("/file/big.bin")], None, vec![None], vec![], vec![], vec![token()], None)[0].id.unwrap();
+    wait_view(&engine, paused, "transferring", |v| v.done > 0);
+    engine.pause(paused);
+    wait_view(&engine, paused, "paused", |v| v.state == JobState::Paused);
+    engine.shutdown();
+    drop(engine);
+
+    let raw = raw_headers(root.path());
+    assert_eq!(raw[0], "[]", "the finished job's column holds no header");
+    assert!(raw[1].contains("X-Token"));
+    let stored = Store::open(&root.path().join("data")).expect("open store").load_all().expect("load jobs");
+    assert!(stored[0].headers.is_empty());
+    assert_eq!(stored[1].headers, token());
 }
