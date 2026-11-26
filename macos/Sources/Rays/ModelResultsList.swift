@@ -1,91 +1,51 @@
 import SwiftUI
 
-/// Search results or trending models as Downloads-style rows; a click or Return opens one.
+/// The sections of the Models search page's List: trending models as cards under Top models, then a card of rows.
+/// The page owns the List, the selection, the paging and the key handling.
 struct ModelResultsList: View {
-    let hits: [HfModel]
-    /// Shows the first few as cards under a Top models header, for the trending list.
-    var featured = false
-    let open: (String) -> Void
-    @State private var selection: String?
-    @State private var page = 0
-    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
+    let cards: ArraySlice<HfModel>
+    let rows: ArraySlice<HfModel>
+    let selection: String?
+    let choose: (String) -> Void
 
     private static let cardLimit = 6
-    private var cards: ArraySlice<HfModel> { featured ? hits.prefix(Self.cardLimit) : [] }
-    private var rest: [HfModel] { Array(hits.dropFirst(cards.count)) }
-    private var rows: ArraySlice<HfModel> { ListControls.page(rest, page, pageSize) }
+
+    /// The first few hits shown as cards, for the trending list only.
+    static func cards(_ hits: [HfModel], featured: Bool) -> ArraySlice<HfModel> {
+        featured ? hits.prefix(cardLimit) : []
+    }
 
     var body: some View {
-        List {
-            if !cards.isEmpty {
-                Section("Top models") {
-                    GlassEffectContainer(spacing: 14) {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
-                            ForEach(cards, id: \.id) { hit in
-                                ModelCard(hit: hit, isSelected: selection == hit.id)
-                                    .onTapGesture { choose(hit.id) }
-                            }
-                        }
-                    }
-                    .listRowInsets(EdgeInsets(top: 6, leading: LayoutMetrics.margin, bottom: 6, trailing: LayoutMetrics.margin))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                }
-            }
-            if !rows.isEmpty {
-                Section {
-                    ForEach(rows, id: \.id) { hit in
-                        ModelResultRow(hit: hit, isSelected: selection == hit.id)
-                            .contentShape(Rectangle())
+        if !cards.isEmpty {
+            Section("Top models") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 10)], spacing: 10) {
+                    ForEach(cards, id: \.id) { hit in
+                        ModelCard(hit: hit, isSelected: selection == hit.id)
                             .onTapGesture { choose(hit.id) }
-                            .listRowInsets(EdgeInsets(
-                                top: LayoutMetrics.rowSpacing / 2,
-                                leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
-                                bottom: LayoutMetrics.rowSpacing / 2,
-                                trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
-                            .listRowSeparator(.hidden)
                     }
-                } header: {
-                    if !cards.isEmpty { Text("More trending") }
                 }
+                .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
         }
-        .listStyle(.inset)
-        .tint(.gray)
-        .scrollContentBackground(.hidden)
-        .scrollEdgeEffectStyle(.soft, for: .all)
-        .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: rest.count, page: $page, padded: true) }
-        .onChange(of: hits.map(\.id)) { _, _ in page = 0 }
-        .focusable()
-        .focusEffectDisabled()
-        .onKeyPress(.upArrow) { step(-1) }
-        .onKeyPress(.downArrow) { step(1) }
-        .onKeyPress(.return) {
-            guard let selection else { return .ignored }
-            open(selection)
-            return .handled
+        if !rows.isEmpty {
+            Section {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, hit in
+                    ModelResultRow(hit: hit, position: CardRowBackground.position(index, of: rows.count), isSelected: selection == hit.id)
+                        .onTapGesture { choose(hit.id) }
+                }
+            } header: {
+                if !cards.isEmpty { Text("More trending") }
+            }
         }
-    }
-
-    private func choose(_ id: String) {
-        selection = id
-        open(id)
-    }
-
-    private func step(_ delta: Int) -> KeyPress.Result {
-        let visible = Array(cards) + rows
-        guard !visible.isEmpty else { return .ignored }
-        let current = visible.firstIndex { $0.id == selection }
-        let next = current.map { min(max($0 + delta, 0), visible.count - 1) } ?? (delta > 0 ? 0 : visible.count - 1)
-        selection = visible[next].id
-        return .handled
     }
 }
 
 private struct ModelResultRow: View {
     @Environment(EngineModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let hit: HfModel
+    let position: CardRowBackground.Position
     let isSelected: Bool
     @State private var isHovered = false
 
@@ -96,41 +56,21 @@ private struct ModelResultRow: View {
         var parts: [String] = []
         if !org.isEmpty { parts.append(org) }
         if hit.gguf { parts.append("GGUF") }
+        if hit.gated && !model.hasHFToken { parts.append("Gated") }
         parts.append("↓ \(hit.downloads.formatted(.number.notation(.compactName)))")
         parts.append("♥ \(hit.likes.formatted(.number.notation(.compactName)))")
         return parts.joined(separator: " · ")
     }
 
     var body: some View {
-        HStack(spacing: LayoutMetrics.gap) {
+        CardRow(title: name, subtitle: status) {
             IconTile(ModelKind(pipelineTag: hit.pipelineTag).tile, size: TileSize.list)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(name)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(hit.id)
-                HStack(spacing: 6) {
-                    Text(status)
-                    if hit.gated && !model.hasHFToken {
-                        Image(systemName: "lock.fill").accessibilityLabel("Gated")
-                    }
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
+        } trailing: {
+            CardChevron()
         }
-        .frame(height: LayoutMetrics.rowHeight)
-        .padding(.horizontal, LayoutMetrics.hoverInset)
-        .listRowBackground(RowHighlight(selected: isSelected, hovered: isHovered))
+        .help(hit.id)
+        .cardRow(position, selected: isSelected, hovered: isHovered)
         .onHover { isHovered = $0 }
-        .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHovered)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }

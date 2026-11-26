@@ -25,28 +25,15 @@ struct ModelHeaderCard: View {
         return items.joined(separator: " · ")
     }
 
+    private var caption: String {
+        [kind.label, isGGUF ? "GGUF" : nil, repo.gated ? "Gated" : nil].compactMap { $0 }.joined(separator: " · ")
+    }
+
     var body: some View {
-        HStack(spacing: LayoutMetrics.gap) {
-            IconTile(kind.tile, size: 56)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(hfNameParts(repo.id).name)
-                    .font(.title3.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-                HStack(spacing: 8) {
-                    Text(subtitle).lineLimit(1)
-                    ModelCapsule(text: kind.label, tint: kind.color)
-                    if isGGUF { ModelCapsule(text: "GGUF") }
-                    if repo.gated { ModelCapsule(text: "Gated") }
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: LayoutMetrics.gap)
+        HeroCard(kind.tile, title: hfNameParts(repo.id).name, subtitle: subtitle, caption: caption) {
             VStack(alignment: .trailing, spacing: 6) {
                 Text(byteText(total))
-                    .font(.system(size: 28, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
                     .foregroundStyle(fits ? Color.primary : Color.red)
                 if let freeBytes {
                     Capsule()
@@ -61,8 +48,6 @@ struct ModelHeaderCard: View {
                 }
             }
         }
-        .padding(LayoutMetrics.gap + 4)
-        .glassEffect(.regular.tint(kind.color.opacity(0.12)), in: .rect(cornerRadius: 16))
         .accessibilityElement(children: .combine)
     }
 }
