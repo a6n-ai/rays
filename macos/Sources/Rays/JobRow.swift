@@ -200,6 +200,11 @@ struct JobRow: View {
                     Text(Links.clickable(part.text)).foregroundStyle(part.tint)
                 }
             }
+            if job.hasHeaders {
+                Image(systemName: "key.fill").font(.system(size: 12)).foregroundStyle(.secondary)
+                    .help("Sends saved headers")
+                    .accessibilityLabel("Sends saved headers")
+            }
             if job.linkExpired { Button("Update link…") { askForLink() }.buttonStyle(.link) }
             slowHint
         }

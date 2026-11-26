@@ -30,6 +30,8 @@ final class EngineModel {
     /// From the menu bar's + menu: a page to scan, or a checksum/mirror sheet to open in the add bar.
     var requestedGrab: String?
     var requestedExtra: LinkExtra?
+    /// Headers typed in the add bar's sheet, by link, until the next add takes them. Kept in memory only.
+    @ObservationIgnored var linkHeaders: [String: [HttpHeader]] = [:]
     /// Bumped when the folders on disk may have changed, so the sidebar re-lists them.
     private(set) var folderRevision = 0
     private(set) var generation = 0
@@ -177,7 +179,10 @@ final class EngineModel {
             return
         }
         let sums = Links.checksums(in: text, for: urls)
-        let results = engine.addWith(urls: urls, dir: nil, names: Array(repeating: nil, count: urls.count), sha256s: sums, mirrors: mirrors, queue: queue)
+        let headers = urls.map { linkHeaders[$0] ?? [] }
+        urls.forEach { linkHeaders[$0] = nil }
+        let results = engine.addWith(urls: urls, dir: nil, names: Array(repeating: nil, count: urls.count), sha256s: sums, mirrors: mirrors,
+                                     headers: headers.allSatisfy(\.isEmpty) ? [] : headers, queue: queue)
         let rejected = results.filter { $0.id == nil }
         notice = rejected.isEmpty
             ? nil

@@ -9,7 +9,7 @@ use crate::queue::{self, QueueConfig, Repeat, NO_QUEUE};
 use crate::speed::{self, BestTime, NetworkKind, Sampler, SpeedSettings};
 use crate::s3::{self, BucketConfig, Listing, Secrets, Signer};
 use crate::store::Store;
-use crate::types::{PartView, AddResult, EngineError, HostView, Job, JobId, JobState, JobView, Live, Outcome, QueueRun, QueueState, QueueView, RunOutcome, now_secs};
+use crate::types::{PartView, AddResult, EngineError, HostView, HttpHeader, Job, JobId, JobState, JobView, Live, Outcome, QueueRun, QueueState, QueueView, RunOutcome, now_secs};
 use jiff::civil::DateTime;
 use jiff::ToSpan;
 use std::collections::{HashMap, HashSet};
@@ -443,10 +443,11 @@ impl Scheduler {
         fixed_names: Vec<Option<String>>,
         queue: Option<u64>,
     ) -> Vec<AddResult> {
-        self.add_with(urls, dir, fixed_names, Vec::new(), Vec::new(), queue)
+        self.add_with(urls, dir, fixed_names, Vec::new(), Vec::new(), Vec::new(), queue)
     }
 
     /// Like `add_to`, with an expected SHA-256 per url (`sha256s` empty: none). A bad hash rejects only that url.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_with(
         self: &Arc<Self>,
         urls: Vec<String>,
@@ -454,6 +455,7 @@ impl Scheduler {
         fixed_names: Vec<Option<String>>,
         sha256s: Vec<Option<String>>,
         mirrors: Vec<Vec<String>>,
+        headers: Vec<Vec<HttpHeader>>,
         queue: Option<u64>,
     ) -> Vec<AddResult> {
         let queue_id = queue.unwrap_or(NO_QUEUE);
@@ -475,10 +477,14 @@ impl Scheduler {
         if !mirrors.is_empty() && mirrors.len() != urls.len() {
             return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("mirrors must match urls".to_owned()) }).collect();
         }
-        let (mut fixed, mut sums, mut extra) = (fixed_names.into_iter(), sha256s.into_iter(), mirrors.into_iter());
+        if !headers.is_empty() && headers.len() != urls.len() {
+            return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("headers must match urls".to_owned()) }).collect();
+        }
+        let (mut fixed, mut sums, mut extra, mut sent) = (fixed_names.into_iter(), sha256s.into_iter(), mirrors.into_iter(), headers.into_iter());
         let results = urls
             .into_iter()
             .map(|url| {
+                let headers: Vec<HttpHeader> = sent.next().unwrap_or_default().into_iter().map(|h| HttpHeader { name: h.name.trim().to_owned(), value: h.value }).collect();
                 let (sum, name, mut mirrors) = (sums.next().flatten().map(|h| h.trim().to_ascii_lowercase()), fixed.next().flatten(), extra.next().unwrap_or_default());
                 if sum.as_deref().is_some_and(|h| h.len() != 64 || !h.bytes().all(|c| c.is_ascii_hexdigit())) {
                     return AddResult { url, id: None, error: Some("sha256 must be 64 hex characters".to_owned()) };
@@ -495,7 +501,10 @@ impl Scheduler {
                 if let Some(bad) = mirrors.iter().find_map(|m| self.check_url(m).err()) {
                     return AddResult { url, id: None, error: Some(format!("mirror: {bad}")) };
                 }
-                self.add_one(url, dir.clone(), name, sum, mirrors, queue_id)
+                if let Err(error) = download::check_headers(&url, &headers) {
+                    return AddResult { url, id: None, error: Some(error) };
+                }
+                self.add_one(url, dir.clone(), name, sum, mirrors, headers, queue_id)
             })
             .collect();
         self.refresh();
@@ -575,7 +584,7 @@ impl Scheduler {
             // Another revision or checksum, or another URL: the old job must not finish under the new add.
             self.remove(id, true);
         }
-        let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone(), Vec::new(), queue_id);
+        let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone(), Vec::new(), Vec::new(), queue_id);
         match (res.id, res.error) {
             (Some(id), _) => hf::HfAddStatus::Added { id },
             (None, error) => rejected(&error.unwrap_or_default()),
@@ -632,7 +641,11 @@ impl Scheduler {
             return Err(invalid("pause the download before changing its link".into()));
         }
         let target = self.sign_for(url).map_err(invalid)?.map_or_else(|| url.to_owned(), |sign| sign());
-        let probe = self.client.get(&target).header(reqwest::header::RANGE, "bytes=0-0").send();
+        let mut req = self.client.get(&target).header(reqwest::header::RANGE, "bytes=0-0");
+        for h in download::headers_for(&lock(&live.job), url) {
+            req = req.header(h.name, h.value);
+        }
+        let probe = req.send();
         let io = |msg: String| EngineError::Io { msg };
         let resp = tokio::time::timeout(Duration::from_secs(15), probe)
             .await
@@ -672,6 +685,9 @@ impl Scheduler {
             job.total = new_total;
             job.etag = new_etag;
             job.last_modified = new_modified;
+        }
+        if download::headers_for(&job, url).is_empty() {
+            job.headers.clear();
         }
         job.url = url.to_owned();
         job.state = JobState::Queued;
@@ -733,14 +749,15 @@ impl Scheduler {
         }
     }
 
-    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, mirrors: Vec<String>, queue_id: u64) -> AddResult {
+    #[allow(clippy::too_many_arguments)]
+    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, mirrors: Vec<String>, headers: Vec<HttpHeader>, queue_id: u64) -> AddResult {
         if let Err(error) = self.check_url(&url) {
             return AddResult { url, id: None, error: Some(error) };
         }
         if fixed_name.as_deref().is_some_and(|n| !valid_file_name(n)) {
             return AddResult { url, id: None, error: Some("file name must be one path component".to_owned()) };
         }
-        match self.insert_job(&url, dir, fixed_name, sha256, mirrors, queue_id) {
+        match self.insert_job(&url, dir, fixed_name, sha256, mirrors, headers, queue_id) {
             Ok(id) => AddResult { url, id: Some(id), error: None },
             Err(e) => AddResult { url, id: None, error: Some(e.to_string()) },
         }
@@ -760,7 +777,8 @@ impl Scheduler {
         }
     }
 
-    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, mirrors: Vec<String>, queue_id: u64) -> Result<JobId, EngineError> {
+    #[allow(clippy::too_many_arguments)]
+    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, mirrors: Vec<String>, headers: Vec<HttpHeader>, queue_id: u64) -> Result<JobId, EngineError> {
         let now = now_secs();
         let position = self.next_position.fetch_add(1, Ordering::Relaxed);
         let folder = dir.clone().unwrap_or_else(|| lock(&self.dir).clone());
@@ -772,6 +790,7 @@ impl Scheduler {
             dir,
             sha256,
             mirrors,
+            headers,
             part_path: PathBuf::new(),
             final_path: None,
             done: 0,
@@ -1172,6 +1191,7 @@ impl Scheduler {
             waiting: if job.state == JobState::Queued { self.waiting_reason(job.queue_id) } else { None },
             verified: job.sha256.is_some() && matches!(job.state, JobState::Done { .. }),
             mirrors: job.mirrors.len() as u32,
+            has_headers: !job.headers.is_empty(),
             link_expired: matches!(&job.state, JobState::Failed { reason } if reason.starts_with(download::LINK_EXPIRED)),
         }
     }

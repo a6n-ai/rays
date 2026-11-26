@@ -22,7 +22,7 @@ With a DMG install, open **Settings > General** and click **Install** next to **
 dl URL...                     download links with Rays
 dl s3://BUCKET/KEY            download an object from a bucket added to Rays
 dl list                       list downloads (also: dl --list)
-dl add [--queue NAME|ID] [--sha256 HEX] URL [--mirror URL]...   download links into a queue
+dl add [--queue NAME|ID] [--sha256 HEX] [--header 'Name: value']... URL [--mirror URL]...   download links into a queue
 dl relink ID URL [--restart]  give a paused or failed download a new link
 dl grab URL [--json]          list the downloadable files linked from a web page
 dl queues [--json]            list queues
@@ -78,6 +78,8 @@ dl queue run Night
 ```
 
 `--sha256 HEX` goes before the URL it checks, and can be repeated for several URLs. `--mirror URL` goes after the URL it belongs to and can be repeated: a mirror is another link for the same file. New connections prefer whichever link is fastest, a link that fails is dropped and the rest carry on, and a mirror that reports a different size or has no range support is ignored. Rays compares the finished file with that SHA-256 (64 hex characters) and fails the download if it differs. `dl add` without `--queue` starts the downloads now, in no queue. A queue is an id or a name: any case, `main` for the Main queue, or the start of a name when it matches only one queue. `dl queues` prints one line per queue: id, name, state, counts of queued and running downloads, and the next start in local time (`next Wed 26 Nov 02:00`) for a scheduled queue. `--json` prints the same as JSON, with the next start in unix seconds (`next_run`) and local time (`next_run_local`).
+
+`--header 'Name: value'` adds a request header for links that need a login, for example `--header 'Cookie: session=abc123'`. It is split at the first colon, can be repeated, and applies to every URL in that command. Rays keeps the values in its database on this Mac and sends them only to each link's own site, never to its mirrors on other sites. It refuses `Host`, `Range`, `If-Range`, `Content-Length`, `Transfer-Encoding` and `Connection`, which Rays sets itself, and headers on `s3://` links.
 
 `dl relink ID URL` keeps the partial file when the new link is the same file. If it is a different file, the command fails with "The new link is a different file" and changes nothing; add `--restart` to delete the partial file and start over. Mirrors are not supported for `s3://` links.
 

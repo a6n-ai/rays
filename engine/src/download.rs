@@ -5,7 +5,7 @@ use crate::events::EventHub;
 use crate::limit::RateLimiter;
 use crate::names;
 use crate::store::MAX_PARTS;
-use crate::types::{Job, JobId, JobState, Live, Outcome, Segment};
+use crate::types::{HttpHeader, Job, JobId, JobState, Live, Outcome, Segment};
 use reqwest::header::{
     ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_RANGE, ETAG, HeaderName, IF_RANGE, LAST_MODIFIED, RANGE,
 };
@@ -1459,6 +1459,38 @@ async fn cancelled(rx: &mut watch::Receiver<bool>) {
     }
 }
 
+/// The job's saved headers when `url` is on the job's own host, else none. Credentials stay with their site.
+/// On redirects to another host we rely on reqwest dropping Authorization and Cookie (it keeps other headers).
+pub fn headers_for(job: &Job, url: &str) -> Vec<HttpHeader> {
+    if job.headers.is_empty() || host_of(url) != host_of(&job.url) {
+        return Vec::new();
+    }
+    job.headers.clone()
+}
+
+/// Headers the engine sets itself; a saved copy would break ranges, framing or the connection.
+const ENGINE_HEADERS: [&str; 6] = ["host", "range", "if-range", "content-length", "transfer-encoding", "connection"];
+
+/// Rejects what cannot be sent: s3 links, bad names or values, headers the engine controls. Messages never carry values.
+pub fn check_headers(url: &str, headers: &[HttpHeader]) -> Result<(), String> {
+    if headers.is_empty() {
+        return Ok(());
+    }
+    if url.starts_with("s3://") {
+        return Err("headers are not supported for s3 links".to_owned());
+    }
+    for h in headers {
+        let name = reqwest::header::HeaderName::from_bytes(h.name.trim().as_bytes()).map_err(|_| format!("header name {:?} is not valid", h.name))?;
+        if ENGINE_HEADERS.contains(&name.as_str()) {
+            return Err(format!("header {} is set by Rays", h.name.trim()));
+        }
+        if reqwest::header::HeaderValue::from_str(&h.value).is_err() {
+            return Err(format!("the value of header {} is not valid", h.name.trim()));
+        }
+    }
+    Ok(())
+}
+
 fn with_job<R>(live: &Live, f: impl FnOnce(&mut Job) -> R) -> R {
     // A poisoned lock still holds a usable Job; keep the download going instead of panicking.
     let mut job = live.job.lock().unwrap_or_else(PoisonError::into_inner);
@@ -1485,10 +1517,14 @@ impl Env {
     }
 
     /// A GET for `url`. The Hugging Face token rides along only on requests to the HF host;
-    /// reqwest drops it when a redirect leaves that host.
+    /// reqwest drops it when a redirect leaves that host. The job's saved headers go only to its own host,
+    /// so a mirror elsewhere never sees them.
     fn get(&self, url: &str) -> reqwest::RequestBuilder {
         let target = self.request_url(url);
-        let req = self.client.get(&target);
+        let mut req = self.client.get(&target);
+        for h in with_job(&self.live, |j| headers_for(j, url)) {
+            req = req.header(h.name, h.value);
+        }
         match &self.hf.token {
             Some(token) if self.hf.covers(&target) => req.bearer_auth(token),
             _ => req,

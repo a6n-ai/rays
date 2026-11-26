@@ -49,10 +49,12 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "UPDATE jobs SET queue_id = 0 WHERE queue_id = 1 AND state IN ('done', 'failed')",
     // Extra links for the same file, JSON text.
     "ALTER TABLE jobs ADD COLUMN mirrors TEXT NOT NULL DEFAULT '[]'",
+    // Request headers for the job's own host, JSON text. Values are secrets.
+    "ALTER TABLE jobs ADD COLUMN headers TEXT NOT NULL DEFAULT '[]'",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
-                       resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id, mirrors";
+                       resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id, mirrors, headers";
 
 pub struct Store {
     conn: Mutex<rusqlite::Connection>,
@@ -123,9 +125,9 @@ impl Store {
         let conn = self.lock()?;
         conn.execute(
             "INSERT INTO jobs (url, name, part_path, final_path, done, total, etag, last_modified, \
-             resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id, mirrors) \
+             resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id, mirrors, headers) \
              VALUES (:url, :name, :part_path, :final_path, :done, :total, :etag, :last_modified, \
-             :resumable, :state, :error, :position, :created_at, :updated_at, :segments, :dir, :fixed_name, :sha256, :queue_id, :mirrors)",
+             :resumable, :state, :error, :position, :created_at, :updated_at, :segments, :dir, :fixed_name, :sha256, :queue_id, :mirrors, :headers)",
             named_params! {
                 ":url": job.url,
                 ":name": job.name,
@@ -146,6 +148,7 @@ impl Store {
                 ":fixed_name": job.fixed_name,
                 ":sha256": job.sha256,
                 ":mirrors": serde_json::to_string(&job.mirrors).unwrap_or_else(|_| "[]".into()),
+                ":headers": serde_json::to_string(&job.headers).unwrap_or_else(|_| "[]".into()),
                 ":queue_id": job.queue_id as i64,
             },
         )?;
@@ -165,7 +168,7 @@ impl Store {
             "UPDATE jobs SET url = :url, name = :name, part_path = :part_path, final_path = :final_path, \
              done = :done, total = :total, etag = :etag, last_modified = :last_modified, \
              resumable = :resumable, state = :state, error = :error, position = :position, \
-             segments = :segments, dir = :dir, fixed_name = :fixed_name, sha256 = :sha256, queue_id = :queue_id, mirrors = :mirrors, \
+             segments = :segments, dir = :dir, fixed_name = :fixed_name, sha256 = :sha256, queue_id = :queue_id, mirrors = :mirrors, headers = :headers, \
              updated_at = :updated_at WHERE id = :id",
             named_params! {
                 ":id": job.id as i64,
@@ -186,6 +189,7 @@ impl Store {
                 ":fixed_name": job.fixed_name,
                 ":sha256": job.sha256,
                 ":mirrors": serde_json::to_string(&job.mirrors).unwrap_or_else(|_| "[]".into()),
+                ":headers": serde_json::to_string(&job.headers).unwrap_or_else(|_| "[]".into()),
                 ":queue_id": job.queue_id as i64,
                 ":updated_at": now_secs(),
             },
@@ -626,6 +630,7 @@ fn job_from_row(row: &Row) -> rusqlite::Result<Job> {
         fixed_name: row.get::<_, i64>("fixed_name")? != 0,
         sha256: row.get("sha256")?,
         mirrors: serde_json::from_str(&row.get::<_, String>("mirrors")?).unwrap_or_default(),
+        headers: serde_json::from_str(&row.get::<_, String>("headers")?).unwrap_or_default(),
         queue_id: row.get::<_, i64>("queue_id")? as u64,
     })
 }
@@ -695,6 +700,7 @@ mod tests {
             fixed_name: false,
             sha256: None,
             mirrors: Vec::new(),
+            headers: Vec::new(),
             queue_id: 1,
         }
     }

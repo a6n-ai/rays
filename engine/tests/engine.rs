@@ -3,14 +3,14 @@
 //! except the one `drain_until_done` builds for `next_events`.
 use dl_engine::protocol::Response;
 use dl_engine::store::Store;
-use dl_engine::{Engine, EngineConfig, EngineError, JobEvent, JobId, JobState, JobView};
+use dl_engine::{Engine, EngineConfig, EngineError, HttpHeader, JobEvent, JobId, JobState, JobView};
 use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Once};
+use std::sync::{Arc, Mutex, Once};
 use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
@@ -57,6 +57,8 @@ fn sha_of(path: &Path) -> Vec<u8> {
 struct Origin {
     addr: SocketAddr,
     stall: Arc<AtomicBool>,
+    /// The lowercased request head of every request received.
+    seen: Arc<Mutex<Vec<String>>>,
 }
 
 impl Origin {
@@ -73,17 +75,23 @@ impl Origin {
         let addr = listener.local_addr().expect("origin addr");
         let stall = Arc::new(AtomicBool::new(false));
         let flag = stall.clone();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
         thread::spawn(move || {
             for conn in listener.incoming().flatten() {
-                let (data, stalling) = (data.clone(), flag.load(Ordering::SeqCst));
-                thread::spawn(move || serve(conn, &data, stalling));
+                let (data, stalling, log) = (data.clone(), flag.load(Ordering::SeqCst), log.clone());
+                thread::spawn(move || serve(conn, &data, stalling, &log));
             }
         });
-        Origin { addr, stall }
+        Origin { addr, stall, seen }
     }
 
     fn url(&self, path: &str) -> String {
         format!("http://{}{path}", self.addr)
+    }
+
+    fn requests(&self) -> Vec<String> {
+        self.seen.lock().unwrap().clone()
     }
 
     fn set_stall(&self, on: bool) {
@@ -91,7 +99,7 @@ impl Origin {
     }
 }
 
-fn serve(mut sock: TcpStream, data: &[u8], stalling: bool) {
+fn serve(mut sock: TcpStream, data: &[u8], stalling: bool, log: &Mutex<Vec<String>>) {
     let mut head = Vec::new();
     let mut byte = [0u8; 1];
     while !head.ends_with(b"\r\n\r\n") {
@@ -101,6 +109,7 @@ fn serve(mut sock: TcpStream, data: &[u8], stalling: bool) {
         }
     }
     let text = String::from_utf8_lossy(&head).to_lowercase();
+    log.lock().unwrap().push(text.clone());
     let path = text.split_whitespace().nth(1).unwrap_or("/").to_string();
     let ranges = !path.starts_with("/noranges/");
     let from = text
@@ -313,7 +322,7 @@ fn add_with_keeps_names_aligned_and_dedupes_mirrors() {
     let (m1, m2) = (url("m1"), url("m2"));
     let mirrors = vec![vec![], vec![m2.clone(), m1.clone(), m2.clone(), url("b"), m1.clone()]];
     let names = vec![Some("first.bin".to_owned()), Some("second.bin".to_owned())];
-    let r = engine.add_with(vec![url("a"), url("b")], None, names, vec![Some("xyz".into()), None], mirrors, None);
+    let r = engine.add_with(vec![url("a"), url("b")], None, names, vec![Some("xyz".into()), None], mirrors, vec![], None);
     assert!(r[0].id.is_none());
     let id = r[1].id.expect("second accepted");
     assert_eq!(view(&engine, id).unwrap().mirrors, 2, "order-preserving unique, primary dropped");
@@ -331,7 +340,7 @@ fn add_with_checks_the_given_sha256() {
     let url = |n: &str| origin.url(&format!("/file/{n}.bin"));
     let urls = vec![url("a"), url("b"), url("c"), url("d")];
     let sums = vec![Some(good.to_ascii_uppercase()), Some("0".repeat(64)), Some("xyz".into()), None];
-    let r = engine.add_with(urls, None, vec![None; 4], sums, vec![], None);
+    let r = engine.add_with(urls, None, vec![None; 4], sums, vec![], vec![], None);
     assert_eq!(r[2].error.as_deref(), Some("sha256 must be 64 hex characters"));
     assert!(r[2].id.is_none());
     let (a, b, d) = (r[0].id.unwrap(), r[1].id.unwrap(), r[3].id.unwrap());
@@ -344,8 +353,8 @@ fn add_with_checks_the_given_sha256() {
         assert!(Instant::now() < deadline, "b never failed");
         thread::sleep(Duration::from_millis(5));
     }
-    assert!(engine.add_with(vec![url("e")], None, vec![None], vec![], vec![], None)[0].id.is_some());
-    assert!(engine.add_with(vec![url("f")], None, vec![None], vec![None, None], vec![], None)[0].id.is_none());
+    assert!(engine.add_with(vec![url("e")], None, vec![None], vec![], vec![], vec![], None)[0].id.is_some());
+    assert!(engine.add_with(vec![url("f")], None, vec![None], vec![None, None], vec![], vec![], None)[0].id.is_none());
     engine.shutdown();
 }
 
@@ -625,7 +634,7 @@ fn mirror_takes_over_when_the_primary_fails() {
     let root = tmp();
     let engine = start(EngineConfig { connections: 4, ..config(root.path(), 2) });
     let mirrors = vec![vec![short.url("/file/big.bin"), mirror.url("/file/big.bin")]];
-    let r = engine.add_with(vec![primary.url("/flaky/big.bin")], None, vec![None], vec![], mirrors, None);
+    let r = engine.add_with(vec![primary.url("/flaky/big.bin")], None, vec![None], vec![], mirrors, vec![], None);
     let id = r[0].id.expect("url accepted");
     let path = wait_done(&engine, id);
     assert_eq!(sha_of(&path), sha(&big_payload()));
@@ -637,5 +646,85 @@ fn mirror_takes_over_when_the_primary_fails() {
         assert!(Instant::now() < deadline, "flaky primary alone never failed");
         thread::sleep(Duration::from_millis(5));
     }
+    engine.shutdown();
+}
+
+fn token() -> Vec<HttpHeader> {
+    vec![HttpHeader { name: "X-Token".into(), value: "s3cret".into() }]
+}
+
+#[test]
+fn headers_reach_every_request_and_stay_off_other_hosts() {
+    setup();
+    let (primary, mirror) = (Origin::start_big(), Origin::start_big());
+    let root = tmp();
+    let engine = start(EngineConfig { connections: 4, ..config(root.path(), 2) });
+    // localhost is another host than the primary's 127.0.0.1.
+    let other = format!("http://localhost:{}/file/big.bin", mirror.addr.port());
+    let r = engine.add_with(vec![primary.url("/file/big.bin")], None, vec![None], vec![], vec![vec![other]], vec![token()], None);
+    let id = r[0].id.expect("url accepted");
+    assert!(view(&engine, id).unwrap().has_headers);
+    let path = wait_done(&engine, id);
+    assert_eq!(sha_of(&path), sha(&big_payload()));
+
+    let sent = primary.requests();
+    assert!(sent.iter().all(|h| h.contains("x-token: s3cret")), "every primary request carries the header: {sent:?}");
+    let probed = mirror.requests();
+    assert!(!probed.is_empty(), "the mirror was probed");
+    assert!(probed.iter().all(|h| !h.contains("x-token")), "the mirror never sees the header: {probed:?}");
+    engine.shutdown();
+}
+
+#[test]
+fn headers_are_validated_per_url() {
+    setup();
+    let origin = Origin::start();
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let add = |name: &str, value: &str, url: String| {
+        engine.add_with(vec![url], None, vec![None], vec![], vec![], vec![vec![HttpHeader { name: name.into(), value: value.into() }]], None)
+    };
+    let ok = origin.url("/file/x.bin");
+    assert!(add("X-Token", "a", ok.clone())[0].id.is_some());
+    let bad = add("bad name", "a", ok.clone());
+    assert!(bad[0].id.is_none() && bad[0].error.as_deref().unwrap().contains("not valid"));
+    let bad = add("X-Token", "line\nbreak", ok.clone());
+    assert!(bad[0].error.as_deref().unwrap().contains("not valid"));
+    assert!(!bad[0].error.as_deref().unwrap().contains("break"), "values stay out of errors");
+    for name in ["Range", "host", "If-Range", "Content-Length", "Transfer-Encoding", "CONNECTION"] {
+        let r = add(name, "x", ok.clone());
+        assert_eq!(r[0].error.as_deref(), Some(format!("header {name} is set by Rays").as_str()));
+    }
+    let r = engine.add_with(vec![ok.clone(), origin.url("/file/y.bin")], None, vec![None; 2], vec![], vec![], vec![token()], None);
+    assert_eq!(r[0].error.as_deref(), Some("headers must match urls"));
+    engine.shutdown();
+}
+
+#[test]
+fn headers_survive_a_restart_and_ride_the_resume() {
+    setup();
+    let origin = Origin::start_big();
+    origin.set_stall(true);
+    let root = tmp();
+    let cfg = EngineConfig { connections: 4, ..config(root.path(), 2) };
+    let engine = start(cfg.clone());
+    let r = engine.add_with(vec![origin.url("/file/big.bin")], None, vec![None], vec![], vec![], vec![token()], None);
+    let id = r[0].id.expect("url accepted");
+    wait_view(&engine, id, "split and transferring", |v| v.state == JobState::Running && v.connections >= 2 && v.done > 0);
+    engine.shutdown();
+    drop(engine);
+    origin.set_stall(false);
+    let before = origin.requests().len();
+
+    let engine = start(cfg);
+    let stored = Store::open(&root.path().join("data")).expect("open store").load_all().expect("load jobs");
+    assert_eq!(stored[0].headers, token());
+    assert!(view(&engine, id).unwrap().has_headers);
+    engine.resume(id);
+    let path = wait_done(&engine, id);
+    assert_eq!(sha_of(&path), sha(&big_payload()));
+    let after = origin.requests().split_off(before);
+    assert!(after.iter().any(|h| h.contains("range: bytes=")), "segments were requested: {after:?}");
+    assert!(after.iter().all(|h| h.contains("x-token: s3cret")), "resume requests carry the header: {after:?}");
     engine.shutdown();
 }

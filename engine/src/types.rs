@@ -59,7 +59,11 @@ pub struct JobView {
     pub link_expired: bool,
     /// How many extra links the job has for the same file.
     pub mirrors: u32,
+    /// True when the job sends saved request headers. The values are never exposed.
+    pub has_headers: bool,
 }
+
+pub use crate::protocol::HttpHeader;
 
 /// One range of a split download, for drawing a segmented progress bar.
 #[derive(uniffi::Record, Clone, Debug, PartialEq)]
@@ -226,6 +230,8 @@ pub struct Job {
     pub sha256: Option<String>,
     /// Extra links for the same file; new connections may use any of them.
     pub mirrors: Vec<String>,
+    /// Request headers for the job's own host (values are secrets: never log or show them).
+    pub headers: Vec<HttpHeader>,
     /// The queue this job belongs to; `NO_QUEUE` (0) is a direct download, 1 is the Main queue.
     pub queue_id: u64,
 }

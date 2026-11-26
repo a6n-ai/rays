@@ -1,6 +1,7 @@
 //! `dl mcp`: a Model Context Protocol server on stdio (JSON-RPC 2.0, one message per line).
 //! Tools reach Rays through the same socket as `dl` and the bundled sorter through `sorter.rs`.
 use crate::sorter;
+use dl_engine::protocol::HttpHeader;
 use dl_engine::protocol::{QueueRef, Request, Response};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
@@ -93,7 +94,8 @@ fn tools() -> Value {
                     "queue": { "type": "string", "description": "Queue name or id from list_queues. Without it the downloads start now, in no queue." },
                     "best_time": { "type": "boolean", "default": false, "description": "Add to the Best time queue instead; queue is ignored." },
                     "sha256": { "type": "array", "items": { "type": ["string", "null"] }, "description": "Optional expected SHA-256 (64 hex characters) for each url, same order; null skips one. A download that does not match fails." },
-                    "mirrors": { "type": "array", "items": { "type": "array", "items": { "type": "string" } }, "description": "Optional extra links for the same file, one list per url, same order. Each must serve the same size with range support or it is ignored." }
+                    "mirrors": { "type": "array", "items": { "type": "array", "items": { "type": "string" } }, "description": "Optional extra links for the same file, one list per url, same order. Each must serve the same size with range support or it is ignored." },
+                    "headers": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Optional request headers for links that need a login, for example {\"Cookie\": \"session=...\"}. Applied to every url. Values are stored on this Mac and only sent to the link's own host." }
                 },
                 "required": ["urls"]
             }
@@ -225,7 +227,16 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
                         .ok_or("mirrors must be an array of arrays of strings")?,
                     _ => return Err("mirrors must be an array of arrays of strings".into()),
                 };
-                Ok(Request::Add { urls, queue: queue_arg(args)?, best_time: args.get("best_time").and_then(Value::as_bool).unwrap_or(false), sha256, mirrors })
+                let headers = match args.get("headers") {
+                    None | Some(Value::Null) => Vec::new(),
+                    Some(Value::Object(o)) => o
+                        .iter()
+                        .map(|(name, v)| v.as_str().map(|value| HttpHeader { name: name.clone(), value: value.to_owned() }))
+                        .collect::<Option<Vec<_>>>()
+                        .ok_or("headers must be an object of strings")?,
+                    _ => return Err("headers must be an object of strings".into()),
+                };
+                Ok(Request::Add { urls, queue: queue_arg(args)?, best_time: args.get("best_time").and_then(Value::as_bool).unwrap_or(false), sha256, mirrors, headers })
             })
             .and_then(|req| reply_text(ask(&req))),
         "speed_test" => {
@@ -400,17 +411,20 @@ mod tests {
         assert_eq!(call_tool("speed_test", json!({"force": true})), false);
         assert_eq!(call_tool("best_time", json!({})), false);
         assert_eq!(call_tool("add_downloads", json!({"urls": ["https://a/y"], "best_time": true})), false);
+        assert_eq!(call_tool("add_downloads", json!({"urls": ["https://a/z"], "headers": {"Cookie": "s=1"}})), false);
+        assert_eq!(call_tool("add_downloads", json!({"urls": ["https://a/z"], "headers": {"Cookie": 1}})), true);
         assert_eq!(
             seen,
             [
                 r#"QueueStop { queue: Name("Night") }"#,
                 "QueueRunNow { queue: Id(3) }",
-                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")), best_time: false, sha256: [], mirrors: [] }"#,
+                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")), best_time: false, sha256: [], mirrors: [], headers: [] }"#,
                 r#"VerifyModel { dir: "/m" }"#,
                 "Queues",
                 "SpeedTest { force: true }",
                 "Speed",
-                r#"Add { urls: ["https://a/y"], queue: None, best_time: true, sha256: [], mirrors: [] }"#,
+                r#"Add { urls: ["https://a/y"], queue: None, best_time: true, sha256: [], mirrors: [], headers: [] }"#,
+                r#"Add { urls: ["https://a/z"], queue: None, best_time: false, sha256: [], mirrors: [], headers: [HttpHeader { name: "Cookie", .. }] }"#,
             ]
         );
     }

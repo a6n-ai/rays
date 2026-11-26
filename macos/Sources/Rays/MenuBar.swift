@@ -337,6 +337,7 @@ struct MenuBarPanel: View {
             Section("With the link") {
                 Button("Add a checksum…", systemImage: "checkmark.shield") { withLink(.checksum) }
                 Button("Add a mirror…", systemImage: "square.on.square") { withLink(.mirror) }
+                Button("Add headers…", systemImage: "key") { withLink(.headers) }
             }
         } label: {
             Image(systemName: "plus.circle").font(.system(size: 15, weight: .semibold)).foregroundStyle(.tint)
