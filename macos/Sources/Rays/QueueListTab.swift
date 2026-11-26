@@ -61,7 +61,6 @@ struct QueueListTab: View {
         .tint(.gray)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .all)
-        .animation(reduceMotion ? nil : .smooth, value: shown.map(\.id))
     }
 }
 

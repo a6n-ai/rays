@@ -104,14 +104,15 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         // Pinned under the list, so it stays put while the sidebar scrolls.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if model.hasActivity {
+            // Animated here, not on the List: an animated List diff crashed in AppKit (0.1.24).
+            VStack { if model.hasActivity {
                 ActivityCard { selection = .downloads }
                     .padding(.horizontal, 10)
                     .padding(.bottom, 10)
                     .transition(.opacity)
-            }
+            } }
+            .animation(.easeInOut(duration: 0.2), value: model.hasActivity)
         }
-        .animation(.easeInOut(duration: 0.2), value: model.hasActivity)
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .task(id: "\(EngineModel.downloadsURL.path(percentEncoded: false))|\(model.jobs.filter(\.isDone).count)|\(model.folderRevision)|\(activations)") {

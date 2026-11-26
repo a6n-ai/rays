@@ -62,11 +62,17 @@ struct ContentView: View {
                 }
         } detail: {
             detail
-                .overlay(alignment: .top) { VStack(spacing: 0) { UpdatePill(); RemovalPillView() } }
-                .overlay(alignment: .top) { CountdownBanner() }
-                .animation(reduceMotion ? nil : .smooth, value: Updater.shared.showsPill)
-                .animation(reduceMotion ? nil : .smooth, value: model.removalPill)
-                .animation(reduceMotion ? nil : .smooth, value: QueueActions.shared.countdown != nil)
+                // Animations stay on the overlays: on `detail` they would animate the Lists' row diffs, which crashed
+                // inside AppKit's table updates (NSGestureRecognizer detach on a torn-down row, 0.1.24).
+                .overlay(alignment: .top) {
+                    VStack(spacing: 0) { UpdatePill(); RemovalPillView() }
+                        .animation(reduceMotion ? nil : .smooth, value: Updater.shared.showsPill)
+                        .animation(reduceMotion ? nil : .smooth, value: model.removalPill)
+                }
+                .overlay(alignment: .top) {
+                    CountdownBanner()
+                        .animation(reduceMotion ? nil : .smooth, value: QueueActions.shared.countdown != nil)
+                }
         }
         .containerBackground(.thinMaterial, for: .window)
         .frame(minWidth: 640, idealWidth: 760, minHeight: 440, idealHeight: 520)

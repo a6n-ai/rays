@@ -123,7 +123,6 @@ struct DownloadsView: View {
             .tint(.gray)
             .scrollContentBackground(.hidden)
             .scrollEdgeEffectStyle(.soft, for: .all)
-            .animation(reduceMotion ? nil : .smooth, value: visible.map(\.id))
             .focusable()
             .focusEffectDisabled()
             .onKeyPress(.upArrow) { step(-1) }
