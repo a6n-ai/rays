@@ -34,8 +34,9 @@ xcrun actool "$root/macos/Resources/AppIcon.icon" --compile "$root/$app/Contents
 # SwiftPM compiles the App Intents but does not extract their metadata, so Shortcuts would not see them.
 # The constvalues of one architecture describe the same intents as the other.
 mkdir -p build/intents
-fd -e swift . macos/Sources/Rays -a >build/intents/sources.txt
-fd -e swiftconstvalues -p 'Release/.*/arm64/' . "$root/macos/.build/out/Intermediates.noindex/Rays.build" -a >build/intents/constvalues.txt
+find "$root/macos/Sources/Rays" -name "*.swift" >build/intents/sources.txt
+# Plain find: CI runners have no fd. The build folder layout differs between Xcode versions, so search all of .build.
+find "$root/macos/.build" -name "*.swiftconstvalues" -path "*Release*" -path "*/arm64/*" -path "*Rays.build*" >build/intents/constvalues.txt
 [ -s build/intents/constvalues.txt ] || { echo "no swiftconstvalues for arm64 under macos/.build" >&2; exit 1; }
 xcrun appintentsmetadataprocessor --output "$root/$app/Contents/Resources" \
   --toolchain-dir "$(dirname "$(dirname "$(dirname "$(xcrun --find swiftc)")")")" --module-name Rays \
