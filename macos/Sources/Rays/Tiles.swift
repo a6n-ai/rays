@@ -21,7 +21,7 @@ struct Tile: Hashable {
 
 /// The closest real macOS icon for a concept: a System Settings pane, an app, or a folder.
 enum SystemIcon: Hashable {
-    case pane(String), app(String), home(String), file(String), bundled(String)
+    case pane(String), app(String), home(String), file(String)
 
     private static let panes = "/System/Library/ExtensionKit/Extensions/"
 
@@ -31,24 +31,16 @@ enum SystemIcon: Hashable {
         case .app(let path): path
         case .home(let sub): FileManager.default.homeDirectoryForCurrentUser.appending(path: sub).path(percentEncoded: false)
         case .file(let path): path
-        case .bundled(let name): name
         }
     }
 
     /// App and folder icons carry transparent padding; panes are full-bleed squircles.
-    var bleed: CGFloat { switch self { case .pane, .bundled: 1; default: 1.22 } }
+    var bleed: CGFloat { if case .pane = self { 1 } else { 1.22 } }
 
     @MainActor private static var cache: [SystemIcon: NSImage?] = [:]
 
     /// nil when the file is missing, so an older or newer macOS falls back to the symbol tile.
-    @MainActor var image: NSImage? { image(dark: false) }
-
-    /// Bundled tiles are rendered from Icon Composer documents at build time; `swift build` runs have none and fall back.
-    @MainActor func image(dark: Bool) -> NSImage? {
-        if case .bundled(let name) = self {
-            let file = dark ? "\(name)-dark" : name
-            return Bundle.main.url(forResource: file, withExtension: "png", subdirectory: "Tiles").flatMap { NSImage(contentsOf: $0) }
-        }
+    @MainActor var image: NSImage? {
         if let hit = Self.cache[self] { return hit }
         let found: NSImage? = switch self {
         case .file: NSImage(contentsOfFile: path)  // an .icns read as an image, not the file's Finder icon
@@ -60,18 +52,18 @@ enum SystemIcon: Hashable {
 }
 
 extension Tile {
-    static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5, system: .bundled("downloads"))
-    static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5, system: .bundled("models"))
-    static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .bundled("sorter"))
-    static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48, system: .bundled("cloud"))
-    static let queues = Tile(symbol: "list.bullet", color: TilePalette.orange, glyphScale: 0.46, system: .bundled("queues"))
-    static let schedules = Tile(symbol: "calendar.badge.clock", color: TilePalette.orange, glyphScale: 0.52, system: .bundled("schedules"))
-    static let speed = Tile(symbol: "gauge.with.dots.needle.67percent", color: TilePalette.teal, glyphScale: 0.6, system: .bundled("speed"))
-    static let stats = Tile(symbol: "chart.bar.fill", color: TilePalette.green, glyphScale: 0.44, system: .bundled("stats"))
-    static let shortcuts = Tile(symbol: "square.stack.3d.up.fill", color: TilePalette.indigo, glyphScale: 0.48, system: .bundled("shortcuts"))
-    static let general = Tile(symbol: "gearshape.fill", color: TilePalette.gray, glyphScale: 0.58, system: .bundled("general"))
-    static let ai = Tile(symbol: "apple.intelligence", color: TilePalette.purple, glyphScale: 0.58, system: .bundled("ai"))
-    static let browsers = Tile(symbol: "safari.fill", color: TilePalette.indigo, glyphScale: 0.6, system: .bundled("browsers"))
+    static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5)
+    static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5)
+    static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .app("/System/Applications/Automator.app"))
+    static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48, system: .file("/System/Library/PrivateFrameworks/AOSUI.framework/Versions/A/Resources/iCloud.icns"))
+    static let queues = Tile(symbol: "list.bullet", color: TilePalette.orange, glyphScale: 0.46, system: .app("/System/Applications/Reminders.app"))
+    static let schedules = Tile(symbol: "calendar.badge.clock", color: TilePalette.orange, glyphScale: 0.52, system: .app("/System/Applications/Calendar.app"))
+    static let speed = Tile(symbol: "gauge.with.dots.needle.67percent", color: TilePalette.teal, glyphScale: 0.6)
+    static let stats = Tile(symbol: "chart.bar.fill", color: TilePalette.green, glyphScale: 0.44, system: .app("/System/Applications/Stocks.app"))
+    static let shortcuts = Tile(symbol: "square.stack.3d.up.fill", color: TilePalette.indigo, glyphScale: 0.48, system: .app("/System/Applications/Shortcuts.app"))
+    static let general = Tile(symbol: "gearshape.fill", color: TilePalette.gray, glyphScale: 0.58, system: .pane("GeneralSettings"))
+    static let ai = Tile(symbol: "apple.intelligence", color: TilePalette.purple, glyphScale: 0.58, system: .pane("SiriPreferenceExtension"))
+    static let browsers = Tile(symbol: "safari.fill", color: TilePalette.indigo, glyphScale: 0.6, system: .pane("Network"))
 
     static let appearance = Tile(symbol: "circle.lefthalf.filled", color: TilePalette.gray, system: .pane("Appearance"))
     static let folder = Tile(symbol: "folder.fill", color: TilePalette.blue)
@@ -100,7 +92,6 @@ extension Tile {
 struct IconTile: View {
     let tile: Tile
     let size: CGFloat
-    @Environment(\.colorScheme) private var scheme
 
     init(_ tile: Tile, size: CGFloat = TileSize.row) {
         self.tile = tile
@@ -108,7 +99,7 @@ struct IconTile: View {
     }
 
     @ViewBuilder var body: some View {
-        if let image = tile.system?.image(dark: scheme == .dark) {
+        if let image = tile.system?.image {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)

@@ -31,17 +31,6 @@ xcrun actool "$root/macos/Resources/AppIcon.icon" --compile "$root/$app/Contents
   --minimum-deployment-target 26.0 --app-icon AppIcon --output-partial-info-plist "$root/build/icon-partial.plist" >/dev/null
 [ -f "$app/Contents/Resources/Assets.car" ] || { echo "actool did not produce Assets.car" >&2; exit 1; }
 
-# Sidebar and row tiles: one Icon Composer document each, rendered to PNGs (Default and Dark) for the app to load.
-ictool="$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool"
-[ -x "$ictool" ] || ictool="/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool"
-[ -x "$ictool" ] || { echo "ictool not found; Xcode 26 is required to render the tile icons" >&2; exit 1; }
-mkdir -p "$app/Contents/Resources/Tiles"
-for doc in "$root"/macos/Resources/Tiles/*.icon; do
-  name="$(basename "$doc" .icon)"
-  "$ictool" "$doc" --export-image --output-file "$root/$app/Contents/Resources/Tiles/$name.png" --platform macOS --rendition Default --width 128 --height 128 --scale 2
-  "$ictool" "$doc" --export-image --output-file "$root/$app/Contents/Resources/Tiles/$name-dark.png" --platform macOS --rendition Dark --width 128 --height 128 --scale 2
-done
-
 # SwiftPM compiles the App Intents but does not extract their metadata, so Shortcuts would not see them.
 # The constvalues of one architecture describe the same intents as the other.
 mkdir -p build/intents
