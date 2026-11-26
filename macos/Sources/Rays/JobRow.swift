@@ -6,6 +6,8 @@ struct JobRow: View {
     @Environment(EngineModel.self) private var model
     let job: JobView
     var isSelected = false
+    /// Where the row sits in its card. Nil for the lists that still draw the old highlight (search, cloud downloads).
+    var position: CardRowBackground.Position? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirmStop = false
     @State private var confirmRemove = false
@@ -51,51 +53,28 @@ struct JobRow: View {
 
     private struct Part {
         var text: String
-        var symbol: String?
-        var tint: Color = .secondary
-
-        init(_ text: String, symbol: String? = nil, tint: Color = .secondary) {
-            self.text = text
-            self.symbol = symbol
-            self.tint = tint
-        }
+        init(_ text: String) { self.text = text }
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: LayoutMetrics.gap) {
-            icon
-            VStack(alignment: .leading, spacing: 4) {
-                Text(job.name)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(job.name)
-                if !job.isFinished { progress }
-                status
+        VStack(alignment: .leading, spacing: 0) {
+            CardRow(title: job.name, subtitle: subtitle, status: dotKind) {
+                icon
+            } trailing: {
+                trailing
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if job.isDone, let url = model.locate(job) {
-                ShareLink(item: url) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
-                        .contentShape(Circle())
+            .help(job.name)
+            if !job.isFinished || job.linkExpired || model.slowHint(for: job) != nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !job.isFinished { progress }
+                    if job.linkExpired { Button("Update link…") { askForLink() }.buttonStyle(.link).font(.callout) }
+                    slowHint
                 }
-                .buttonStyle(.plain)
-                .opacity(isHovered ? 1 : 0)
-                .help("Share or AirDrop \(job.name)")
-                .accessibilityLabel("Share \(job.name)")
+                .padding(.leading, TileSize.list + 10)
+                .padding(.bottom, 10)
             }
-            moreButton
-            if let primary { primaryButton(primary) }
-            if primary == .reveal { trashButton }
-            if primary == .retry { removeButton }
         }
-        .frame(height: LayoutMetrics.rowHeight)
-        .padding(.horizontal, LayoutMetrics.hoverInset)
-        // In the row background, so hover fills the same full-width cell as the selection.
-        .listRowBackground(RowHighlight(selected: isSelected, hovered: isHovered))
+        .rowBackground(position, selected: isSelected, hovered: isHovered)
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHovered)
         .dragOut(model.locate(job))
@@ -136,11 +115,49 @@ struct JobRow: View {
         }
     }
 
+    private var trailing: some View {
+        HStack(spacing: 4) {
+            if job.isDone, let url = model.locate(job) {
+                ShareLink(item: url) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .opacity(isHovered ? 1 : 0)
+                .help("Share or AirDrop \(job.name)")
+                .accessibilityLabel("Share \(job.name)")
+            }
+            moreButton
+            if let primary { primaryButton(primary) }
+            if primary == .reveal { trashButton }
+            if primary == .retry { removeButton }
+        }
+    }
+
+    private var subtitle: String {
+        var parts = statusParts.map(\.text)
+        if job.hasHeaders { parts.append("Sends saved headers") }
+        return parts.joined(separator: " · ")
+    }
+
+    private var dotKind: StatusDot.Kind {
+        switch job.state {
+        case .running, .verifying: .active
+        case .queued: .off
+        case .paused, .retrying: .warning
+        case .failed: .error
+        case .done: isMissing ? (model.isInTrash(job) ? .off : .error) : .ok
+        }
+    }
+
     private var icon: some View {
         let type = UTType(filenameExtension: URL(filePath: job.name).pathExtension) ?? .data
         return Image(nsImage: NSWorkspace.shared.icon(for: type))
             .resizable()
-            .frame(width: LayoutMetrics.iconSize, height: LayoutMetrics.iconSize)
+            .frame(width: TileSize.list, height: TileSize.list)
             .overlay(alignment: .bottomTrailing) { badge }
     }
 
@@ -187,32 +204,6 @@ struct JobRow: View {
         }
     }
 
-    private var status: some View {
-        HStack(spacing: 12) {
-            ForEach(Array(statusParts.enumerated()), id: \.offset) { _, part in
-                if let symbol = part.symbol {
-                    HStack(spacing: 4) {
-                        Image(systemName: symbol).font(.system(size: 12))
-                        Text(part.text)
-                    }
-                    .foregroundStyle(part.tint)
-                } else {
-                    Text(Links.clickable(part.text)).foregroundStyle(part.tint)
-                }
-            }
-            if job.hasHeaders {
-                Image(systemName: "key.fill").font(.system(size: 12)).foregroundStyle(.secondary)
-                    .help("Sends saved headers")
-                    .accessibilityLabel("Sends saved headers")
-            }
-            if job.linkExpired { Button("Update link…") { askForLink() }.buttonStyle(.link) }
-            slowHint
-        }
-        .font(.callout)
-        .monospacedDigit()
-        .lineLimit(1)
-    }
-
     @ViewBuilder private var slowHint: some View {
         if let hint = model.slowHint(for: job) {
             HStack(spacing: 6) {
@@ -233,7 +224,7 @@ struct JobRow: View {
         switch job.state {
         case .queued:
             // The engine gives a reason only for queued jobs, e.g. "Queue stopped".
-            parts = job.waiting.map { [Part($0, symbol: "clock")] } ?? [Part("Waiting")]
+            parts = job.waiting.map { [Part($0)] } ?? [Part("Waiting")]
         case .running:
             parts = [Part(job.sizeText)]
             if job.bytesPerSec > 0 { parts.append(Part(byteText(job.bytesPerSec) + "/s")) }
@@ -249,24 +240,24 @@ struct JobRow: View {
             _ = model.folderRevision
             if let url = model.locate(job) {
                 // Where the file is now matters more than when it finished, so the time is dropped here.
-                parts = [Part(model.location(of: url, job: job), symbol: "folder"), Part(byteText(job.total ?? job.done))]
-                if job.verified { parts.append(Part("Checksum matched", symbol: "checkmark.seal")) }
+                parts = [Part(model.location(of: url, job: job)), Part(byteText(job.total ?? job.done))]
+                if job.verified { parts.append(Part("Checksum matched")) }
             } else {
                 parts = model.isInTrash(job)
-                    ? [Part("In the Trash", symbol: "trash")]
-                    : [Part("Deleted or moved out of Downloads", symbol: "questionmark.folder")]
+                    ? [Part("In the Trash")]
+                    : [Part("Deleted or moved out of Downloads")]
             }
         case .failed(let reason):
             parts = [Part(job.linkExpired ? "Link expired" : Self.humanFailure(reason))]
         }
         if !job.resumable && (job.isActive || job.state == .paused) {
-            parts.append(Part("Can't resume", symbol: "exclamationmark.arrow.circlepath", tint: .orange))
+            parts.append(Part("Can't resume"))
         }
         if job.mirrors > 0 {
-            parts.append(Part(job.mirrors == 1 ? "1 mirror" : "\(job.mirrors) mirrors", symbol: "square.on.square"))
+            parts.append(Part(job.mirrors == 1 ? "1 mirror" : "\(job.mirrors) mirrors"))
         }
         if job.isActive && job.connections > 1 {
-            parts.append(Part("\(job.connections)", symbol: "point.3.connected.trianglepath.dotted"))
+            parts.append(Part("\(job.connections) connections"))
         }
         return parts
     }
@@ -467,6 +458,14 @@ struct JobRow: View {
 }
 
 private extension View {
+    @ViewBuilder func rowBackground(_ position: CardRowBackground.Position?, selected: Bool, hovered: Bool) -> some View {
+        if let position {
+            cardRow(position, selected: selected, hovered: hovered)
+        } else {
+            padding(.horizontal, LayoutMetrics.hoverInset).listRowBackground(RowHighlight(selected: selected, hovered: hovered))
+        }
+    }
+
     @ViewBuilder func dragOut(_ url: URL?) -> some View {
         if let url { draggable(url) } else { self }
     }

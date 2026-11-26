@@ -18,8 +18,10 @@ struct DownloadsView: View {
     /// The sorter moves finished files out of the downloads folder; rows then show where each one went.
     @State private var watcher = DirectoryWatcher()
 
-    /// The same three pages on every view: recent activity, the files, then settings.
-    enum DownloadsSection: String { case recent, files, settings }
+    @State private var sorter = SorterModel()
+
+    /// The same two pages on every view: recent activity, then the files. A stored "settings" falls back to recent.
+    enum DownloadsSection: String { case recent, files }
 
     private var inQueue: [JobView] { model.jobs.filter { queue == nil || $0.queueId == queue } }
     private var queueView: QueueView? { model.queues.first { $0.id == queue } }
@@ -32,17 +34,14 @@ struct DownloadsView: View {
         pageView(queue == nil ? section : .recent)
             .safeAreaInset(edge: .top) { ExtensionBanner() }
             .safeAreaInset(edge: .bottom) {
-                if (queue == nil ? section : .recent) != .settings {
-                    AddBar(isTargeted: isDropTargeted, defaultQueue: queue ?? 0)
-                        .disabled(model.startError != nil)
-                }
+                AddBar(isTargeted: isDropTargeted, defaultQueue: queue ?? 0)
+                    .disabled(model.startError != nil)
             }
             .navigationTitle(queueView?.config.name ?? "Rays")
             .navigationSubtitle(subtitle)
             .toolbar { toolbar }
             .onAppear { watcher.watch(EngineModel.downloadsURL) { model.foldersChanged() } }
             .onDisappear { watcher.stop() }
-            .onChange(of: model.pendingAdd, initial: true) { _, new in if new != nil, section == .settings { section = .recent } }
             .confirmationDialog(
                 removalTitle, isPresented: Binding(get: { !removal.isEmpty }, set: { if !$0 { removal = [] } }),
                 titleVisibility: .visible
@@ -81,8 +80,6 @@ struct DownloadsView: View {
             }
         case .files:
             FolderView(root: EngineModel.downloadsURL, folder: EngineModel.downloadsURL, embedded: true) {}
-        case .settings:
-            DownloadsTab()
         }
     }
 
@@ -95,9 +92,7 @@ struct DownloadsView: View {
             } actions: {
                 Button("Try Again") { model.restart() }
             }
-        } else if model.jobs.isEmpty && queue == nil {
-            WelcomeEmpty()
-        } else if visible.isEmpty {
+        } else if queue != nil && visible.isEmpty {
             if inQueue.isEmpty {
                 EmptyState(symbol: "tray", title: "No downloads in this queue",
                            message: "Use Move to Queue on a download, or pick this queue when you add one.")
@@ -105,18 +100,38 @@ struct DownloadsView: View {
                 EmptyState(symbol: "tray", title: "No downloads match")
             }
         } else {
-            // Selection is drawn by the rows (RowHighlight), not List(selection:), whose highlight is always the accent blue.
+            // Selection is drawn by the rows (CardRowBackground), not List(selection:), whose highlight is always the accent blue.
             List {
-                ForEach(visible, id: \.id) { job in
-                    JobRow(job: job, isSelected: selection.contains(job.id))
-                        .contentShape(Rectangle())
-                        .onTapGesture { select(job.id) }
-                        .listRowInsets(EdgeInsets(
-                            top: LayoutMetrics.rowSpacing / 2,
-                            leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
-                            bottom: LayoutMetrics.rowSpacing / 2,
-                            trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
-                        .listRowSeparator(.hidden)
+                if queue == nil {
+                    Section {
+                        HeroCard(.downloads, title: "Downloads", subtitle: subtitle.isEmpty ? "Everything you download, in one place." : subtitle,
+                                 learnMore: URL(string: "https://rays.a6n.ai/docs/app/downloads/"))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 8, leading: LayoutMetrics.margin, bottom: 8, trailing: LayoutMetrics.margin))
+                    }
+                    CollapsibleSettingsCard(page: "downloads") {
+                        settingsRow(SaveFolderRow(sorter: sorter), .first)
+                        settingsRow(CopiedLinksRow(), .middle)
+                        settingsRow(NotifyRow(), .middle)
+                        settingsRow(MaxRunningRow(), .middle)
+                        settingsRow(PartsRow(), .middle)
+                        settingsRow(SpeedLimitRow(), .middle)
+                        settingsRow(UnpackSettingsRows(), .middle)
+                        settingsRow(ReplaceExistingRow(), .last)
+                    }
+                }
+                Section {
+                    if visible.isEmpty {
+                        emptyRow
+                    } else {
+                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, job in
+                            JobRow(job: job, isSelected: selection.contains(job.id),
+                                   position: CardRowBackground.position(index, of: visible.count))
+                                .contentShape(Rectangle())
+                                .onTapGesture { select(job.id) }
+                        }
+                    }
                 }
             }
             .listStyle(.inset)
@@ -133,13 +148,25 @@ struct DownloadsView: View {
         }
     }
 
+    private func settingsRow(_ row: some View, _ position: CardRowBackground.Position) -> some View {
+        row.padding(.vertical, 6).cardRow(position, separatorInset: TileSize.row + 10)
+    }
+
+    /// Plain text, not the glass empty states: this sits in a List row.
+    private var emptyRow: some View {
+        Text(model.jobs.isEmpty ? "No downloads yet. Paste a link below, or press ⌘L." : "No downloads match")
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if queue == nil {
             ToolbarItem(placement: .principal) {
                 ToolbarIconGroup {
                     ForEach([(DownloadsSection.recent, "clock.arrow.circlepath", "Recent downloads"),
-                             (DownloadsSection.files, "folder", "Downloads folder"),
-                             (DownloadsSection.settings, "slider.horizontal.3", "Download settings")], id: \.0) { item in
+                             (DownloadsSection.files, "folder", "Downloads folder")], id: \.0) { item in
                         Button { section = item.0 } label: {
                             ToolbarIcon(symbol: item.1, title: item.2, selected: section == item.0)
                         }
