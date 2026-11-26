@@ -39,7 +39,7 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 - **Speed limit** and how many files download at once.
 - **Safe names.** The server's suggested name is cleaned, so a file can never land outside your folder.
 - **Share** finished downloads with AirDrop or the Share menu, or drag them out of the window.
-- **Remove from List** or **Move to Trash** from each row, or press Delete. A pill at the top offers **Undo** (also Command-Z).
+- **Remove from List** or **Move to Trash** from each row, or press Delete. Failed downloads have **Retry** and **Remove** buttons. A pill at the top offers **Undo** (also Command-Z).
 - **Pages everywhere.** Every long list has pages, with 25, 50, 100 or 200 per page.
 
 ## Sorting with on-device AI

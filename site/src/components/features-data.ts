@@ -152,8 +152,8 @@ export const GROUPS: Group[] = [
 		items: [
 			{ icon: 'clock', title: 'Activity in the sidebar', text: 'A dot on Downloads while something downloads, and a card with the files, speed and time left.', href: '/docs/app/downloads/' },
 			{ icon: 'check', title: 'Notifications', text: 'A notification when downloads finish or fail, with Open, Show in Finder and Retry right on the notification.' },
-			{ icon: 'menubar', title: 'Menu bar and Dock', text: 'Show the download speed and a badge with the downloads running. Close the window and Rays keeps downloading.' },
-			{ icon: 'refresh', title: 'Updates itself', text: 'Click Update and Rays replaces itself and reopens.' },
+			{ icon: 'menubar', title: 'Menu bar and Dock', text: 'Show the download speed and a badge with the downloads running. The menu bar panel adds links, opens queues, schedules, the speed test and Shortcuts. Close the window and Rays keeps downloading.' },
+			{ icon: 'refresh', title: 'Updates itself', text: 'Click Update and Rays replaces itself and reopens, also on a Mac where you are not an administrator.' },
 			{ icon: 'install', title: 'Install and uninstall', text: 'Use the DMG or Homebrew. Uninstall from Settings, which also removes the sorter, browser helpers and the command line.' },
 			{ icon: 'settings', title: 'Light, dark or system', text: 'Pick the appearance that suits you.' },
 			{ icon: 'heart', title: 'Free and open', text: 'AGPL-3.0, no account, no ads and no analytics.' },
