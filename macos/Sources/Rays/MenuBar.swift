@@ -226,6 +226,7 @@ struct MenuBarPanel: View {
                 MenuItem("Queues", symbol: "list.bullet.rectangle") { go(.queues) }
                 MenuItem("Schedules", symbol: "calendar.badge.clock") { go(.schedules) }
                 MenuItem("Speed Test", symbol: "gauge.with.dots.needle.67percent") { go(.speed) }
+                MenuItem("Stats", symbol: "chart.bar.xaxis") { go(.stats) }
                 MenuItem("Shortcuts", symbol: "square.2.layers.3d") { go(.shortcuts) }
             }
             .padding(6)

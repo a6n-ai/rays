@@ -193,6 +193,14 @@ impl Store {
         Ok(())
     }
 
+    /// Finished downloads that finished at or after `since`: link, size, finish time.
+    pub fn finished_since(&self, since: i64) -> Result<Vec<crate::stats::Finished>, EngineError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare("SELECT url, COALESCE(total, done), updated_at FROM jobs WHERE state = 'done' AND updated_at >= ?1")?;
+        let rows = stmt.query_map([since], |r| Ok((r.get(0)?, r.get::<_, i64>(1)?.max(0) as u64, r.get(2)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     pub fn delete(&self, id: JobId) -> Result<(), EngineError> {
         self.lock()?.execute("DELETE FROM jobs WHERE id = ?1", [id as i64])?;
         Ok(())
@@ -1122,6 +1130,21 @@ mod tests {
         assert_eq!(store.setting("k").unwrap(), Some("v".to_string()));
         store.set_setting("k", None).unwrap();
         assert_eq!(store.setting("k").unwrap(), None);
+    }
+
+    #[test]
+    fn finished_since_lists_done_jobs_only_and_loses_removed_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let mut ids = Vec::new();
+        for (state, at) in [(JobState::Done { path: "/d/a".into() }, 100), (JobState::Done { path: "/d/b".into() }, 10), (JobState::Paused, 100)] {
+            let mut job = sample(&dir.path().join("p"), state);
+            ids.push(store.insert(&mut job).unwrap());
+            store.lock().unwrap().execute("UPDATE jobs SET updated_at = ?1 WHERE id = ?2", [at, job.id as i64]).unwrap();
+        }
+        assert_eq!(store.finished_since(50).unwrap(), vec![("https://example.com/f.bin".to_string(), 100, 100)]);
+        store.delete(ids[0]).unwrap();
+        assert!(store.finished_since(50).unwrap().is_empty());
     }
 
     #[test]

@@ -34,6 +34,8 @@ pub mod speed;
 #[cfg(feature = "full")]
 pub mod speedtest;
 #[cfg(feature = "full")]
+pub mod stats;
+#[cfg(feature = "full")]
 pub mod store;
 #[cfg(feature = "full")]
 pub mod types;

@@ -883,6 +883,8 @@ extension EngineModel {
     /// All 60 kept days: at most one sample a minute, about 86 400 rows.
     func loadSpeedHistory() { speedHistory = engine?.speedHistory(limit: 100_000) ?? [] }
 
+    func stats(days: UInt32) -> Stats? { try? engine?.stats(days: days) }
+
     /// A test is running that the app did not start; it can't be stopped.
     var automaticTestRunning: Bool { speedProgress != nil && !testing }
 

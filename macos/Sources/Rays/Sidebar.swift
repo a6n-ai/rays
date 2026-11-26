@@ -9,6 +9,7 @@ enum Destination: Hashable {
     case queues
     case schedules
     case speed
+    case stats
     case shortcuts
 }
 
@@ -77,6 +78,8 @@ struct SidebarView: View {
             }
             Section("Tools") {
                 SpeedCard().tag(Destination.speed)
+                Label("Stats", systemImage: "chart.bar.xaxis")
+                    .tag(Destination.stats)
                 Label("Shortcuts", systemImage: "square.2.layers.3d")
                     .tag(Destination.shortcuts)
             }

@@ -98,6 +98,15 @@ dl add --best-time https://example.com/a.zip
 
 `dl speed` prints the last speed test and the fastest window to download, or how many days of data are still needed. `dl speed test` runs a test now, which takes about 10 seconds. It is refused on a metered link unless you add `--force`. `dl add --best-time` adds downloads to the Best time queue instead of a named queue. See [Speed test and best time](/docs/app/speed/).
 
+## Stats
+
+```sh
+dl stats
+dl stats --days 7
+```
+
+`dl stats` prints totals for downloads finished in the last 30 days (or `--days N`): bytes and files, average and peak speed, the top sites, then one line per day. It counts downloads still in your list.
+
 ## Verify a model
 
 ```sh
