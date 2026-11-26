@@ -55,32 +55,32 @@ struct SidebarView: View {
         VStack(spacing: 0) {
         List(selection: $selection) {
             Section {
-                SidebarLabel("Downloads", symbol: "arrow.down.circle", color: .blue)
+                SidebarLabel("Downloads", symbol: "arrow.down", color: .blue)
                     .activeDot(model.hasActivity)
                     .tag(Destination.downloads)
                 // Always shown, not a DisclosureGroup: a sidebar List ignores its saved expansion and can hide a selected child.
-                SidebarLabel("Models", symbol: "cube", color: .purple)
+                SidebarLabel("Models", symbol: "cube.fill", color: .purple)
                     .padding(.leading, 18)
                     .tag(Destination.models)
                 SidebarLabel("Sorter", symbol: "sparkles", color: .yellow)
                     .tag(Destination.sorter)
-                SidebarLabel("Cloud", symbol: "cloud", color: .cyan)
+                SidebarLabel("Cloud", symbol: "cloud.fill", color: .cyan)
                     .tag(Destination.cloud)
             } header: {
                 Text("Rays")
             }
             Section("Queues") {
-                SidebarLabel("Queues", symbol: "list.bullet.rectangle", color: .orange)
+                SidebarLabel("Queues", symbol: "list.bullet", color: .orange)
                     .activeDot(model.queuesRunning)
                     .tag(Destination.queues)
-                SidebarLabel("Schedules", symbol: "calendar.badge.clock", color: .red)
+                SidebarLabel("Schedules", symbol: "calendar", color: .red)
                     .tag(Destination.schedules)
             }
             Section("Tools") {
                 SpeedCard().tag(Destination.speed)
-                SidebarLabel("Stats", symbol: "chart.bar.xaxis", color: .green)
+                SidebarLabel("Stats", symbol: "chart.bar.fill", color: .green)
                     .tag(Destination.stats)
-                SidebarLabel("Shortcuts", symbol: "square.2.layers.3d", color: .indigo)
+                SidebarLabel("Shortcuts", symbol: "square.2.layers.3d.fill", color: .indigo)
                     .tag(Destination.shortcuts)
             }
             Section("Folders", isExpanded: $foldersExpanded) {
@@ -186,12 +186,11 @@ private struct FolderNode: View {
     }
 }
 
-/// A sidebar row label whose symbol keeps its own colour, and turns white on the selected row.
+/// A sidebar row label with a System Settings style icon: a white symbol on a small tile of the item's colour.
 struct SidebarLabel: View {
     let title: String
     let symbol: String
     let color: Color
-    @Environment(\.backgroundProminence) private var prominence
 
     init(_ title: String, symbol: String, color: Color) {
         (self.title, self.symbol, self.color) = (title, symbol, color)
@@ -201,7 +200,11 @@ struct SidebarLabel: View {
         Label {
             Text(title)
         } icon: {
-            Image(systemName: symbol).foregroundStyle(prominence == .increased ? AnyShapeStyle(.white) : AnyShapeStyle(color.mix(with: .gray, by: 0.45)))
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 20, height: 20)
+                .background(color.gradient, in: .rect(cornerRadius: 5))
         }
     }
 }
