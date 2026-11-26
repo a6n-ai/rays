@@ -1,1 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="0.35" stop-color="#FFFFFF"/><stop offset="1" stop-color="#9CC8FF"/></linearGradient></defs><path d="M512 214 Q566 214 566 268 V468 H690 L512 676 L334 468 H458 V268 Q458 214 512 214Z" fill="url(#a)" stroke="url(#a)" stroke-width="36" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<g fill="none" stroke="#043166" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"><path d="M512 350 V610"/><path d="M412 520 L512 620 L612 520"/><path d="M400 700 H624"/></g>
+</svg>

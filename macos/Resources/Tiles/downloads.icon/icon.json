@@ -1,6 +1,6 @@
 {
   "fill": {
-    "automatic-gradient": "extended-srgb:0.5,0.5,0.5,1.0"
+    "automatic-gradient": "extended-srgb:0.04000,0.48000,1.00000,1.00000"
   },
   "groups": [
     {
@@ -13,56 +13,24 @@
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
-      },
-      "specular": true,
-      "translucency": {
-        "enabled": false,
-        "value": 0
+        "opacity": 0.3
       }
     },
     {
       "layers": [
         {
           "glass": true,
-          "image-name": "tray.svg",
-          "name": "tray"
+          "image-name": "card.svg",
+          "name": "card"
         }
       ],
-      "shadow": {
-        "kind": "layer-color",
-        "opacity": 0.6
-      },
-      "specular": true,
       "translucency": {
-        "enabled": false,
-        "value": 0
-      }
-    },
-    {
-      "layers": [
-        {
-          "glass": false,
-          "image-name-specializations": [
-            {
-              "value": "background.svg"
-            },
-            {
-              "appearance": "dark",
-              "value": "background-dark.svg"
-            }
-          ],
-          "name": "background"
-        }
-      ],
+        "enabled": true,
+        "value": 0.1
+      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0
-      },
-      "specular": false,
-      "translucency": {
-        "enabled": false,
-        "value": 0
+        "opacity": 0.45
       }
     }
   ],
