@@ -91,9 +91,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
+    /// `rays://add?url=<encoded>` (repeatable), from the Share extension, queues the links.
     /// `rays://install-helpers`, from the browser extension when its helper is missing: installs the helper for every
     /// installed browser (each only lets the Rays extension in) and shows Settings > Browsers with the result.
     func application(_ application: NSApplication, open urls: [URL]) {
+        let adds = urls.filter { $0.scheme == "rays" && $0.host() == "add" }
+        if !adds.isEmpty {
+            var links: [String] = []
+            for add in adds {
+                for item in URLComponents(url: add, resolvingAgainstBaseURL: false)?.queryItems ?? [] where item.name == "url" {
+                    guard let value = item.value, !links.contains(value) else { continue }
+                    let scheme = URL(string: value)?.scheme?.lowercased() ?? ""
+                    if scheme == "http" || scheme == "https" { links.append(value) }
+                }
+            }
+            if !links.isEmpty { model.add(links.joined(separator: "\n")) }
+            return
+        }
         guard urls.contains(where: { $0.scheme == "rays" && $0.host() == "install-helpers" }) else { return }
         for browser in BrowserCheck.browsers where browser.engine != .safari && BrowserCheck.appURL(for: browser) != nil {
             try? BrowserCheck.installHelper(browser)

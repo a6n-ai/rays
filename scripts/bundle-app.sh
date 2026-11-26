@@ -48,6 +48,20 @@ for bin in sorter extract; do
 done
 
 codesign --force -s "$identity" "$app/Contents/MacOS/dl"
+# Share extension: universal build, linked as an appex (entry _NSExtensionMain), signed before the app.
+appex="$app/Contents/PlugIns/RaysShare.appex"
+mkdir -p "$appex/Contents/MacOS" build/share
+for arch in arm64 x86_64; do
+  xcrun swiftc -parse-as-library -module-name RaysShare -application-extension -target "$arch-apple-macos26.0" \
+    -Xlinker -e -Xlinker _NSExtensionMain -o "build/share/RaysShare-$arch" macos/ShareExtension/ShareViewController.swift
+done
+lipo -create build/share/RaysShare-arm64 build/share/RaysShare-x86_64 -output "$appex/Contents/MacOS/RaysShare"
+cp macos/ShareExtension/Info.plist "$appex/Contents/Info.plist"
+for key in CFBundleShortVersionString CFBundleVersion; do
+  plutil -replace "$key" -string "$(plutil -extract "$key" raw macos/Resources/Info.plist)" "$appex/Contents/Info.plist"
+done
+codesign --force -s "$identity" --entitlements macos/ShareExtension/RaysShare.entitlements "$appex"
+
 codesign --force -s "$identity" "$app"
 
 du -sh "$app"
