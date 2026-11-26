@@ -80,16 +80,12 @@ struct SorterFolderPage: View {
             }
 
             Section {
-                Button(role: .destructive) {
-                    confirmingRemoval = true
-                } label: {
-                    Text("Remove Folder…")
-                        .frame(maxWidth: .infinity)
-                }
+                DestructiveButton(title: "Remove Folder…") { confirmingRemoval = true }
                 .disabled(model.busy)
             }
         }
         .formStyle(.grouped)
+        .toggleStyle(SettingSwitchStyle())
         .scrollContentBackground(.hidden)
         .navigationTitle(folder.name)
         .confirmationDialog(

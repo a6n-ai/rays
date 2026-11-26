@@ -70,6 +70,7 @@ private struct SpeedOverview: View {
             bestTime
         }
         .formStyle(.grouped)
+        .toggleStyle(SettingSwitchStyle())
     }
 
     private func notice(_ text: String, _ kind: StatusDot.Kind) -> some View {
@@ -98,8 +99,12 @@ private struct SpeedOverview: View {
                            message: "\(days) of \(needed) days. Rays learns from your downloads and speed tests.")
                     .frame(height: 220)
                 if model.speedSettings.nightPromptAnswered && !model.nightWeekActive {
-                    Button("Test at night for a week") { model.startNightWeek() }
-                        .frame(maxWidth: .infinity)
+                    HStack {
+                        Spacer()
+                        Button("Test at night for a week") { model.startNightWeek() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
                 }
             }
         case nil:

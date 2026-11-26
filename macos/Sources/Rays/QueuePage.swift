@@ -65,8 +65,10 @@ struct QueuePage: View {
                     DownloadsView(isDropTargeted: isDropTargeted, queue: queueId)
                 case .schedule:
                     ScheduleTab(draft: draft, queue: queue, isDirty: dirty)
+                        .toggleStyle(SettingSwitchStyle())
                 case .options:
                     OptionsTab(draft: draft, queueId: queueId, onDelete: { delete() })
+                        .toggleStyle(SettingSwitchStyle())
                 }
             }
             .safeAreaInset(edge: .bottom) {

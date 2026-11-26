@@ -47,22 +47,14 @@ struct QueueSettingsTab: View {
             .cardRow(row(1), separatorInset: TileSize.row + 10)
         }
         SettingRow(.concurrency, title: "Simultaneous", hint: "Defaults apply to queues you create from now on. Run command and Shut down are set per queue.") {
-            Stepper(value: Binding(get: { shownRunning }, set: { defaultRunning = $0 }), in: 0...max(cap, 1)) {
-                Text(shownRunning == 0 ? "Same as Rays" : "\(shownRunning) download\(shownRunning == 1 ? "" : "s") at a time")
-                    .monospacedDigit()
+            StepSlider(title: "Simultaneous", value: Binding(get: { shownRunning }, set: { defaultRunning = $0 }),
+                       range: 0...max(cap, 1), lowLabel: "Same as Rays", highLabel: "\(max(cap, 1))") {
+                $0 == 0 ? "Auto" : "\($0)"
             }
         }
         .cardRow(row(missing ? 2 : 1), separatorInset: TileSize.row + 10)
         SettingRow(.speedLimit, title: "Speed limit") {
-            Picker("Speed limit", selection: $defaultSpeed) {
-                ForEach(SpeedPreset.all) { Text($0.title).tag($0.bytes) }
-                if !SpeedPreset.all.contains(where: { $0.bytes == defaultSpeed }) {
-                    Text(SpeedPreset.text(defaultSpeed)).tag(defaultSpeed)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .fixedSize()
+            SpeedLimitField(bytes: $defaultSpeed)
         }
         .cardRow(row(missing ? 3 : 2), separatorInset: TileSize.row + 10)
         SettingRow(.queues, title: "When finished") {
@@ -71,6 +63,7 @@ struct QueueSettingsTab: View {
             }
             .pickerStyle(.menu)
             .labelsHidden()
+            .controlSize(.small)
             .fixedSize()
         }
         .cardRow(row(missing ? 4 : 3), separatorInset: TileSize.row + 10)

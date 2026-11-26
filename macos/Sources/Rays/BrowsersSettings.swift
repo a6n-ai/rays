@@ -41,6 +41,8 @@ struct BrowsersTab: View {
         }
         .scrollContentBackground(.hidden)
         .formStyle(.grouped)
+        .controlSize(.small)
+        .toggleStyle(SettingSwitchStyle())
         .onAppear { model.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refresh()

@@ -6,14 +6,10 @@ struct ReplaceExistingRow: View {
     @AppStorage(SettingsKey.replaceExisting) private var replaceExisting = false
 
     var body: some View {
-        SettingRow(.duplicates, title: "If a file with the same name exists", hint: "Applies to every download.") {
-            Picker("If a file with the same name exists", selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) })) {
-                Text("Keep both").tag(false)
-                Text("Replace (old file goes to the Trash)").tag(true)
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
+        SettingRow(.duplicates, title: "If a file with the same name exists", hint: "Applies to every download. A replaced file goes to the Trash.") {
+            RadioChoice(title: "If a file with the same name exists",
+                        selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) }),
+                        choices: [false, true]) { Text($0 ? "Replace" : "Keep both") }
         }
     }
 }

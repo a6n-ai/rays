@@ -35,12 +35,7 @@ private struct GeneralTab: View {
             Section {
                 SettingRow(.appearance,
                            title: "Appearance", hint: "Match your Mac, or always light or dark.") {
-                    Picker("Appearance", selection: $appearance) {
-                        ForEach(AppearanceChoice.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
+                    RadioChoice(title: "Appearance", selection: $appearance, choices: AppearanceChoice.allCases) { Text($0.title) }
                 }
 
                 SaveFolderRow(sorter: sorter)
@@ -160,12 +155,7 @@ struct MaxRunningRow: View {
     var body: some View {
         SettingRow(.concurrency,
                    title: "Downloads at once", hint: "How many files download at the same time.") {
-            Picker("Downloads at once", selection: Binding(get: { maxRunning }, set: { model.setMaxRunning($0) })) {
-                ForEach(1...10, id: \.self) { Text($0 == 3 ? "3 (Recommended)" : "\($0)").tag($0) }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
+            StepSlider(title: "Downloads at once", value: Binding(get: { maxRunning }, set: { model.setMaxRunning($0) }), range: 1...10)
         }
     }
 }
@@ -177,12 +167,7 @@ struct PartsRow: View {
     var body: some View {
         SettingRow(.parts,
                    title: "Parts per file", hint: "Big files download in parts at once. 4 works well for most sites.") {
-            Picker("Parts per file", selection: Binding(get: { connections }, set: { model.setConnections($0) })) {
-                ForEach(1...16, id: \.self) { Text($0 == 4 ? "4 (Recommended)" : "\($0)").tag($0) }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
+            StepSlider(title: "Parts per file", value: Binding(get: { connections }, set: { model.setConnections($0) }), range: 1...16)
         }
     }
 }
@@ -190,58 +175,12 @@ struct PartsRow: View {
 struct SpeedLimitRow: View {
     @Environment(EngineModel.self) private var model
     @AppStorage(SettingsKey.speedLimit) private var speedLimit = 0
-    @State private var customMode = false
-    @State private var customMB = 0.0
-
-    /// Sentinel tag for the Custom… row; presets are tagged with their byte counts.
-    private let customTag = -1
-
-    private var showsCustom: Bool {
-        customMode || !SpeedPreset.all.contains { $0.bytes == speedLimit }
-    }
 
     var body: some View {
-        Group {
-            SettingRow(.speedLimit,
-                       title: "Speed limit", hint: "Leave some internet for everything else on your Mac.") {
-                Picker("Speed limit", selection: limitSelection) {
-                    ForEach(SpeedPreset.all) { Text($0.title).tag($0.bytes) }
-                    Text("Custom…").tag(customTag)
-                }
-                .labelsHidden()
-                .fixedSize()
-            }
-            if showsCustom {
-                LabeledContent("Custom limit") {
-                    HStack(spacing: 6) {
-                        TextField("MB/s", value: $customMB, format: .number)
-                            .labelsHidden()
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                            .onChange(of: customMB) { _, mb in model.setSpeedLimit(Int(max(0, mb) * 1_000_000)) }
-                        Text("MB/s").foregroundStyle(.secondary)
-                    }
-                }
-            }
+        SettingRow(.speedLimit,
+                   title: "Speed limit", hint: "Leave some internet for everything else on your Mac. 0 means no limit.") {
+            SpeedLimitField(bytes: Binding(get: { speedLimit }, set: { model.setSpeedLimit($0) }))
         }
-        .onAppear {
-            customMB = Double(speedLimit) / 1_000_000
-        }
-    }
-
-    private var limitSelection: Binding<Int> {
-        Binding(
-            get: { showsCustom ? customTag : speedLimit },
-            set: { value in
-                if value == customTag {
-                    customMode = true
-                    customMB = max(customMB, 1)
-                    model.setSpeedLimit(Int(customMB * 1_000_000))
-                } else {
-                    customMode = false
-                    model.setSpeedLimit(value)
-                }
-            })
     }
 }
 

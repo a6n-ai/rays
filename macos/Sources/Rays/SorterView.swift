@@ -215,12 +215,8 @@ struct SorterView: View {
             addRow("Add \(url.lastPathComponent)") { Task { await model.addFolder(url.path(percentEncoded: false)) } }
                 .disabled(model.busy)
         case .removeAll:
-            Button(role: .destructive) { confirmRemoveAll = true } label: {
-                Text("Remove Sorter…").frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardRowMinHeight)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.red)
-            .disabled(model.busy)
+            DestructiveButton(title: "Remove Sorter…") { confirmRemoveAll = true }
+                .disabled(model.busy)
         }
     }
 

@@ -71,6 +71,8 @@ struct BucketsForm: View {
         }
         .scrollContentBackground(.hidden)
         .formStyle(.grouped)
+        .controlSize(.small)
+        .toggleStyle(SettingSwitchStyle())
         .task { await model.loadCloudLogins() }
         .onAppear { applyPreset() }
         .onChange(of: providerID) { applyPreset() }

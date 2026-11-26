@@ -36,7 +36,9 @@ struct ScheduleTab: View {
                 Picker("Repeat", selection: Binding(get: { kind }, set: setKind)) {
                     ForEach(RepeatKind.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .fixedSize()
                 .labelsHidden()
                 repeatDetail
                 if kind == .none { formNote("Runs only when you start it. Pick a repeat to run it at set times.") }

@@ -77,6 +77,7 @@ struct ShortcutsPage: View {
             }
             .formStyle(.grouped)
             .buttonStyle(.glass)
+            .controlSize(.small)
             .navigationTitle("Shortcuts")
         }
     }

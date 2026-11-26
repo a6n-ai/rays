@@ -46,14 +46,13 @@ struct SortDelayRow: View {
     var body: some View {
         SettingRow(.sortDelay, title: "Sort new files after",
                    hint: "Rays waits this long after a file arrives, so you can open or move it first.") {
-            Picker("Sort new files after", selection: Binding(
-                get: { sorter.status?.waitSeconds ?? 10 },
-                set: { secs in Task { await sorter.setWait(secs) } })) {
-                ForEach(SorterModel.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
+            StepSlider(title: "Sort new files after",
+                       value: Binding(
+                           get: { SorterModel.waitChoices.firstIndex { $0.seconds == (sorter.status?.waitSeconds ?? 10) } ?? 0 },
+                           set: { i in Task { await sorter.setWait(SorterModel.waitChoices[i].seconds) } }),
+                       range: 0...(SorterModel.waitChoices.count - 1), lowLabel: "10 seconds", highLabel: "1 hour", width: 190) {
+                SorterModel.waitChoices[$0].title.replacingOccurrences(of: " (Recommended)", with: "")
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
             .disabled(sorter.busy || sorter.loadFailed)
         }
     }

@@ -208,7 +208,6 @@ struct ModelDetailView: View {
                     queuePicker
                     Button(total == 0 ? "Download" : "Download \(byteText(total))", action: download)
                         .buttonStyle(.glassProminent)
-                        .controlSize(.large)
                         .keyboardShortcut(.defaultAction)
                         .disabled(files.isEmpty || notEnoughSpace || needsToken || downloading)
                 }

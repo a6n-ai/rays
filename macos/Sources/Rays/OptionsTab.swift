@@ -20,21 +20,14 @@ struct OptionsTab: View {
                     formRow("Icon & color") { QueueIconPicker(queue: queue) }
                 }
                 formRow("Simultaneous") {
-                    Stepper(value: Binding(get: { shownRunning }, set: { draft.maxRunning = UInt32($0) }), in: 0...max(cap, 1)) {
-                        Text(shownRunning == 0 ? "Same as Rays" : "\(shownRunning) download\(shownRunning == 1 ? "" : "s") at a time")
-                            .monospacedDigit()
+                    StepSlider(title: "Simultaneous", value: Binding(get: { shownRunning }, set: { draft.maxRunning = UInt32($0) }),
+                               range: 0...max(cap, 1), lowLabel: "Same as Rays", highLabel: "\(max(cap, 1))") {
+                        $0 == 0 ? "Auto" : "\($0)"
                     }
                 }
                 formRow("Speed limit") {
                     HStack(spacing: 8) {
-                        Picker("Speed limit", selection: Binding(get: { Int(draft.speedLimit) }, set: { draft.speedLimit = UInt64($0) })) {
-                            ForEach(SpeedPreset.all) { Text($0.title).tag($0.bytes) }
-                            if !SpeedPreset.all.contains(where: { $0.bytes == Int(draft.speedLimit) }) {
-                                Text(SpeedPreset.text(Int(draft.speedLimit))).tag(Int(draft.speedLimit))
-                            }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
+                        SpeedLimitField(bytes: Binding(get: { Int(draft.speedLimit) }, set: { draft.speedLimit = UInt64(max(0, $0)) }))
                         Text("for the whole queue").font(.callout).foregroundStyle(.secondary)
                     }
                 }

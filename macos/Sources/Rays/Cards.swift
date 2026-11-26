@@ -324,6 +324,8 @@ struct SettingRow<Control: View>: View {
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: LayoutMetrics.gap)
             control
+                .controlSize(.small)
+                .toggleStyle(SettingSwitchStyle())
         }
         .frame(minHeight: LayoutMetrics.cardRowMinHeight)
     }
