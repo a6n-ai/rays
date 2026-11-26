@@ -118,6 +118,11 @@ final class Updater {
         // Staged beside the app so the swap is a rename on the same volume.
         let staged = app.deletingLastPathComponent().appending(path: ".Rays-update.app", directoryHint: .isDirectory)
         try? fm.removeItem(at: staged)
+        // A standard user can't add items to /Applications but owns Rays.app, so replace its contents in place instead.
+        guard fm.isWritableFile(atPath: app.deletingLastPathComponent().path(percentEncoded: false)) else {
+            try run("/usr/bin/rsync", ["-a", "--delete", new.path(percentEncoded: false) + "/", app.path(percentEncoded: false) + "/"])
+            return
+        }
         try run("/usr/bin/ditto", [new.path(percentEncoded: false), staged.path(percentEncoded: false)])
         do {
             _ = try fm.replaceItemAt(app, withItemAt: staged)
