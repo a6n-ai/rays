@@ -175,46 +175,52 @@ struct ModelDetailView: View {
     }
 
     private var bottomBar: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             if needsToken {
-                HStack {
-                    Text("This model is gated. Add your Hugging Face token in the Models settings")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Open Models") { UserDefaults.standard.set(true, forKey: "settingsCard.models"); nav.replaceSub(nil) }
+                notice("lock.fill", "This model is gated. Add your Hugging Face token to download it.", tint: .orange) {
+                    Button("Add token") { UserDefaults.standard.set(true, forKey: "settingsCard.models"); nav.replaceSub(nil) }
                 }
             }
             if let bannerText {
-                HStack {
-                    Text(bannerText).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Show Downloads") {
-                        NotificationCenter.default.post(name: .openDownloads, object: nil)
-                    }
+                notice("arrow.down.circle.fill", bannerText, tint: .blue) {
+                    Button("Show Downloads") { NotificationCenter.default.post(name: .openDownloads, object: nil) }
                 }
             }
             if notEnoughSpace, let freeBytes {
-                Text("Not enough space: needs \(byteText(total)), \(byteText(freeBytes)) free")
-                    .foregroundStyle(.red)
+                notice("exclamationmark.triangle.fill", "Not enough space: needs \(byteText(total)), \(byteText(freeBytes)) free.", tint: .red) { EmptyView() }
             }
             if let errorText {
-                Text(errorText).foregroundStyle(.red)
+                notice("exclamationmark.triangle.fill", errorText, tint: .red) { EmptyView() }
             }
             GlassEffectContainer(spacing: 12) {
-                HStack {
+                HStack(spacing: 10) {
                     saveTo
-                    Spacer()
+                    Spacer(minLength: 8)
                     queuePicker
                     Button(total == 0 ? "Download" : "Download \(byteText(total))", action: download)
                         .buttonStyle(.glassProminent)
                         .keyboardShortcut(.defaultAction)
                         .disabled(files.isEmpty || notEnoughSpace || needsToken || downloading)
+                        .fixedSize()
                 }
             }
         }
         .font(.callout)
         .padding(.horizontal, LayoutMetrics.margin)
         .padding(.vertical, 12)
+        // Opaque, so the file list scrolls under the bar instead of showing through it.
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    /// One line above the actions: symbol, message (wraps to two lines), and an optional small button.
+    private func notice<B: View>(_ symbol: String, _ text: String, tint: Color, @ViewBuilder button: () -> B) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol).foregroundStyle(tint)
+            Text(text).foregroundStyle(.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            button().controlSize(.small).buttonStyle(.bordered)
+        }
     }
 
     /// Resolved at each use, so a deleted choice falls back instead of sending a stale id.
