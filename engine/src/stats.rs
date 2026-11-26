@@ -70,7 +70,7 @@ pub fn compute(finished: &[Finished], midnights: &[i64], samples: &[SpeedSample]
     let mut top_hosts: Vec<HostTotal> = hosts.into_iter().map(|(host, (bytes, files))| HostTotal { host, bytes, files }).collect();
     top_hosts.sort_by_key(|h| std::cmp::Reverse(h.bytes));
     top_hosts.truncate(TOP_HOSTS);
-    let bps: Vec<u64> = samples.iter().filter(|s| s.at >= start).map(|s| s.bps).collect();
+    let bps: Vec<u64> = samples.iter().filter(|s| s.at >= start && s.source == crate::speed::SampleSource::Downloads).map(|s| s.bps).collect();
     let avg_bps = (!bps.is_empty()).then(|| bps.iter().sum::<u64>() / bps.len() as u64);
     Stats { total_bytes, total_files, per_day, top_hosts, avg_bps, peak_bps: bps.iter().copied().max() }
 }

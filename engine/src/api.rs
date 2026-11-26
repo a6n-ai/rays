@@ -157,12 +157,12 @@ impl Engine {
         speedtest::last(&self.sched)
     }
 
-    /// The fastest 4 hours of the last 28 days, once there is enough data.
     /// Totals of downloads finished in the last `days` local days that are still in the list.
     pub fn stats(&self, days: u32) -> Result<crate::stats::Stats, EngineError> {
         self.sched.stats(days)
     }
 
+    /// The fastest 4 hours of the last 28 days, once there is enough data.
     pub fn best_time(&self) -> BestTime {
         self.sched.best_time()
     }
