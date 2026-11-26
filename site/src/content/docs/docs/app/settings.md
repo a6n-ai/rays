@@ -24,8 +24,8 @@ Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make
 
 ### Unpack archives
 
-- **Unpack archives when done**: off by default. When a download finishes, Rays unpacks a `.zip`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.txz` or `.7z` into a new folder next to it, named after the file without its extension. If that folder exists, Rays uses "name 2", "name 3" and so on. Other files, such as a lone `.gz`, `.dmg`, `.pkg` or `.rar`, are left alone.
-- **Move the archive to the Trash after unpacking**: available when unpacking is on. If unpacking fails, Rays removes the empty folder, keeps the archive and shows "Couldn't unpack" with the file name.
+- **Unpack archives when done**: off by default. When a download finishes, Rays unpacks a `.zip`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.txz` or `.7z` next to it. Like Archive Utility, an archive that holds one item (often a single folder) gives you that item; anything else goes into a new folder named after the file without its extension. If the name is taken, Rays uses "name 2", "name 3" and so on. Other files, such as a lone `.gz`, `.dmg`, `.pkg` or `.rar`, are left alone.
+- **Move the archive to the Trash after unpacking**: available when unpacking is on. If unpacking fails, Rays removes what it started, keeps the archive and shows "Couldn't unpack" with the file name.
 
 ## Sorting
 

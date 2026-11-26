@@ -201,7 +201,7 @@ struct SidebarLabel: View {
         Label {
             Text(title)
         } icon: {
-            Image(systemName: symbol).foregroundStyle(prominence == .increased ? AnyShapeStyle(.white) : AnyShapeStyle(color))
+            Image(systemName: symbol).foregroundStyle(prominence == .increased ? AnyShapeStyle(.white) : AnyShapeStyle(color.mix(with: .gray, by: 0.45)))
         }
     }
 }
