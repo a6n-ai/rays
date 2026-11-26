@@ -91,6 +91,8 @@ struct ActivityCard: View {
             if let fraction {
                 Text(fraction, format: .percent.precision(.fractionLength(0)))
                     .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                    .fixedSize()
+                    .layoutPriority(1)
             }
         }
     }
