@@ -40,6 +40,11 @@ struct ContentView: View {
                     }
                 }
                 .onChange(of: model.pendingAdd) { _, new in if new != nil { destination = .downloads } }
+                .onChange(of: model.requestedDestination) { _, new in
+                    guard let new else { return }
+                    destination = new
+                    model.requestedDestination = nil
+                }
                 .onChange(of: destination) { _, new in
                     switch new {
                     case .folder(let url)?: lastFolder = url.path(percentEncoded: false)

@@ -11,6 +11,8 @@ final class EngineModel {
     private(set) var notice: String?
     /// Links from a rays://add URL, waiting for the add bar to take them so the user presses Download.
     var pendingAdd: String?
+    /// A page the add bar menu asks the window to show (Cloud, Models); the window takes it and clears it.
+    var requestedDestination: Destination?
     /// Bumped when the folders on disk may have changed, so the sidebar re-lists them.
     private(set) var folderRevision = 0
     private(set) var generation = 0
