@@ -21,7 +21,7 @@ struct Tile: Hashable {
 
 /// The closest real macOS icon for a concept: a System Settings pane, an app, or a folder.
 enum SystemIcon: Hashable {
-    case pane(String), app(String), home(String)
+    case pane(String), app(String), home(String), file(String)
 
     private static let panes = "/System/Library/ExtensionKit/Extensions/"
 
@@ -30,6 +30,7 @@ enum SystemIcon: Hashable {
         case .pane(let name): Self.panes + name + ".appex"
         case .app(let path): path
         case .home(let sub): FileManager.default.homeDirectoryForCurrentUser.appending(path: sub).path(percentEncoded: false)
+        case .file(let path): path
         }
     }
 
@@ -41,7 +42,10 @@ enum SystemIcon: Hashable {
     /// nil when the file is missing, so an older or newer macOS falls back to the symbol tile.
     @MainActor var image: NSImage? {
         if let hit = Self.cache[self] { return hit }
-        let found = FileManager.default.fileExists(atPath: path) ? NSWorkspace.shared.icon(forFile: path) : nil
+        let found: NSImage? = switch self {
+        case .file: NSImage(contentsOfFile: path)  // an .icns read as an image, not the file's Finder icon
+        default: FileManager.default.fileExists(atPath: path) ? NSWorkspace.shared.icon(forFile: path) : nil
+        }
         Self.cache[self] = found
         return found
     }
@@ -51,7 +55,7 @@ extension Tile {
     static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5)
     static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5)
     static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .app("/System/Applications/Automator.app"))
-    static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48)
+    static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48, system: .file("/System/Library/PrivateFrameworks/AOSUI.framework/Versions/A/Resources/iCloud.icns"))
     static let queues = Tile(symbol: "list.bullet", color: TilePalette.orange, glyphScale: 0.46, system: .app("/System/Applications/Reminders.app"))
     static let schedules = Tile(symbol: "calendar.badge.clock", color: TilePalette.orange, glyphScale: 0.52, system: .app("/System/Applications/Calendar.app"))
     static let speed = Tile(symbol: "gauge.with.dots.needle.67percent", color: TilePalette.teal, glyphScale: 0.6)
