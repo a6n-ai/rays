@@ -39,6 +39,7 @@ struct ContentView: View {
                         destination = .folder(URL(filePath: path, directoryHint: .isDirectory))
                     }
                 }
+                .onChange(of: model.pendingAdd) { _, new in if new != nil { destination = .downloads } }
                 .onChange(of: destination) { _, new in
                     switch new {
                     case .folder(let url)?: lastFolder = url.path(percentEncoded: false)

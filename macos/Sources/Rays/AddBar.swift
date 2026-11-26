@@ -69,6 +69,12 @@ struct AddBar: View {
         .padding(.bottom, LayoutMetrics.margin)
         // Clearing the field after a submit must keep the notice that submit just produced.
         .onChange(of: input) { _, new in if !new.isEmpty { model.clearNotice() } }
+        .onChange(of: model.pendingAdd, initial: true) { _, pending in
+            guard let pending else { return }
+            input = isBlank ? pending : input + "\n" + pending
+            model.pendingAdd = nil
+            fieldFocused = true
+        }
         .task(id: model.notice) {
             guard model.notice != nil else { return }
             try? await Task.sleep(for: .seconds(4))

@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
-    /// `rays://add?url=<encoded>` (repeatable), from the Share extension, queues the links.
+    /// `rays://add?url=<encoded>` (repeatable), from the Share extension, puts the links in the add bar.
     /// `rays://install-helpers`, from the browser extension when its helper is missing: installs the helper for every
     /// installed browser (each only lets the Rays extension in) and shows Settings > Browsers with the result.
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -105,7 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if scheme == "http" || scheme == "https" { links.append(value) }
                 }
             }
-            if !links.isEmpty { model.add(links.joined(separator: "\n")) }
+            if !links.isEmpty {
+                // A web page can open rays:// links, so they only fill the add bar; the user presses Download.
+                model.pendingAdd = links.joined(separator: "\n")
+                Self.showInDock()
+            }
             return
         }
         guard urls.contains(where: { $0.scheme == "rays" && $0.host() == "install-helpers" }) else { return }

@@ -9,6 +9,8 @@ final class EngineModel {
     private let notifier = DownloadNotifier()
     private(set) var startError: String?
     private(set) var notice: String?
+    /// Links from a rays://add URL, waiting for the add bar to take them so the user presses Download.
+    var pendingAdd: String?
     /// Bumped when the folders on disk may have changed, so the sidebar re-lists them.
     private(set) var folderRevision = 0
     private(set) var generation = 0

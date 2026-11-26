@@ -41,6 +41,7 @@ struct DownloadsView: View {
             .toolbar { toolbar }
             .onAppear { watcher.watch(EngineModel.downloadsURL) { model.foldersChanged() } }
             .onDisappear { watcher.stop() }
+            .onChange(of: model.pendingAdd, initial: true) { _, new in if new != nil, section == .settings { section = .recent } }
             .confirmationDialog(
                 removalTitle, isPresented: Binding(get: { !removal.isEmpty }, set: { if !$0 { removal = [] } }),
                 titleVisibility: .visible
