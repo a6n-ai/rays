@@ -54,6 +54,7 @@ struct SidebarView: View {
         List(selection: $selection) {
             Section {
                 Label("Downloads", systemImage: "arrow.down.circle")
+                    .activeDot(model.hasActivity)
                     .tag(Destination.downloads)
                 // Always shown, not a DisclosureGroup: a sidebar List ignores its saved expansion and can hide a selected child.
                 Label("Models", systemImage: "cube")
@@ -68,11 +69,16 @@ struct SidebarView: View {
             }
             Section("Queues") {
                 Label("Queues", systemImage: "list.bullet.rectangle")
+                    .activeDot(model.queuesRunning)
                     .tag(Destination.queues)
                 Label("Schedules", systemImage: "calendar.badge.clock")
                     .tag(Destination.schedules)
             }
             Section("Tools") {
+                if model.hasActivity {
+                    ActivityCard { selection = .downloads }
+                        .transition(.opacity)
+                }
                 SpeedCard().tag(Destination.speed)
             }
             Section("Folders", isExpanded: $foldersExpanded) {
@@ -97,6 +103,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .animation(.easeInOut(duration: 0.2), value: model.hasActivity)
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         .task(id: "\(EngineModel.downloadsURL.path(percentEncoded: false))|\(model.jobs.filter(\.isDone).count)|\(model.folderRevision)|\(activations)") {

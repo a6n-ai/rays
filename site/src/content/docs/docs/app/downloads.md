@@ -37,6 +37,10 @@ Rays adds actions to the Shortcuts app and to Spotlight: **Add download** (a lin
 - The toolbar's **Speed Limit** menu caps bandwidth for all downloads.
 - **Settings > Downloads** sets how many files download at once (1 to 10) and how many parts each file uses (1 to 16).
 
+## Activity in the sidebar
+
+While a download is running, retrying, verifying or about to start, a dot appears next to **Downloads** in the sidebar, and a card above **Speed test** shows what is happening: how many files, the combined speed, the time left, and progress for the two newest files. Click the card to open Downloads. Both disappear when nothing is active.
+
 ## The Downloads list
 
 - **Filter** by status (All, Active, Finished, Failed) or by type (Documents, Images, Video, Audio, Archives, Apps and installers, Other).
