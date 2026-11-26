@@ -14,32 +14,9 @@ struct SortingTab: View {
                 AIStatusRow()
             }
 
-            Section {
-                SettingRow(.sortDelay, title: "Sort new files after",
-                           hint: "Rays waits this long after a file arrives, so you can open or move it first.") {
-                    Picker("Sort new files after", selection: Binding(
-                        get: { sorter.status?.waitSeconds ?? 10 },
-                        set: { secs in Task { await sorter.setWait(secs) } })) {
-                        ForEach(SorterModel.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                    .disabled(sorter.busy || sorter.loadFailed)
-                }
-            }
+            Section { SortDelayRow(sorter: sorter) }
 
-            Section {
-                SettingRow(.rename, title: "Rename files from their content",
-                           hint: "Off keeps every file's original name. Files are still sorted into folders.") {
-                    Toggle("Rename files from their content", isOn: Binding(
-                        get: { sorter.status?.renameFiles ?? true },
-                        set: { on in Task { await sorter.setRename(on) } }))
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .disabled(sorter.busy || sorter.loadFailed)
-                }
-            }
+            Section { RenameRow(sorter: sorter) }
 
             Section {
                 SettingRow(.watchedFolders, title: watched == 1 ? "1 folder watched" : "\(watched) folders watched",
@@ -60,5 +37,40 @@ struct SortingTab: View {
     private func openSorter() {
         openWindow(id: "main")
         NotificationCenter.default.post(name: .openSorter, object: nil)
+    }
+}
+
+struct SortDelayRow: View {
+    let sorter: SorterModel
+
+    var body: some View {
+        SettingRow(.sortDelay, title: "Sort new files after",
+                   hint: "Rays waits this long after a file arrives, so you can open or move it first.") {
+            Picker("Sort new files after", selection: Binding(
+                get: { sorter.status?.waitSeconds ?? 10 },
+                set: { secs in Task { await sorter.setWait(secs) } })) {
+                ForEach(SorterModel.waitChoices, id: \.seconds) { Text($0.title).tag($0.seconds) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+            .disabled(sorter.busy || sorter.loadFailed)
+        }
+    }
+}
+
+struct RenameRow: View {
+    let sorter: SorterModel
+
+    var body: some View {
+        SettingRow(.rename, title: "Rename files from their content",
+                   hint: "Off keeps every file's original name. Files are still sorted into folders.") {
+            Toggle("Rename files from their content", isOn: Binding(
+                get: { sorter.status?.renameFiles ?? true },
+                set: { on in Task { await sorter.setRename(on) } }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .disabled(sorter.busy || sorter.loadFailed)
+        }
     }
 }

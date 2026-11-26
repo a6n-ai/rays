@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Cloud > Buckets: S3-compatible buckets. A provider preset fills the endpoint; every field stays editable.
+/// The Cloud page: hero, settings (add a bucket, AWS CLI and R2 logins) and the buckets card. S3-compatible buckets. A provider preset fills the endpoint; every field stays editable.
 struct BucketsForm: View {
     @Environment(EngineModel.self) private var model
     @State private var providerID = "aws"
@@ -13,7 +13,7 @@ struct BucketsForm: View {
     @State private var pathStyle = false
     @State private var adding = false
     @State private var error: String?
-    @AppStorage("cloudTab") private var cloudTab: CloudTab = .browse
+    @AppStorage("cloudTab") private var cloudTab: CloudTab = .buckets
     @AppStorage("cloudPlace") private var cloudPlace = ""
 
     private var preset: ProviderPreset? { model.providers.first { $0.id == providerID } }
@@ -28,13 +28,28 @@ struct BucketsForm: View {
 
     var body: some View {
         Form {
+            Section {
+                HeroCard(.cloud, title: "Cloud",
+                         subtitle: "Browse buckets on S3-compatible storage like folders, and download from them.",
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/s3/"))
+                    .listRowBackground(Color.clear)
+            }
+
+            CollapsibleSettingsCard(page: "cloud") {
+                addBucketRows
+                if !model.awsProfiles.isEmpty { AWSRows() }
+                CloudflareRows()
+            }
+
             Section("Buckets") {
                 if model.buckets.isEmpty {
-                    Text("No buckets yet. Add one below, then browse it.")
+                    Text("No buckets yet. Open Settings above to add one, then browse it.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.buckets, id: \.name) { bucket in
-                    CloudRow(provider: bucket.provider, title: bucket.name, detail: detail(bucket)) {
+                    CardRow(title: bucket.name, subtitle: detail(bucket)) {
+                        ProviderIcon(provider: bucket.provider, size: TileSize.list)
+                    } trailing: {
                         RowIcon("folder", "Browse \(bucket.name)", tint: .blue) {
                             cloudPlace = "b:" + bucket.name
                             cloudTab = .browse
@@ -42,41 +57,6 @@ struct BucketsForm: View {
                         RowIcon("trash", "Remove \(bucket.name)", tint: .red) { remove(bucket.name) }
                     }
                 }
-            }
-
-            if !model.awsProfiles.isEmpty { AWSSection() }
-            CloudflareSection()
-
-            Section {
-                Picker("Provider", selection: $providerID) {
-                    ForEach(model.providers, id: \.id) { preset in
-                        Label { Text(preset.name) } icon: { Image(systemName: ProviderIcon.style(preset.id).0) }
-                            .tag(preset.id)
-                    }
-                }
-                TextField("Bucket name", text: $name)
-                if let label = preset?.fieldLabel {
-                    TextField(label, text: $field)
-                }
-                TextField("Region", text: $region, prompt: Text(preset?.regionHint ?? ""))
-                TextField("Endpoint", text: $endpoint, prompt: Text("https://s3.example.com"))
-                Toggle("Path-style addressing", isOn: $pathStyle)
-                TextField("Access key ID", text: $keyID)
-                SecureField("Secret access key", text: $secret)
-                HStack {
-                    if let error { ErrorLine(text: error) }
-                    Spacer()
-                    if adding { ProgressView().controlSize(.small) }
-                    Button("Add Bucket", action: add)
-                        .disabled(!canAdd)
-                        .keyboardShortcut(.defaultAction)
-                }
-            } header: {
-                Text("Add a bucket")
-            } footer: {
-                Text("Rays lists the bucket once to check the keys. The secret key is kept in your Keychain.")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
             }
         }
         .scrollContentBackground(.hidden)
@@ -86,6 +66,36 @@ struct BucketsForm: View {
         .onChange(of: providerID) { applyPreset() }
         .onChange(of: region) { fillEndpoint() }
         .onChange(of: field) { fillEndpoint() }
+    }
+
+    @ViewBuilder private var addBucketRows: some View {
+        Text("Add a bucket").font(.subheadline.weight(.semibold))
+        Picker("Provider", selection: $providerID) {
+            ForEach(model.providers, id: \.id) { preset in
+                Label { Text(preset.name) } icon: { Image(systemName: ProviderIcon.style(preset.id).0) }
+                    .tag(preset.id)
+            }
+        }
+        TextField("Bucket name", text: $name)
+        if let label = preset?.fieldLabel {
+            TextField(label, text: $field)
+        }
+        TextField("Region", text: $region, prompt: Text(preset?.regionHint ?? ""))
+        TextField("Endpoint", text: $endpoint, prompt: Text("https://s3.example.com"))
+        Toggle("Path-style addressing", isOn: $pathStyle)
+        TextField("Access key ID", text: $keyID)
+        SecureField("Secret access key", text: $secret)
+        HStack {
+            if let error { ErrorLine(text: error) }
+            Spacer()
+            if adding { ProgressView().controlSize(.small) }
+            Button("Add Bucket", action: add)
+                .disabled(!canAdd)
+                .keyboardShortcut(.defaultAction)
+        }
+        Text("Rays lists the bucket once to check the keys. The secret key is kept in your Keychain.")
+            .font(.footnote)
+            .foregroundStyle(.tertiary)
     }
 
     private func detail(_ bucket: BucketConfig) -> String {
@@ -141,7 +151,7 @@ struct BucketsForm: View {
 }
 
 /// Buckets from the AWS CLI logins on this Mac. Linking one stores no keys: the CLI hands Rays fresh ones.
-private struct AWSSection: View {
+private struct AWSRows: View {
     @Environment(EngineModel.self) private var model
     @AppStorage("cloudAWSProfile") private var profile = "default"
     @State private var found: [AwsBucket] = []
@@ -152,7 +162,8 @@ private struct AWSSection: View {
     private var linked: Set<String> { Set(model.buckets.map(\.name)) }
 
     var body: some View {
-        Section {
+        Group {
+            Text("Your AWS CLI").font(.subheadline.weight(.semibold))
             Picker("Profile", selection: $profile) {
                 ForEach(model.awsProfiles, id: \.self) { Text($0).tag($0) }
             }
@@ -169,9 +180,6 @@ private struct AWSSection: View {
                         .disabled(adding != nil)
                 }
             }
-        } header: {
-            Text("Your AWS CLI")
-        } footer: {
             Text("Rays asks the aws command for keys each time and keeps none. Only list and read access is used.")
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
@@ -209,7 +217,7 @@ private struct AWSSection: View {
 }
 
 /// R2 buckets from the `cf` login. Shown only when `cf` is installed and logged in.
-private struct CloudflareSection: View {
+private struct CloudflareRows: View {
     @Environment(EngineModel.self) private var model
     @State private var adding: String?
     @State private var error: String?
@@ -225,34 +233,30 @@ private struct CloudflareSection: View {
     var body: some View {
         Group {
             if !checked {
-                Section("Cloudflare R2") { ProgressView().frame(maxWidth: .infinity) }
+                Text("Cloudflare R2").font(.subheadline.weight(.semibold))
+                HStack { ProgressView().controlSize(.small); Text("Checking the cf login").foregroundStyle(.secondary) }
             } else if let loadError, !loadError.contains("not found") {
-                Section("Cloudflare R2") {
-                    Text("Log in with cf auth login in Terminal to see your R2 buckets here.")
-                        .foregroundStyle(.secondary)
-                    Text(loadError).font(.footnote).foregroundStyle(.tertiary).lineLimit(2)
-                }
+                Text("Cloudflare R2").font(.subheadline.weight(.semibold))
+                Text("Log in with cf auth login in Terminal to see your R2 buckets here.")
+                    .foregroundStyle(.secondary)
+                Text(loadError).font(.footnote).foregroundStyle(.tertiary).lineLimit(2)
             } else if let account {
-                Section {
-                    if let error { ErrorLine(text: error) }
-                    if account.buckets.isEmpty {
-                        Text("No R2 buckets in this account.").foregroundStyle(.secondary)
-                    }
-                    ForEach(account.buckets, id: \.self) { bucket in
-                        CloudRow(provider: "r2", title: bucket, detail: "Cloudflare R2") {
-                            AddState(added: linked.contains(bucket), busy: adding == bucket, name: bucket) {
-                                add(bucket, account: account.id)
-                            }
-                            .disabled(adding != nil)
-                        }
-                    }
-                } header: {
-                    Text("Cloudflare R2 · \(account.name)")
-                } footer: {
-                    Text("The first Add creates a read-only R2 token named \u{201C}Rays (read-only R2)\u{201D} in your Cloudflare account. Its key is kept in your Keychain.")
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
+                Text("Cloudflare R2 · \(account.name)").font(.subheadline.weight(.semibold))
+                if let error { ErrorLine(text: error) }
+                if account.buckets.isEmpty {
+                    Text("No R2 buckets in this account.").foregroundStyle(.secondary)
                 }
+                ForEach(account.buckets, id: \.self) { bucket in
+                    CloudRow(provider: "r2", title: bucket, detail: "Cloudflare R2") {
+                        AddState(added: linked.contains(bucket), busy: adding == bucket, name: bucket) {
+                            add(bucket, account: account.id)
+                        }
+                        .disabled(adding != nil)
+                    }
+                }
+                Text("The first Add creates a read-only R2 token named \u{201C}Rays (read-only R2)\u{201D} in your Cloudflare account. Its key is kept in your Keychain.")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
             }
         }
     }
