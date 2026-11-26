@@ -22,6 +22,11 @@ Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make
 - **Parts per file**: 1 to 16 connections per file (4 is recommended).
 - **Speed limit**: off, a preset, or **Custom…** in MB/s.
 
+### Unpack archives
+
+- **Unpack archives when done**: off by default. When a download finishes, Rays unpacks a `.zip`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.txz` or `.7z` into a new folder next to it, named after the file without its extension. If that folder exists, Rays uses "name 2", "name 3" and so on. Other files, such as a lone `.gz`, `.dmg`, `.pkg` or `.rar`, are left alone.
+- **Move the archive to the Trash after unpacking**: available when unpacking is on. If unpacking fails, Rays removes the empty folder, keeps the archive and shows "Couldn't unpack" with the file name.
+
 ## Sorting
 
 The main [sorter](/docs/app/sorter/) settings: whether on-device AI is ready, how long to wait before sorting, renaming from content, and the folders being watched, with a button to open the Sorter.

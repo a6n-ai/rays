@@ -243,6 +243,8 @@ struct DownloadsTab: View {
                 }
             }
 
+            Section { UnpackSettingsRows() }
+
             Section { WakePermissionRow() }
 
             HuggingFaceTokenSection()

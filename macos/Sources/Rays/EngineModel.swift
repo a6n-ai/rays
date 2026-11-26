@@ -544,12 +544,29 @@ final class EngineModel {
         engine?.shutdown()
     }
 
+    private func unpackIfWanted(_ job: JobView) {
+        let defaults = UserDefaults.standard
+        guard job.isDone, defaults.bool(forKey: SettingsKey.unpackArchives), let path = job.finishedPath else { return }
+        let url = URL(filePath: path)
+        let trash = defaults.bool(forKey: SettingsKey.trashUnpackedArchive)
+        Task {
+            switch await Unpacker.unpack(url, trash: trash) {
+            case .success: notice = "Unpacked \(url.lastPathComponent)"
+            case .failure: notice = "Couldn't unpack \(url.lastPathComponent)"
+            case nil: break
+            }
+        }
+    }
+
     private func apply(_ event: JobEvent) {
         switch event {
         case .upsert(let job):
             if job.isActive { runningSince[job.id] = runningSince[job.id] ?? Date() } else { runningSince[job.id] = nil }
             if let index = allJobs.firstIndex(where: { $0.id == job.id }) {
-                if job.isFinished && !allJobs[index].isFinished { notifier.note(job) }
+                if job.isFinished && !allJobs[index].isFinished {
+                    notifier.note(job)
+                    unpackIfWanted(job)
+                }
                 allJobs[index] = job
             } else {
                 allJobs.append(job)
@@ -612,6 +629,8 @@ enum SettingsKey {
     static let menuBar = "showsMenuBar"
     static let clipboard = "offersCopiedLinks"
     static let notifyDone = "notifiesWhenDone"
+    static let unpackArchives = "unpackArchives"
+    static let trashUnpackedArchive = "trashUnpackedArchive"
     static let queueDefaultMaxRunning = "queueDefaultMaxRunning"
     static let queueDefaultSpeed = "queueDefaultSpeed"
     static let queueDefaultFinish = "queueDefaultFinish"

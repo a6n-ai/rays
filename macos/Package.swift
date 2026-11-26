@@ -16,6 +16,7 @@ let package = Package(
                 .linkedFramework("CoreFoundation"),
             ]
         ),
+        .testTarget(name: "RaysTests", dependencies: ["Rays"]),
     ],
     swiftLanguageModes: [.v5]
 )
