@@ -33,6 +33,8 @@ struct ContentView: View {
                         destination = .queues
                     } else if path == "speed" {
                         destination = .speed
+                    } else if path == "stats" {
+                        destination = .stats
                     } else if path == "shortcuts" {
                         destination = .shortcuts
                     } else if path == "models" {
@@ -56,6 +58,7 @@ struct ContentView: View {
                     case .queues?: lastFolder = "queues"
                     case .schedules?: lastFolder = "schedules"
                     case .speed?: lastFolder = "speed"
+                    case .stats?: lastFolder = "stats"
                     case .shortcuts?: lastFolder = "shortcuts"
                     default: lastFolder = ""
                     }
@@ -131,6 +134,8 @@ struct ContentView: View {
                     ModelsView()
                 case .speed?:
                     SpeedPage()
+                case .stats?:
+                    StatsPage()
                 case .shortcuts?:
                     ShortcutsPage()
                 case .schedules?:
