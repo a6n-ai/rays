@@ -27,7 +27,7 @@ struct SchedulesPage: View {
             VStack(spacing: 0) {
                 ListControls(statuses: QueueFilter.schedules, status: $status, kind: $kind, showsKind: false,
                              sorts: [.nextRun, .name], sort: $sort, count: shown.count, page: $page)
-                if shown.isEmpty { EmptyState(symbol: "tray", title: "No schedules match") } else { list }
+                list
             }
             .navigationTitle("Schedules")
             .alert("New queue with a schedule", isPresented: $naming) {
@@ -46,36 +46,44 @@ struct SchedulesPage: View {
         }
     }
 
+    private var heroSubtitle: String {
+        nothingScheduled
+            ? "Nothing scheduled yet. Add a schedule to a queue below, or use + in the toolbar."
+            : "Start queues at set times, optionally waiting for Wi-Fi, power or an idle Mac."
+    }
+
     private var list: some View {
         List {
-            if nothingScheduled {
-                // The toolbar's + and each queue's calendar button add one, so no button of its own here.
-                HStack(spacing: LayoutMetrics.gap) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 15, weight: .medium))
+            Section {
+                HeroCard(.schedules, title: "Schedules", subtitle: heroSubtitle,
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues#schedules"))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 4, leading: LayoutMetrics.margin - 4, bottom: 4, trailing: LayoutMetrics.margin - 4))
+            }
+            CollapsibleSettingsCard(page: "schedules") {
+                WakePermissionRow().cardRow(.only, separatorInset: TileSize.row + 10)
+            }
+            if shown.isEmpty {
+                Section {
+                    Text("No schedules match")
                         .foregroundStyle(.secondary)
-                        .frame(width: 24)
-                    Text("Nothing scheduled yet. Add a schedule to a queue below, or use + in the toolbar.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+                        .cardRow(.only)
                 }
-                .frame(minHeight: LayoutMetrics.rowAction)
-                .padding(.horizontal, LayoutMetrics.hoverInset)
-                .rowInsets()
             }
             if !upcoming.isEmpty {
-                Section { ForEach(upcoming) { scheduled($0) } } header: { header("Upcoming") }
+                Section { ForEach(Array(upcoming.enumerated()), id: \.element.id) { scheduled($1, $0, of: upcoming.count) } } header: { header("Upcoming") }
             }
             if !paused.isEmpty {
-                Section { ForEach(paused) { scheduled($0) } } header: { header("Paused") }
+                Section { ForEach(Array(paused.enumerated()), id: \.element.id) { scheduled($1, $0, of: paused.count) } } header: { header("Paused") }
             }
             if !unscheduled.isEmpty {
                 Section {
-                    ForEach(unscheduled) { queue in
-                        HStack(spacing: LayoutMetrics.gap) {
-                            QueueTile(queue: queue, size: 24).opacity(0.6)
-                            Text(queue.config.name).foregroundStyle(.secondary).lineLimit(1)
-                            Spacer()
+                    ForEach(Array(unscheduled.enumerated()), id: \.element.id) { index, queue in
+                        CardRow(title: queue.config.name, subtitle: "Not scheduled", status: .off) {
+                            QueueTile(queue: queue, size: TileSize.list)
+                        } trailing: {
                             Button { addSchedule(to: queue) } label: {
                                 Image(systemName: "calendar.badge.plus")
                                     .font(.system(size: 13, weight: .semibold))
@@ -89,9 +97,7 @@ struct SchedulesPage: View {
                             .help("Add schedule to \(queue.config.name)")
                             .accessibilityLabel("Add schedule to \(queue.config.name)")
                         }
-                        .frame(minHeight: LayoutMetrics.rowAction)
-                        .padding(.horizontal, LayoutMetrics.hoverInset)
-                        .rowInsets()
+                        .cardRow(CardRowBackground.position(index, of: unscheduled.count))
                     }
                 } header: { header("Not scheduled") }
             }
@@ -106,12 +112,11 @@ struct SchedulesPage: View {
         Text(title).font(.headline).foregroundStyle(.primary).padding(.leading, LayoutMetrics.hoverInset)
     }
 
-    private func scheduled(_ queue: QueueView) -> some View {
-        QueueRow(queue: queue, isDirty: drafts.isDirty(queue.id), parts: queue.statusParts(withNext: false, withDownloads: false),
-                 trailing: AnyView(nextRun(queue)))
+    private func scheduled(_ queue: QueueView, _ index: Int, of count: Int) -> some View {
+        QueueRow(queue: queue, position: CardRowBackground.position(index, of: count), isDirty: drafts.isDirty(queue.id),
+                 parts: queue.statusParts(withNext: false, withDownloads: false), trailing: AnyView(nextRun(queue)))
             .contentShape(Rectangle())
             .onTapGesture { open(queue.id) }
-            .rowInsets()
     }
 
     @ViewBuilder private func nextRun(_ queue: QueueView) -> some View {
@@ -182,13 +187,5 @@ struct SchedulesPage: View {
         }
         .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .primaryAction) { SettingsToolbarButton() }
-    }
-}
-
-private extension View {
-    func rowInsets() -> some View {
-        listRowInsets(EdgeInsets(top: LayoutMetrics.rowSpacing / 2, leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
-                                 bottom: LayoutMetrics.rowSpacing / 2, trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
-            .listRowSeparator(.hidden)
     }
 }

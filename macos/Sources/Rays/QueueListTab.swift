@@ -5,7 +5,6 @@ struct QueueListTab: View {
     let drafts: QueueDrafts
     let open: (UInt64) -> Void
     @Environment(EngineModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var deleting: QueueView?
     @State private var status = "All"
     @State private var sort = ListSort.newest
@@ -19,7 +18,7 @@ struct QueueListTab: View {
         VStack(spacing: 0) {
             ListControls(statuses: QueueFilter.queues, status: $status, kind: $kind, showsKind: false,
                          sorts: [.name, .newest, .nextRun], sort: $sort, count: shown.count, page: $page)
-            if shown.isEmpty { EmptyState(symbol: "tray", title: "No queues match") } else { list }
+            list
         }
         .confirmationDialog(
             "Delete \(deleting?.config.name ?? "queue")?",
@@ -44,17 +43,29 @@ struct QueueListTab: View {
     }
 
     private var list: some View {
-        List {
-            ForEach(ListControls.page(shown, page, pageSize)) { queue in
-                QueueRow(queue: queue, isDirty: drafts.isDirty(queue.id), onDelete: { deleting = queue })
-                    .contentShape(Rectangle())
-                    .onTapGesture { open(queue.id) }
-                    .listRowInsets(EdgeInsets(
-                        top: LayoutMetrics.rowSpacing / 2,
-                        leading: LayoutMetrics.margin - LayoutMetrics.hoverInset,
-                        bottom: LayoutMetrics.rowSpacing / 2,
-                        trailing: LayoutMetrics.margin - LayoutMetrics.hoverInset))
+        let queues = Array(ListControls.page(shown, page, pageSize))
+        return List {
+            Section {
+                HeroCard(.queues, title: "Queues", subtitle: "Group downloads and start them together, now or on a schedule.",
+                         learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues"))
+                    .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 4, leading: LayoutMetrics.margin - 4, bottom: 4, trailing: LayoutMetrics.margin - 4))
+            }
+            CollapsibleSettingsCard(page: "queues") { QueueSettingsTab() }
+            Section {
+                if queues.isEmpty {
+                    Text("No queues match")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.cardListRowHeight)
+                        .cardRow(.only)
+                }
+                ForEach(Array(queues.enumerated()), id: \.element.id) { index, queue in
+                    QueueRow(queue: queue, position: CardRowBackground.position(index, of: queues.count),
+                             isDirty: drafts.isDirty(queue.id), onDelete: { deleting = queue })
+                        .contentShape(Rectangle())
+                        .onTapGesture { open(queue.id) }
+                }
             }
         }
         .listStyle(.inset)
@@ -66,55 +77,57 @@ struct QueueListTab: View {
 
 struct QueueRow: View {
     let queue: QueueView
+    let position: CardRowBackground.Position
     let isDirty: Bool
     /// Replaces the status line, e.g. Schedules shows the next run beside the row instead.
     var trailing: AnyView?
     var parts: [QueueStatusPart]?
     let onDelete: (() -> Void)?
     @Environment(EngineModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
 
-    init(queue: QueueView, isDirty: Bool, parts: [QueueStatusPart]? = nil, trailing: AnyView? = nil, onDelete: (() -> Void)? = nil) {
+    init(queue: QueueView, position: CardRowBackground.Position, isDirty: Bool, parts: [QueueStatusPart]? = nil,
+         trailing: AnyView? = nil, onDelete: (() -> Void)? = nil) {
         self.queue = queue
+        self.position = position
         self.isDirty = isDirty
         self.parts = parts
         self.trailing = trailing
         self.onDelete = onDelete
     }
 
-    var body: some View {
-        HStack(spacing: LayoutMetrics.gap) {
-            QueueTile(queue: queue)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(queue.config.name)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if isDirty {
-                        Circle().fill(.secondary).frame(width: 6, height: 6).accessibilityLabel("Unsaved changes")
-                    }
-                }
-                QueueStatusText(parts: parts ?? queue.statusParts())
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if let trailing { trailing }
-            if let badge = queue.badge, queue.state != .open { QueueBadgePill(badge: badge) }
-            if onDelete != nil { moreMenu }
-            Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .controlSize(.small)
-                .tint(.accentColor)
-                .help("Enabled")
-            if onDelete != nil { primaryButton }
+    private var statusKind: StatusDot.Kind {
+        switch queue.state {
+        case .open: queue.running > 0 || queue.config.schedule != nil ? .active : .off
+        case .waitingForTime: .active
+        case .waitingForCondition: .warning
+        case .stopped, .off: .off
         }
-        .frame(height: LayoutMetrics.rowHeight)
-        .padding(.horizontal, LayoutMetrics.hoverInset)
-        .listRowBackground(RowHighlight(selected: false, hovered: isHovered))
+    }
+
+    var body: some View {
+        CardRow(title: queue.config.name, subtitle: (parts ?? queue.statusParts()).map(\.text).joined(separator: " · "),
+                status: statusKind) {
+            QueueTile(queue: queue, size: TileSize.list)
+        } trailing: {
+            HStack(spacing: LayoutMetrics.gap) {
+                if isDirty {
+                    Circle().fill(.secondary).frame(width: 6, height: 6).accessibilityLabel("Unsaved changes")
+                }
+                if let trailing { trailing }
+                if let badge = queue.badge, queue.state != .open { QueueBadgePill(badge: badge) }
+                if onDelete != nil { moreMenu }
+                Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .tint(.accentColor)
+                    .help("Enabled")
+                if onDelete != nil { primaryButton }
+            }
+        }
+        .cardRow(position, hovered: isHovered)
         .onHover { isHovered = $0 }
-        .animation(reduceMotion ? nil : .smooth(duration: 0.15), value: isHovered)
         .contextMenu { if onDelete != nil { actions } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(queue.config.name), \(queue.statusLine)")
