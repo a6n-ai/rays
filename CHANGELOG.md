@@ -1,5 +1,13 @@
 # Release notes
 
+## 0.1.25 (26 Nov 2026)
+
+- Fixed a crash when rows were added to or removed from the Downloads or Queues list.
+- **Update** now works on a Mac where you are not an administrator: Rays replaces its own files instead of adding a new copy to Applications.
+- Failed downloads have a **Remove** button next to **Retry**.
+- The Undo pill and error notices stay on one line, with long names shortened in the middle. Error notices no longer hide behind the add bar.
+- The menu bar panel links to **Queues**, **Schedules**, **Speed Test** and **Shortcuts**, and its **+** menu offers find links on a page, a cloud bucket, a Hugging Face model, a checksum or a mirror.
+
 ## 0.1.24 (26 Nov 2026)
 
 - **Find links on a page.** Paste a web page link and choose **Find links on a page…** from the new **+** menu in the add bar. Rays lists every file the page links to, so you can filter by type, pick the ones you want and download them or add them to a queue. `dl grab` and the MCP tool `grab_links` do the same.
