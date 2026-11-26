@@ -37,7 +37,7 @@ struct ModelCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(10)
-        .glassEffect(.regular.tint(kind.color.opacity(0.18)).interactive(), in: .rect(cornerRadius: 14))
+        .glassEffect(.regular.tint(kind.color.opacity(0.18)), in: .rect(cornerRadius: 14))
         .overlay {
             if isSelected {
                 RoundedRectangle(cornerRadius: 14).strokeBorder(kind.color, lineWidth: 2)
@@ -71,8 +71,7 @@ struct ModelFilterBar: View {
             }
         }
         .scrollClipDisabled()
-        .padding(.horizontal, LayoutMetrics.margin)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 12)
     }
 
     private func chip(_ title: String, tint: Color, on: Bool, action: @escaping () -> Void) -> some View {
@@ -83,7 +82,7 @@ struct ModelFilterBar: View {
                 .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
-        .glassEffect(on ? .regular.tint(tint).interactive() : .regular.interactive(), in: .capsule)
+        .glassEffect(on ? .regular.tint(tint) : .regular, in: .capsule)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }

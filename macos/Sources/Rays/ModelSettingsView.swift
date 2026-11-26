@@ -19,30 +19,55 @@ struct ReplaceExistingRow: View {
 }
 
 struct HuggingFaceTokenSection: View {
+    var body: some View {
+        Section {
+            HuggingFaceTokenRows()
+        } header: {
+            Text("Hugging Face")
+        } footer: {
+            Text(HuggingFaceTokenRows.note)
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+        }
+    }
+}
+
+/// The token field and its error line. `card` lays it out as a settings-card row with the note under the title;
+/// otherwise it is bare rows for a Form section that shows the note as its footer.
+struct HuggingFaceTokenRows: View {
+    static let note = "Needed for gated and private models. Sent only to huggingface.co. Stored in Keychain."
+
+    var card = false
     @Environment(EngineModel.self) private var model
     @State private var token = ""
     @State private var hasToken = false
     @State private var tokenError: String?
 
     var body: some View {
-        Section {
-            HStack {
-                SecureField("Access token", text: $token)
-                if hasToken { Text("Saved").foregroundStyle(.secondary) }
-                Button("Save", action: saveToken)
-                    .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Button("Remove") { _ = setToken(nil) }
-                    .disabled(!hasToken)
+        Group {
+            if card {
+                VStack(alignment: .leading, spacing: 6) {
+                    SettingRow(.models, title: "Hugging Face token", hint: Self.note, status: hasToken ? .ok : nil) { controls }
+                    if let tokenError { ErrorLine(text: tokenError) }
+                }
+            } else {
+                controls
+                if let tokenError { ErrorLine(text: tokenError) }
             }
-            if let tokenError { ErrorLine(text: tokenError) }
-        } header: {
-            Text("Hugging Face")
-        } footer: {
-            Text("Needed for gated and private models. Sent only to huggingface.co. Stored in Keychain.")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
         }
         .onAppear { hasToken = model.hasHFToken }
+    }
+
+    private var controls: some View {
+        HStack {
+            SecureField("Access token", text: $token)
+                .frame(minWidth: card ? 120 : 0)
+            if hasToken { Text("Saved").foregroundStyle(.secondary) }
+            Button("Save", action: saveToken)
+                .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Remove") { _ = setToken(nil) }
+                .disabled(!hasToken)
+        }
     }
 
     /// The field keeps the typed token when the save fails, so the user can retry or copy it.
@@ -63,21 +88,13 @@ struct HuggingFaceTokenSection: View {
     }
 }
 
-/// The Settings page of the Models view.
-struct ModelSettingsView: View {
+/// The AI Models folder row of the Models settings card.
+struct AIModelsFolderRow: View {
     let folder: URL
 
     var body: some View {
-        Form {
-            Section {
-                ReplaceExistingRow()
-                SettingRow(.modelsFolder, title: "AI Models folder", hint: (folder.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath) {
-                    Button("Show in Finder") { AIModelsFolder.reveal(folder) }
-                }
-            }
-            HuggingFaceTokenSection()
+        SettingRow(.modelsFolder, title: "AI Models folder", hint: (folder.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath) {
+            Button("Show in Finder") { AIModelsFolder.reveal(folder) }
         }
-        .scrollContentBackground(.hidden)
-        .formStyle(.grouped)
     }
 }

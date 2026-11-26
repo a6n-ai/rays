@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// Finds Hugging Face models, lists the ones already downloaded, and holds the model settings.
+/// Finds Hugging Face models and lists the ones already downloaded. The model settings sit in the Search page's settings card.
 struct ModelsView: View {
     @Environment(EngineModel.self) private var model
     @AppStorage("modelsSection") private var section = ModelsSection.search
     @State private var sorter = SorterModel()
     @State private var query = ""
+    @State private var selection: String?
+    @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
     @State private var results: [HfModel] = []
     @State private var repo: HfRepo?
     @State private var error: String?
@@ -15,7 +18,7 @@ struct ModelsView: View {
     /// Bumped by every search and open; a reply is used only if no newer request started meanwhile.
     @State private var request = 0
 
-    enum ModelsSection: String { case search, downloaded, settings }
+    enum ModelsSection: String { case search, downloaded }
 
     private var text: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -28,15 +31,9 @@ struct ModelsView: View {
             Group {
                 switch section {
                 case .search:
-                    VStack(spacing: 0) {
-                        searchField
-                        ModelFilterBar(filter: $filter, ggufOnly: $ggufOnly)
-                        content
-                    }
+                    searchList
                 case .downloaded:
                     DownloadedModelsView(folder: folder)
-                case .settings:
-                    ModelSettingsView(folder: folder)
                 }
             }
             .navigationTitle("Models")
@@ -54,8 +51,7 @@ struct ModelsView: View {
         ToolbarItem(placement: .principal) {
             ToolbarIconGroup {
                 ForEach([(ModelsSection.search, "magnifyingglass", "Search Hugging Face"),
-                         (ModelsSection.downloaded, "shippingbox", "Downloaded models"),
-                         (ModelsSection.settings, "slider.horizontal.3", "Model settings")], id: \.0) { item in
+                         (ModelsSection.downloaded, "shippingbox", "Downloaded models")], id: \.0) { item in
                     Button {
                         section = item.0
                         repo = nil
@@ -107,37 +103,105 @@ struct ModelsView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(.quaternary, in: .rect(cornerRadius: 8))
-        .padding(LayoutMetrics.margin)
+        .padding(.horizontal, 12)
     }
 
     private var shown: [HfModel] {
         results.filter { filter.matches(ModelKind(pipelineTag: $0.pipelineTag)) && (!ggufOnly || $0.gguf) }
     }
 
+    private var cards: ArraySlice<HfModel> { ModelResultsList.cards(shown, featured: text.isEmpty) }
+    private var rest: [HfModel] { Array(shown.dropFirst(cards.count)) }
+    private var pageRows: ArraySlice<HfModel> { ListControls.page(rest, page, pageSize) }
+
+    /// One List holds the hero (with the search field, so it keeps focus while results reload), the settings card and the results.
+    private var searchList: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    HeroCard(.models, title: "Models",
+                             subtitle: "Find models on Hugging Face and download them to your AI Models folder.",
+                             learnMore: URL(string: "https://rays.a6n.ai/docs/app/models/"))
+                        .padding(.horizontal, 12)
+                    searchField
+                    ModelFilterBar(filter: $filter, ggufOnly: $ggufOnly)
+                }
+                .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
+            CollapsibleSettingsCard(page: "models") {
+                AIModelsFolderRow(folder: folder)
+                    .cardRow(.first, separatorInset: TileSize.row + 10)
+                HuggingFaceTokenRows(card: true)
+                    .cardRow(.last, separatorInset: TileSize.row + 10)
+            }
+            content
+        }
+        .listStyle(.inset)
+        .tint(.gray)
+        .scrollContentBackground(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .all)
+        .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: rest.count, page: $page, padded: true) }
+        .onChange(of: shown.map(\.id)) { _, _ in page = 0 }
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.upArrow) { step(-1) }
+        .onKeyPress(.downArrow) { step(1) }
+        .onKeyPress(.return) {
+            guard let selection else { return .ignored }
+            Task { await open(selection) }
+            return .handled
+        }
+    }
+
+    private func choose(_ id: String) {
+        selection = id
+        Task { await open(id) }
+    }
+
+    private func step(_ delta: Int) -> KeyPress.Result {
+        let visible = Array(cards) + pageRows
+        guard !visible.isEmpty else { return .ignored }
+        let current = visible.firstIndex { $0.id == selection }
+        let next = current.map { min(max($0 + delta, 0), visible.count - 1) } ?? (delta > 0 ? 0 : visible.count - 1)
+        selection = visible[next].id
+        return .handled
+    }
+
+    private func stateRow<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        Section {
+            content()
+                .frame(maxWidth: .infinity, minHeight: 160)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+        }
+    }
+
     @ViewBuilder private var content: some View {
         if let error {
-            ContentUnavailableView {
-                Label("Couldn't load models", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(error)
-            } actions: {
-                Button("Try Again") { Task { await search() } }
+            stateRow {
+                ContentUnavailableView {
+                    Label("Couldn't load models", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Try Again") { Task { await search() } }
+                }
             }
         } else if results.isEmpty {
             if loading {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                stateRow { ProgressView() }
             } else if !text.isEmpty {
-                EmptyState(symbol: "tray", title: "No models match")
+                stateRow { EmptyState(symbol: "tray", title: "No models match") }
             } else {
-                EmptyState(symbol: "cube", title: "No trending models")
+                stateRow { EmptyState(symbol: "cube", title: "No trending models") }
             }
         } else if shown.isEmpty {
             let what = ggufOnly && filter == .all ? "GGUF" : filter.label
-            EmptyState(symbol: filter.representative.symbol, title: "No \(what) models in \(text.isEmpty ? "trending" : "results")")
+            stateRow { EmptyState(symbol: filter.representative.symbol, title: "No \(what) models in \(text.isEmpty ? "trending" : "results")") }
         } else {
-            ModelResultsList(hits: shown, featured: text.isEmpty) { id in
-                Task { await open(id) }
-            }
+            ModelResultsList(cards: cards, rows: pageRows, selection: selection, choose: choose)
         }
     }
 
