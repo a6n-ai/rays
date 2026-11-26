@@ -48,9 +48,8 @@ struct UninstallSection: View {
     @State private var problems: [String] = []
 
     var body: some View {
-        CardSection {
+        VStack(spacing: 6) {
             DestructiveButton(title: working ? "Uninstalling…" : "Uninstall Rays…") { confirm = true }
-                .opacity(Uninstaller.canUninstall ? 1 : 0.5)
             .disabled(!Uninstaller.canUninstall || working)
             .help(Uninstaller.canUninstall ? "Remove Rays from this Mac" : "Only a copy in Applications can uninstall itself.")
             .confirmationDialog("Uninstall Rays?", isPresented: $confirm, titleVisibility: .visible) {
@@ -61,11 +60,14 @@ struct UninstallSection: View {
                 Text("Rays stops sorting your folders, removes its browser helpers and the dl command, and moves itself to the Trash. Your downloads and sorted files stay where they are. Uninstall and delete data also removes download history and settings.")
             }
             ForEach(problems, id: \.self) { ErrorLine(text: $0) }
-        } footer: {
             if !Uninstaller.canUninstall {
                 Text("This copy of Rays isn't in Applications, so it can't uninstall itself.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func start(deleteData: Bool) {

@@ -224,7 +224,7 @@ struct CardRow<Leading: View, Trailing: View>: View {
             Spacer(minLength: 8)
             trailing
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .frame(minHeight: subtitle == nil ? LayoutMetrics.cardRowMinHeight : LayoutMetrics.cardListRowHeight)
         .contentShape(.rect)
     }

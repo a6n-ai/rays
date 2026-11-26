@@ -188,7 +188,7 @@ struct CountdownBanner: View {
                 Image(systemName: "timer").foregroundStyle(.orange)
                 Text(countdown.message).font(.callout.weight(.medium)).monospacedDigit()
                 Button("Cancel") { actions.cancel() }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
                     .controlSize(.small)
             }

@@ -94,12 +94,12 @@ struct CommandLineSection: View {
                 switch state {
                 case .installed(let link):
                     Button("Remove") { run { try CommandLineTool.uninstall(link) } }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
                 case .otherDL:
                     EmptyView()
                 case .missing:
                     Button("Install") { run { try CommandLineTool.install() } }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
                 }
             }
             if let error { ErrorLine(text: error) }

@@ -90,25 +90,25 @@ final class AIReadinessStore {
 struct AIStatusRow: View {
     private var readiness: AIReadiness { AIReadinessStore.shared.value }
 
+    private var status: StatusDot.Kind {
+        switch readiness {
+        case .ready: .ok
+        case .downloading: .active
+        case .notEligible: .error
+        default: .warning
+        }
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(readiness.title)
-                Text(readiness.hint).font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
+        SettingRow(title: readiness.title, hint: readiness.hint, status: status) {
             if readiness == .notEnabled {
                 Button("Open System Settings") {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.Siri-Settings.extension") {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                .buttonStyle(.glass)
-                .controlSize(.small)
+                .buttonStyle(.bordered)
             }
         }
-        .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
     }
 }

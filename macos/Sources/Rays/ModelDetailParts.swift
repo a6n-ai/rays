@@ -48,7 +48,7 @@ struct ModelHeaderCard: View {
                 }
                 if let url = URL(string: "https://huggingface.co/\(repo.id)") {
                     Button("Open on Hugging Face") { NSWorkspace.shared.open(url) }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
                         .controlSize(.small)
                         .help("Open \(repo.id) on Hugging Face")
                 }

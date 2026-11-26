@@ -3,8 +3,8 @@ import SwiftUI
 enum TileSize {
     static let sidebar: CGFloat = 20
     static let menu: CGFloat = 18
-    static let row: CGFloat = 22
-    static let list: CGFloat = 32
+    static let row: CGFloat = 20
+    static let list: CGFloat = 28
     static let hero: CGFloat = 28
     static let heroLarge: CGFloat = 64
 }
@@ -13,21 +13,22 @@ enum TileSize {
 struct Tile: Hashable {
     let symbol: String
     let color: Color
+    var glyphScale: CGFloat = 0.5
 }
 
 extension Tile {
-    static let downloads = Tile(symbol: "arrow.down", color: TilePalette.blue)
-    static let models = Tile(symbol: "cube.fill", color: TilePalette.purple)
-    static let sorter = Tile(symbol: "sparkles", color: TilePalette.pink)
-    static let cloud = Tile(symbol: "cloud.fill", color: TilePalette.sky)
-    static let queues = Tile(symbol: "list.bullet", color: TilePalette.orange)
-    static let schedules = Tile(symbol: "calendar", color: TilePalette.orange)
-    static let speed = Tile(symbol: "gauge.with.dots.needle.67percent", color: TilePalette.teal)
-    static let stats = Tile(symbol: "chart.bar.fill", color: TilePalette.green)
-    static let shortcuts = Tile(symbol: "square.2.layers.3d.fill", color: TilePalette.indigo)
+    static let downloads = Tile(symbol: "arrow.down.circle.fill", color: TilePalette.blue)
+    static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple)
+    static let sorter = Tile(symbol: "wand.and.sparkles", color: TilePalette.pink, glyphScale: 0.45)
+    static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.45)
+    static let queues = Tile(symbol: "list.bullet.rectangle.portrait.fill", color: TilePalette.orange, glyphScale: 0.42)
+    static let schedules = Tile(symbol: "calendar.badge.clock", color: TilePalette.orange, glyphScale: 0.42)
+    static let speed = Tile(symbol: "speedometer", color: TilePalette.teal)
+    static let stats = Tile(symbol: "chart.bar.xaxis", color: TilePalette.green, glyphScale: 0.42)
+    static let shortcuts = Tile(symbol: "square.stack.3d.up.fill", color: TilePalette.indigo, glyphScale: 0.42)
     static let general = Tile(symbol: "gearshape.fill", color: TilePalette.gray)
     static let ai = Tile(symbol: "apple.intelligence", color: TilePalette.purple)
-    static let browsers = Tile(symbol: "globe", color: TilePalette.indigo)
+    static let browsers = Tile(symbol: "safari.fill", color: TilePalette.indigo)
 
     static let appearance = Tile(symbol: "circle.lefthalf.filled", color: TilePalette.gray)
     static let folder = Tile(symbol: "folder.fill", color: TilePalette.blue)
@@ -63,11 +64,19 @@ struct IconTile: View {
     }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
         Image(systemName: tile.symbol)
-            .font(.system(size: (size * 0.5).rounded(), weight: .semibold))
+            .symbolRenderingMode(.hierarchical)
+            .font(.system(size: (size * tile.glyphScale).rounded(), weight: .semibold))
             .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.2), radius: 0.5, y: 0.5)
             .frame(width: size, height: size)
-            .background(tile.color.gradient, in: .rect(cornerRadius: size * 0.225, style: .continuous))
+            .background(
+                LinearGradient(colors: [tile.color.mix(with: .white, by: 0.12), tile.color], startPoint: .top, endPoint: .bottom),
+                in: shape)
+            .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.25), .black.opacity(0.12)],
+                                                       startPoint: .top, endPoint: .bottom), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.15), radius: 0.5, y: 0.5)
             .accessibilityHidden(true)
     }
 }

@@ -25,7 +25,7 @@ struct QueueHeader: View {
             Spacer()
             if showsRunNow {
                 Button { model.runQueueNow(queue.id) } label: { Label("Run now", systemImage: "play.fill") }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
                     .disabled(isDirty)
                     .help(isDirty ? "Save your changes first" : "Run this queue now")
@@ -35,7 +35,7 @@ struct QueueHeader: View {
             } label: {
                 Label(queue.isStopped ? "Start queue" : "Stop queue", systemImage: queue.isStopped ? "play.circle" : "stop.circle")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .controlSize(.small)
             Toggle("Enabled", isOn: Binding(get: { queue.config.enabled }, set: { model.setQueueEnabled(queue, $0) }))
                 .toggleStyle(.switch)

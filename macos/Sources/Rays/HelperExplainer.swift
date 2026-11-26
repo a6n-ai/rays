@@ -1,12 +1,9 @@
 import SwiftUI
 
-/// Plain-language explanation of the browser helper, collapsed by default in Settings → Browsers.
+/// Plain-language explanation of the browser helper, the page behind Browsers > How the helper works.
 struct HelperExplainer: View {
-    @State private var expanded = false
-
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
                 flow
                     .padding(.top, 6)
                 point("checkmark.shield.fill", TilePalette.green, "What it does",
@@ -19,9 +16,6 @@ struct HelperExplainer: View {
                       "Each helper is one small file named ai.a6n.rays.json in the browser's NativeMessagingHosts folder. Delete it to undo.")
             }
             .padding(.vertical, 4)
-        } label: {
-            Label("How the helper works", systemImage: "questionmark.circle")
-        }
     }
 
     /// Extension → Helper → Rays, the path a link takes.

@@ -13,7 +13,7 @@ enum LayoutMetrics {
     static let hoverInset: CGFloat = 4
     static let gap: CGFloat = 12
     static let iconSize: CGFloat = 32
-    static let cardListRowHeight: CGFloat = 52
-    static let cardRowMinHeight: CGFloat = 44
+    static let cardListRowHeight: CGFloat = 48
+    static let cardRowMinHeight: CGFloat = 36
     static let chartHeight: CGFloat = 160
 }

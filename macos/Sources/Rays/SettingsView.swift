@@ -18,10 +18,10 @@ struct SaveFolderRow: View {
                     .truncationMode(.middle)
                     .help(folder.path(percentEncoded: false))
                 Button("Change…", action: chooseFolder)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                     .accessibilityLabel("Choose download folder")
                 Button("Reset") { change(to: nil) }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                     .disabled(customFolder.isEmpty)
                     .help("Use the Downloads folder")
             }

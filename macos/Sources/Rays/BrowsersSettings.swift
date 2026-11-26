@@ -2,47 +2,21 @@ import AppKit
 import SwiftUI
 
 struct BrowsersPage: View {
+    @Environment(NavHistory.self) private var nav
     @State private var model = BrowserCheckModel()
 
+    private var allInstalled: Bool { !model.states.contains { $0.browser.engine != .safari && $0.helper != .ok } }
+
     var body: some View {
-        CardForm {
-            CardSection {
-                HeroCard(.browsers, title: "Browsers", subtitle: "Add the Rays extension to send links from your browser.")
-            }
-            CardSection {
-                SettingRow(title: "Rays browser extension", hint: "Right-click any link and choose Download with Rays.") {
-                    Button("Install all helpers") { model.installAllHelpers(model.states) }
-                        .buttonStyle(.glassProminent)
-                        .disabled(!model.states.contains { $0.browser.engine != .safari && $0.helper != .ok })
-                    Button("Check again") { model.refresh() }
-                        .buttonStyle(.glass)
-                }
-                HelperExplainer()
-            }
-            if model.loaded && model.states.isEmpty {
-                CardSection {
-                    Text("No supported browsers found.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            ForEach(model.states) { state in
-                CardSection {
-                    BrowserStatus(state: state, failure: model.failures[state.browser.bundleID],
-                                  install: { model.installHelper(state) },
-                                  remove: { model.removeHelper(state) })
-                } header: {
-                    BrowserTitle(state: state)
-                }
-            }
-            ForEach(model.others) { other in
-                CardSection { OtherBrowserRow(browser: other) }
-            }
-            if model.states.contains(where: { $0.helper != .missing }) {
-                CardSection { RemoveAllHelpersRow(model: model) }
+        Group {
+            if nav.sub == "helper" {
+                CardForm { CardSection { HelperExplainer() } }
+            } else {
+                overview
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Browsers")
+        .navigationTitle(nav.sub == "helper" ? "How the helper works" : "Browsers")
         .controlSize(.small)
         .toggleStyle(SettingSwitchStyle())
         .onAppear { model.refresh() }
@@ -50,6 +24,49 @@ struct BrowsersPage: View {
             model.refresh()
         }
     }
+
+    private var overview: some View {
+        CardForm {
+            CardSection {
+                HeroCard(.browsers, title: "Browsers", subtitle: "Add the Rays extension to send links from your browser.") {
+                    HeroActions {
+                        Button("Install all helpers") { model.installAllHelpers(model.states) }
+                            .disabled(allInstalled)
+                            .help(allInstalled ? "All helpers are installed" : "Install the helper in every browser")
+                        Button("Check again") { model.refresh() }
+                    }
+                }
+                DrillInRow(tile: Tile(symbol: "questionmark.circle.fill", color: TilePalette.gray), title: "How the helper works",
+                           subtitle: "What it does and how to remove it") { nav.open("helper") }
+            }
+            if model.loaded && model.states.isEmpty {
+                CardSection {
+                    Text("No supported browsers found.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if !model.states.isEmpty || !model.others.isEmpty {
+                CardSection {
+                    ForEach(model.states) { state in
+                        BrowserRow(state: state, failure: model.failures[state.browser.bundleID],
+                                   install: { model.installHelper(state) },
+                                   remove: { model.removeHelper(state) })
+                    }
+                    ForEach(model.others) { OtherBrowserRow(browser: $0) }
+                }
+            }
+            if model.states.contains(where: { $0.helper != .missing }) {
+                RemoveAllHelpersRow(model: model)
+            }
+        }
+    }
+}
+
+private func appIcon(_ url: URL) -> some View {
+    Image(nsImage: NSWorkspace.shared.icon(forFile: url.path(percentEncoded: false)))
+        .resizable()
+        .frame(width: TileSize.row, height: TileSize.row)
+        .accessibilityHidden(true)
 }
 
 /// A browser Rays found but has no setup for, with what that means.
@@ -57,133 +74,67 @@ private struct OtherBrowserRow: View {
     let browser: BrowserCheck.OtherBrowser
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.path(percentEncoded: false)))
-                .resizable()
-                .frame(width: 22, height: 22)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(browser.name)
-                Text(browser.chromium
-                     ? "Built on Chromium, but Rays couldn't find its data folder. Open it once, then click Check again."
-                     : "Rays can't add itself to this browser: its extension needs Chrome, Firefox or a browser built on them.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
+        CardRow(title: browser.name,
+                subtitle: browser.chromium
+                    ? "Built on Chromium, but Rays couldn't find its data folder. Open it once, then click Check again."
+                    : "Rays can't add itself to this browser: its extension needs Chrome, Firefox or a browser built on them.",
+                status: .off) { appIcon(browser.appURL) }
     }
 }
 
-private struct BrowserTitle: View {
-    let state: BrowserCheck.State
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: state.appURL.path(percentEncoded: false)))
-                .resizable()
-                .frame(width: 22, height: 22)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .accessibilityHidden(true)
-            Text(state.browser.name)
-        }
-    }
-}
-
-private struct BrowserStatus: View {
+/// One browser: app icon, name, status line, and only the buttons that apply.
+private struct BrowserRow: View {
     let state: BrowserCheck.State
     let failure: String?
     let install: () -> Void
     let remove: () -> Void
     @State private var confirmRemove = false
 
+    private var status: (StatusDot.Kind, String) {
+        if state.browser.engine == .safari { return (.off, "Coming later, Safari needs a signed build") }
+        switch (state.helper, state.addon) {
+        case (.broken(let reason), _): return (.error, "Helper needs repair: \(reason)")
+        case (.missing, _): return (.off, "Helper not installed")
+        case (.ok, .added): return (.ok, "Connected, extension added")
+        case (.ok, .notAdded): return (.warning, "Connected, extension not found")
+        case (.ok, .unknown): return (.warning, "Connected, extension not found")
+        }
+    }
+
     var body: some View {
-        if state.browser.engine == .safari {
-            Label("Coming later — Safari needs a signed build.", systemImage: "clock")
-                .foregroundStyle(.secondary)
-        } else {
-            helperLine
-            if let note = state.browser.helperNote {
-                Text(note).font(.callout).foregroundStyle(.secondary)
+        CardRow(title: state.browser.name, subtitle: failure ?? status.1, status: failure == nil ? status.0 : .error) {
+            appIcon(state.appURL)
+        } trailing: {
+            if state.browser.engine != .safari { buttons }
+        }
+        .confirmationDialog("Remove the Rays helper from \(state.browser.name)?",
+                            isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button("Remove helper", role: .destructive, action: remove)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(state.browser.helperNote.map { "\($0) Removing it affects both. You can install it again anytime." }
+                 ?? "Download with Rays stops working in this browser. You can install it again anytime.")
+        }
+    }
+
+    @ViewBuilder private var buttons: some View {
+        HStack(spacing: 8) {
+            if state.helper != .ok {
+                Button(state.helper == .missing ? "Install helper" : "Repair helper", action: install)
+                    .buttonStyle(.bordered)
             }
-            addonLine
-            HStack(spacing: 8) {
-                if state.helper != .ok {
-                    Button(state.helper == .missing ? "Install helper" : "Repair helper", action: install)
-                        .buttonStyle(.glass)
-                }
-                if state.addon != .added, BrowserCheck.storeURL(for: state.browser.engine) != nil {
-                    Button("Get extension") { BrowserCheck.openStore(in: state.browser) }
-                        .buttonStyle(.glassProminent)
-                        .help(state.browser.engine == .firefox ? "Opens Rays on Firefox Add-ons." : "Opens Rays in the Chrome Web Store.")
-                }
-                if state.helper != .missing {
+            if state.addon != .added, BrowserCheck.storeURL(for: state.browser.engine) != nil {
+                Button("Get extension") { BrowserCheck.openStore(in: state.browser) }
+                    .buttonStyle(.bordered)
+                    .help(state.browser.engine == .firefox ? "Opens Rays on Firefox Add-ons." : "Opens Rays in the Chrome Web Store.")
+            }
+            if state.helper != .missing {
+                HeroMenu {
                     Button("Remove helper", role: .destructive) { confirmRemove = true }
-                        .buttonStyle(.glass)
-                        .confirmationDialog("Remove the Rays helper from \(state.browser.name)?",
-                                            isPresented: $confirmRemove, titleVisibility: .visible) {
-                            Button("Remove helper", role: .destructive, action: remove)
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            Text(state.browser.engine == .firefox
-                                 ? "Download with Rays stops working in this browser. Firefox and Zen share this helper, so both are affected. You can install it again anytime."
-                                 : "Download with Rays stops working in this browser. You can install it again anytime.")
-                        }
+                        .help(state.browser.helperNote ?? "Removes the helper from this browser.")
                 }
             }
-            if let failure {
-                ErrorLine(text: failure)
-            }
         }
-    }
-
-    @ViewBuilder
-    private var helperLine: some View {
-        switch state.helper {
-        case .ok:
-            StatusLine(symbol: "checkmark.circle.fill", color: .green, text: "Connected to Rays")
-        case .broken(let reason):
-            StatusLine(symbol: "exclamationmark.triangle.fill", color: .orange, text: "Helper needs repair: \(reason)")
-        case .missing:
-            StatusLine(symbol: "xmark.circle", color: .secondary, text: "Helper not installed")
-        }
-    }
-
-    @ViewBuilder
-    private var addonLine: some View {
-        switch state.addon {
-        case .added:
-            StatusLine(symbol: "checkmark.circle.fill", color: .green, text: "Extension added")
-        case .notAdded:
-            StatusLine(symbol: "xmark.circle", color: .secondary, text: "Extension not added")
-        case .unknown(let reason):
-            StatusLine(symbol: "questionmark.circle", color: .secondary, text: "Extension status unknown", detail: reason)
-        }
-    }
-}
-
-private struct StatusLine: View {
-    let symbol: String
-    let color: Color
-    let text: String
-    var detail: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Label {
-                Text(text)
-            } icon: {
-                Image(systemName: symbol).foregroundStyle(color)
-            }
-            if let detail {
-                Text(detail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

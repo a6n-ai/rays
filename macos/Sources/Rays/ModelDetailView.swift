@@ -112,7 +112,7 @@ struct ModelDetailView: View {
             Button("All") { selected = Set(repo.files.map(\.path)) }
             Button("None") { selected = [] }
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.bordered)
         .controlSize(.small)
         .padding(.top, 8)
     }

@@ -89,7 +89,7 @@ struct HeroActions<Content: View>: View {
 
     var body: some View {
         HStack(spacing: 8) { content }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .controlSize(.small)
     }
 }
@@ -119,7 +119,7 @@ struct DrillInRow: View {
 
     var body: some View {
         Button(action: action) {
-            CardRow(title: title, subtitle: subtitle, leading: { IconTile(tile, size: TileSize.list) }, trailing: { CardChevron() })
+            CardRow(title: title, subtitle: subtitle, leading: { IconTile(tile, size: TileSize.row) }, trailing: { CardChevron() })
         }
         .buttonStyle(.plain)
     }

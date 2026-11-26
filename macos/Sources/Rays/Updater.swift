@@ -248,12 +248,13 @@ struct UpdateSettingsSection: View {
                     .disabled(updater.status == .installing)
                 } else {
                     Button("Check for updates") { Task { await updater.check() } }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
                         .disabled(updater.status == .checking)
                 }
             }
-            Toggle("Check for updates automatically", isOn: $automatic)
-                .toggleStyle(.switch)
+            SettingRow(title: "Check for updates automatically") {
+                Toggle("Check for updates automatically", isOn: $automatic).labelsHidden()
+            }
         } header: {
             Text("Updates")
         }

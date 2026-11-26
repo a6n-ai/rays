@@ -63,7 +63,6 @@ struct ModelsView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(.quaternary, in: .rect(cornerRadius: 8))
-        .padding(.horizontal, 12)
     }
 
     private var shown: [HfModel] {
@@ -78,17 +77,20 @@ struct ModelsView: View {
     private var searchList: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
                     HeroCard(.models, title: "Models",
                              subtitle: "Find models on Hugging Face and download them.",
                              learnMore: URL(string: "https://rays.a6n.ai/docs/app/models/")) {
                         HeroActions { Button("Open folder") { AIModelsFolder.reveal(folder) } }
                     }
-                        .padding(.horizontal, 12)
-                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 10, style: .continuous))
-                    searchField
-                    ModelFilterBar(filter: $filter, ggufOnly: $ggufOnly)
+                    HStack(spacing: 10) {
+                        searchField
+                        ModelFilterBar(filter: $filter, ggufOnly: $ggufOnly)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+                .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 10, style: .continuous))
                 .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
