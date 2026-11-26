@@ -93,7 +93,7 @@ struct AddBar: View {
             if let grabPage { GrabSheet(page: grabPage) }
         }
         .sheet(item: $extra) { kind in
-            LinkExtraSheet(kind: kind, link: links.first ?? "") { line, replacing in
+            LinkExtraSheet(kind: kind, link: links.first ?? "", saveHeaders: { link, headers in model.linkHeaders[link] = headers }) { line, replacing in
                 var lines = input.split(whereSeparator: \.isNewline).map(String.init).filter { $0.trimmingCharacters(in: .whitespaces) != replacing }
                 lines.append(line)
                 input = lines.joined(separator: "\n")
@@ -193,6 +193,7 @@ struct AddBar: View {
             Section("With the link") {
                 Button("Add a checksum…", systemImage: "checkmark.shield") { extra = .checksum }
                 Button("Add a mirror…", systemImage: "square.on.square") { extra = .mirror }
+                Button("Add headers…", systemImage: "key") { extra = .headers }
             }
         } label: {
             Label("Add", systemImage: "plus.circle")
@@ -210,7 +211,7 @@ struct AddBar: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel("Add")
-        .help("Paste links, find links on a page, add a checksum or a mirror")
+        .help("Paste links, find links on a page, add a checksum, a mirror or headers")
     }
 
     /// Plain style with an explicit glass shape: the glass button styles pad the label, so the frame could not pin the height.
@@ -302,55 +303,116 @@ struct AddBar: View {
 }
 
 enum LinkExtra: String, Identifiable {
-    case checksum, mirror
+    case checksum, mirror, headers
     var id: String { rawValue }
 }
 
+/// One `Name: value` per line; a line without a colon is an error the sheet shows.
+enum HeaderLines {
+    static func parse(_ text: String) -> (headers: [HttpHeader], badLine: Int?) {
+        var headers: [HttpHeader] = []
+        for (i, raw) in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).enumerated() {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            guard let colon = line.firstIndex(of: ":") else { return ([], i + 1) }
+            let name = line[..<colon].trimmingCharacters(in: .whitespaces)
+            if name.isEmpty { return ([], i + 1) }
+            headers.append(HttpHeader(name: name, value: line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)))
+        }
+        return (headers, nil)
+    }
+}
+
 /// Builds the text the add bar's parser reads: "link sha256" or "link mirror1 mirror2". `onConfirm` gets the line and the bare link line it replaces.
+/// Headers cannot ride in that text, so `saveHeaders` hands them to the model, which sends them with the next add.
 struct LinkExtraSheet: View {
     @Environment(\.dismiss) private var dismiss
     let kind: LinkExtra
+    let saveHeaders: (String, [HttpHeader]) -> Void
     let onConfirm: (String, String) -> Void
     @State private var link: String
     @State private var value = ""
 
-    init(kind: LinkExtra, link: String, onConfirm: @escaping (String, String) -> Void) {
+    init(kind: LinkExtra, link: String, saveHeaders: @escaping (String, [HttpHeader]) -> Void, onConfirm: @escaping (String, String) -> Void) {
         self.kind = kind
+        self.saveHeaders = saveHeaders
         self.onConfirm = onConfirm
         _link = State(initialValue: link)
     }
 
     private var cleanLink: String { link.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var cleanValue: String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var parsedHeaders: (headers: [HttpHeader], badLine: Int?) { HeaderLines.parse(value) }
     private var valid: Bool {
         guard !Links.inText(cleanLink).isEmpty else { return false }
-        if kind == .checksum { return cleanValue.count == 64 && cleanValue.allSatisfy(\.isHexDigit) }
-        return !Links.inText(cleanValue).isEmpty
+        switch kind {
+        case .checksum: return cleanValue.count == 64 && cleanValue.allSatisfy(\.isHexDigit)
+        case .mirror: return !Links.inText(cleanValue).isEmpty
+        case .headers: return !parsedHeaders.headers.isEmpty && parsedHeaders.badLine == nil
+        }
+    }
+
+    private var title: String {
+        switch kind {
+        case .checksum: "Add a checksum"
+        case .mirror: "Add a mirror"
+        case .headers: "Add headers"
+        }
+    }
+
+    private var summary: String {
+        switch kind {
+        case .checksum: "Rays checks the file against this SHA-256 when it finishes."
+        case .mirror: "Mirrors must serve the same file under the same name on other hosts. Rays uses the fastest."
+        case .headers: "Rays sends these headers with every request for this link and keeps them in its database on this Mac."
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
-            Text(kind == .checksum ? "Add a checksum" : "Add a mirror").font(.headline)
-            Text(kind == .checksum ? "Rays checks the file against this SHA-256 when it finishes."
-                 : "Mirrors must serve the same file under the same name on other hosts. Rays uses the fastest.")
-                .font(.callout).foregroundStyle(.secondary)
+            Text(title).font(.headline)
+            Text(summary).font(.callout).foregroundStyle(.secondary)
             Form {
                 TextField("Link", text: $link, prompt: Text("https://example.com/file.iso"))
-                if kind == .checksum {
+                switch kind {
+                case .checksum:
                     TextField("SHA-256", text: $value, prompt: Text("64 hex characters"))
                         .font(.body.monospaced())
-                } else {
+                case .mirror:
                     TextField("Mirror links", text: $value, prompt: Text("One or more links, separated by spaces"), axis: .vertical)
                         .lineLimit(2...4)
+                case .headers:
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Headers")
+                        TextEditor(text: $value)
+                            .font(.body.monospaced())
+                            .scrollContentBackground(.hidden)
+                            .padding(4)
+                            .frame(height: 84)
+                            .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 6))
+                        if let bad = parsedHeaders.badLine {
+                            Label("Line \(bad) needs a colon, like Name: value", systemImage: "exclamationmark.circle")
+                                .font(.callout).foregroundStyle(.red)
+                        } else {
+                            Text("For links that need a login, for example Cookie: session=\u{2026} Sent only to this link's site.")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .formStyle(.columns)
             HStack {
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Add to field") {
-                    let extras = kind == .checksum ? cleanValue : Links.inText(cleanValue).joined(separator: " ")
-                    onConfirm("\(Links.inText(cleanLink)[0]) \(extras)", cleanLink)
+                Button(kind == .headers ? "Save" : "Add to field") {
+                    if kind == .headers {
+                        let url = Links.inText(cleanLink)[0]
+                        saveHeaders(url, parsedHeaders.headers)
+                        onConfirm(url, cleanLink)
+                    } else {
+                        let extras = kind == .checksum ? cleanValue : Links.inText(cleanValue).joined(separator: " ")
+                        onConfirm("\(Links.inText(cleanLink)[0]) \(extras)", cleanLink)
+                    }
                     dismiss()
                 }
                 .buttonStyle(.glassProminent)

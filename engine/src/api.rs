@@ -8,7 +8,7 @@ use crate::speed::{BestTime, NetworkKind, SpeedSample, SpeedSettings};
 use crate::speedtest::{self, SpeedTestResult};
 use crate::store::Store;
 use crate::queue::QueueConfig;
-use crate::types::{AddResult, EngineConfig, EngineError, HostView, JobEvent, JobId, JobView, QueueRun, QueueView};
+use crate::types::{AddResult, EngineConfig, EngineError, HostView, HttpHeader, JobEvent, JobId, JobView, QueueRun, QueueView};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -82,8 +82,9 @@ impl Engine {
     }
 
     /// `add_to` with an expected SHA-256 per url (empty list: none), checked after the download.
-    pub fn add_with(&self, urls: Vec<String>, dir: Option<String>, names: Vec<Option<String>>, sha256s: Vec<Option<String>>, mirrors: Vec<Vec<String>>, queue: Option<u64>) -> Vec<AddResult> {
-        self.sched.add_with(urls, dir.map(PathBuf::from), names, sha256s, mirrors, queue)
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_with(&self, urls: Vec<String>, dir: Option<String>, names: Vec<Option<String>>, sha256s: Vec<Option<String>>, mirrors: Vec<Vec<String>>, headers: Vec<Vec<HttpHeader>>, queue: Option<u64>) -> Vec<AddResult> {
+        self.sched.add_with(urls, dir.map(PathBuf::from), names, sha256s, mirrors, headers, queue)
     }
 
     pub fn queues(&self) -> Vec<QueueView> {

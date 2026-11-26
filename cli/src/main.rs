@@ -3,6 +3,7 @@ mod framing;
 mod mcp;
 mod sorter;
 
+use dl_engine::protocol::HttpHeader;
 use dl_engine::protocol::{BestTimeLine, QueueRef, Request, Response, SpeedLine, SpeedTestLine, StatsLine};
 use serde_json::{Value, json};
 use std::error::Error;
@@ -15,8 +16,9 @@ use std::time::{Duration, Instant};
 const USAGE: &str = "usage:
   dl URL...                     download links with Rays
   dl list                       list downloads (also: dl --list)
-  dl add [--queue NAME|ID] [--best-time] [--sha256 HEX] URL [--mirror URL]...
-                                download links into a queue (default: Main), or the Best time queue
+  dl add [--queue NAME|ID] [--best-time] [--sha256 HEX] [--header 'Name: value']... URL [--mirror URL]...
+                                download links into a queue (default: Main), or the Best time queue;
+                                each --header is sent to every URL's own site (for links that need a login)
   dl relink ID URL [--restart]  give a paused or failed download a new link and resume it;
                                 --restart starts over if the new link is a different file
   dl grab URL [--json]          list the downloadable files linked from a web page, one URL per line
@@ -114,7 +116,7 @@ fn main() -> ExitCode {
         [cmd, rest @ ..] if cmd == "status" => return sorter::status(rest),
         [cmd, ..] if ["watch", "unwatch", "config"].contains(&cmd.as_str()) => return sorter::run(&args),
         [a, ..] if a.starts_with('-') => return usage(),
-        urls => Request::Add { urls: urls.to_vec(), queue: None, best_time: false, sha256: vec![], mirrors: vec![] },
+        urls => Request::Add { urls: urls.to_vec(), queue: None, best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] },
     };
 
     let reply = match ask_rays(&req) {
@@ -255,17 +257,29 @@ fn ago(at: i64, now: i64) -> String {
     if mins < 60 { format!("{mins} min ago") } else { format!("{} h ago", mins / 60) }
 }
 
+/// Splits `Name: value` on the first colon and trims both sides.
+fn parse_header(text: &str) -> Result<HttpHeader, String> {
+    let (name, value) = text.split_once(':').ok_or("--header takes \"Name: value\"")?;
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("--header needs a name before the colon".into());
+    }
+    Ok(HttpHeader { name: name.to_owned(), value: value.trim().to_owned() })
+}
+
 /// `add`, `queues`, `queue start|stop|run`, `verify` and `speed`; `args[0]` is the command.
 fn queue_command(args: &[String]) -> Result<Request, String> {
     match args {
         [c, rest @ ..] if c == "add" => {
             let (mut queue, mut best_time, mut urls, mut it) = (None, false, Vec::new(), rest.iter());
             let (mut sha256, mut pending, mut mirrors) = (Vec::new(), None, Vec::<Vec<String>>::new());
+            let mut headers = Vec::new();
             while let Some(a) = it.next() {
                 match a.as_str() {
                     "--queue" => queue = Some(QueueRef::parse(it.next().ok_or("--queue needs a name or id")?)),
                     "--best-time" => best_time = true,
                     "--sha256" => pending = Some(it.next().ok_or("--sha256 needs a hash")?.clone()),
+                    "--header" => headers.push(parse_header(it.next().ok_or("--header needs \"Name: value\"")?)?),
                     "--mirror" => {
                         let link = it.next().ok_or("--mirror needs a URL")?.clone();
                         mirrors.last_mut().ok_or("--mirror goes after the URL it belongs to")?.push(link);
@@ -293,7 +307,7 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
             if best_time && queue.is_some() {
                 return Err("use --queue or --best-time, not both".into());
             }
-            Ok(Request::Add { urls, queue, best_time, sha256, mirrors })
+            Ok(Request::Add { urls, queue, best_time, sha256, mirrors, headers })
         }
         [c, id, url, rest @ ..] if c == "relink" && matches!(rest, [] | [_]) && rest.iter().all(|f| f == "--restart") => {
             Ok(Request::Relink { id: id.parse().map_err(|_| "relink takes a download id and a URL")?, url: url.clone(), restart: !rest.is_empty() })
@@ -436,7 +450,7 @@ fn host_add(msg: &Value) -> Result<Value, String> {
         return Ok(json!({"ok": true, "added": 0, "rejected": []}));
     }
 
-    let resp = ask_rays(&Request::Add { urls, queue: None, best_time: false, sha256: vec![], mirrors: vec![] })?;
+    let resp = ask_rays(&Request::Add { urls, queue: None, best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] })?;
     if !resp.ok {
         return Err(resp.error.unwrap_or_else(|| "Rays rejected the request".into()));
     }
@@ -460,19 +474,19 @@ mod tests {
     fn add_queue_flag_parses_name_or_id() {
         assert_eq!(
             queue_command(&args(&["add", "--queue", "Night", "https://a/x", "https://a/y"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![], mirrors: vec![] }
+            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] }
         );
         assert_eq!(
             queue_command(&args(&["add", "https://a/x", "--queue", "3"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into()], queue: Some(QueueRef::Id(3)), best_time: false, sha256: vec![], mirrors: vec![] }
+            Request::Add { urls: vec!["https://a/x".into()], queue: Some(QueueRef::Id(3)), best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] }
         );
         assert_eq!(
             queue_command(&args(&["add", "https://a/x"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: false, sha256: vec![], mirrors: vec![] }
+            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] }
         );
         assert_eq!(
             queue_command(&args(&["add", "https://a/x", "--sha256", "ab", "https://a/y"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: None, best_time: false, sha256: vec![None, Some("ab".into())], mirrors: vec![] }
+            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: None, best_time: false, sha256: vec![None, Some("ab".into())], mirrors: vec![], headers: vec![] }
         );
         assert!(queue_command(&args(&["add", "https://a/x", "--sha256", "ab"])).is_err());
         assert_eq!(
@@ -482,10 +496,23 @@ mod tests {
                 queue: None,
                 best_time: false,
                 sha256: vec![],
-                mirrors: vec![vec!["https://b/x".into(), "https://c/x".into()], vec![]]
+                mirrors: vec![vec!["https://b/x".into(), "https://c/x".into()], vec![]],
+                headers: vec![]
             }
         );
         assert!(queue_command(&args(&["add", "--mirror", "https://b/x", "https://a/x"])).is_err());
+        assert_eq!(
+            queue_command(&args(&["add", "--header", "Cookie: a=b: c", "--header", "X-Id:7", "https://a/x"])).unwrap(),
+            Request::Add {
+                urls: vec!["https://a/x".into()],
+                queue: None,
+                best_time: false,
+                sha256: vec![],
+                mirrors: vec![],
+                headers: vec![HttpHeader { name: "Cookie".into(), value: "a=b: c".into() }, HttpHeader { name: "X-Id".into(), value: "7".into() }]
+            }
+        );
+        assert!(queue_command(&args(&["add", "--header", "no colon", "https://a/x"])).is_err());
         assert!(queue_command(&args(&["add", "--queue"])).is_err());
         assert!(queue_command(&args(&["add", "--queue", "Night"])).is_err());
     }
@@ -501,7 +528,7 @@ mod tests {
     fn best_time_add_and_speed_commands_parse() {
         assert_eq!(
             queue_command(&args(&["add", "--best-time", "https://a/x"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: true, sha256: vec![], mirrors: vec![] }
+            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: true, sha256: vec![], mirrors: vec![], headers: vec![] }
         );
         assert_eq!(queue_command(&args(&["stats"])).unwrap(), Request::Stats { days: 30 });
         assert_eq!(queue_command(&args(&["stats", "--days", "7"])).unwrap(), Request::Stats { days: 7 });

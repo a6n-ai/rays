@@ -5,7 +5,7 @@ use crate::events::EventHub;
 use crate::limit::RateLimiter;
 use crate::names;
 use crate::store::MAX_PARTS;
-use crate::types::{Job, JobId, JobState, Live, Outcome, Segment};
+use crate::types::{HttpHeader, Job, JobId, JobState, Live, Outcome, Segment};
 use reqwest::header::{
     ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_RANGE, ETAG, HeaderName, IF_RANGE, LAST_MODIFIED, RANGE,
 };
@@ -338,7 +338,7 @@ async fn run_attempt(
             req = req.header(IF_RANGE, v.as_str());
         }
     }
-    let mut resp = or_cancel(cancel, tokio::time::timeout(STALL, req.send()))
+    let mut resp = or_cancel(cancel, tokio::time::timeout(STALL, env.send(req)))
         .await?
         .map_err(|_| Stop::Retry("timeout waiting for response".to_string()))?
         .map_err(|e| Stop::Retry(format!("request: {e}")))?;
@@ -1060,8 +1060,9 @@ async fn probe_mirrors(env: &Env, cancel: &mut watch::Receiver<bool>) -> Result<
     let mut set = tokio::task::JoinSet::new();
     for (i, url) in mirrors.iter().enumerate() {
         let req = env.get(url).header(RANGE, "bytes=0-0");
+        let sender = env.clone();
         set.spawn(async move {
-            let ok = match tokio::time::timeout(MIRROR_PROBE, req.send()).await {
+            let ok = match tokio::time::timeout(MIRROR_PROBE, sender.send(req)).await {
                 Ok(Ok(resp)) => resp.status().as_u16() == 206 && content_range_total(&resp) == Some(total),
                 _ => false,
             };
@@ -1253,7 +1254,7 @@ async fn segment_attempt(
             if let Some(v) = shared.validator.as_ref().filter(|_| i == 0) {
                 req = req.header(IF_RANGE, v.as_str());
             }
-            let resp = match or_cancel(cancel, tokio::time::timeout(STALL, req.send())).await? {
+            let resp = match or_cancel(cancel, tokio::time::timeout(STALL, shared.env.send(req))).await? {
                 Ok(Ok(resp)) => resp,
                 Ok(Err(e)) => {
                     shared.conn_failed(idx);
@@ -1459,6 +1460,101 @@ async fn cancelled(rx: &mut watch::Receiver<bool>) {
     }
 }
 
+/// The job's saved headers when `url` has the same origin (scheme, host and port) as the job's link, else none.
+/// Credentials stay with their site, and an https to http downgrade is another origin.
+pub fn headers_for(job: &Job, url: &str) -> Vec<HttpHeader> {
+    let origin = |u: &str| reqwest::Url::parse(u).ok().map(|u| u.origin());
+    if job.headers.is_empty() || origin(url).is_none() || origin(url) != origin(&job.url) {
+        return Vec::new();
+    }
+    job.headers.clone()
+}
+
+/// A client that follows redirects only within one origin (up to 10 hops) and returns the first cross-origin
+/// redirect as a response. reqwest itself strips only Authorization, Cookie and a few more on a cross-host
+/// redirect, so a saved header such as X-Api-Key would follow it; `send_following` takes that hop by hand without them.
+fn strict_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        let policy = reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 10 {
+                attempt.error("too many redirects")
+            } else if attempt.previous().last().map(reqwest::Url::origin) == Some(attempt.url().origin()) {
+                attempt.follow()
+            } else {
+                attempt.stop()
+            }
+        });
+        reqwest::Client::builder()
+            .user_agent(concat!("Rays/", env!("CARGO_PKG_VERSION"), " (+https://rays.a6n.ai)"))
+            .connect_timeout(Duration::from_secs(15))
+            .read_timeout(Duration::from_secs(30))
+            .redirect(policy)
+            .build()
+            .expect("redirect client")
+    })
+}
+
+/// A GET for `target`. A job with saved headers sends them (to its own origin only) through the strict client.
+pub fn job_request(client: &reqwest::Client, job: &Job, url: &str, target: &str) -> reqwest::RequestBuilder {
+    let sent = headers_for(job, url);
+    let mut req = if sent.is_empty() { client.get(target) } else { strict_client().get(target) };
+    for h in sent {
+        req = req.header(h.name, h.value);
+    }
+    req
+}
+
+/// Sends `req` and takes any redirect the client stopped at (a cross-origin hop) by hand: the same request, to
+/// `Location`, without the saved headers or credentials, keeping Range and If-Range.
+pub async fn send_following(req: reqwest::RequestBuilder, saved: &[HttpHeader]) -> Result<reqwest::Response, reqwest::Error> {
+    let (client, built) = req.build_split();
+    let mut next = built?;
+    for _ in 0..10 {
+        let spare = next.try_clone();
+        let resp = client.execute(next).await?;
+        let hop = resp.headers().get(reqwest::header::LOCATION).and_then(|v| v.to_str().ok()).and_then(|v| resp.url().join(v).ok());
+        let (true, Some(mut again), Some(to)) = (resp.status().is_redirection(), spare, hop) else { return Ok(resp) };
+        if to.origin() != resp.url().origin() {
+            let headers = again.headers_mut();
+            for name in [reqwest::header::AUTHORIZATION, reqwest::header::COOKIE, reqwest::header::PROXY_AUTHORIZATION] {
+                headers.remove(name);
+            }
+            for h in saved {
+                if let Ok(name) = HeaderName::from_bytes(h.name.as_bytes()) {
+                    headers.remove(name);
+                }
+            }
+        }
+        *again.url_mut() = to;
+        next = again;
+    }
+    client.execute(next).await
+}
+
+/// Headers the engine sets itself; a saved copy would break ranges, framing or the connection.
+const ENGINE_HEADERS: [&str; 6] = ["host", "range", "if-range", "content-length", "transfer-encoding", "connection"];
+
+/// Rejects what cannot be sent: s3 links, bad names or values, headers the engine controls. Messages never carry values.
+pub fn check_headers(url: &str, headers: &[HttpHeader]) -> Result<(), String> {
+    if headers.is_empty() {
+        return Ok(());
+    }
+    if url.starts_with("s3://") {
+        return Err("headers are not supported for s3 links".to_owned());
+    }
+    for h in headers {
+        let name = reqwest::header::HeaderName::from_bytes(h.name.trim().as_bytes()).map_err(|_| format!("header name {:?} is not valid", h.name))?;
+        if ENGINE_HEADERS.contains(&name.as_str()) {
+            return Err(format!("header {} is set by Rays", h.name.trim()));
+        }
+        if reqwest::header::HeaderValue::from_str(&h.value).is_err() {
+            return Err(format!("the value of header {} is not valid", h.name.trim()));
+        }
+    }
+    Ok(())
+}
+
 fn with_job<R>(live: &Live, f: impl FnOnce(&mut Job) -> R) -> R {
     // A poisoned lock still holds a usable Job; keep the download going instead of panicking.
     let mut job = live.job.lock().unwrap_or_else(PoisonError::into_inner);
@@ -1485,14 +1581,20 @@ impl Env {
     }
 
     /// A GET for `url`. The Hugging Face token rides along only on requests to the HF host;
-    /// reqwest drops it when a redirect leaves that host.
+    /// reqwest drops it when a redirect leaves that host. The job's saved headers go only to its own origin,
+    /// so a mirror elsewhere never sees them; send these requests with `send`, which also keeps them off redirects.
     fn get(&self, url: &str) -> reqwest::RequestBuilder {
         let target = self.request_url(url);
-        let req = self.client.get(&target);
+        let req = with_job(&self.live, |j| job_request(&self.client, j, url, &target));
         match &self.hf.token {
             Some(token) if self.hf.covers(&target) => req.bearer_auth(token),
             _ => req,
         }
+    }
+
+    async fn send(&self, req: reqwest::RequestBuilder) -> Result<reqwest::Response, reqwest::Error> {
+        let saved = with_job(&self.live, |j| j.headers.clone());
+        send_following(req, &saved).await
     }
 
     /// Lifts a remembered limit by one after a clean finish; a no-op for hosts without a row.

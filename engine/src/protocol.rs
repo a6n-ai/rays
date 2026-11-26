@@ -4,6 +4,21 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_LINE: usize = 1 << 20;
 
+/// A request header sent with every request to a job's own site. Lives here so the CLI can build it;
+/// the value is a secret, so `Debug` leaves it out.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "full", derive(uniffi::Record))]
+pub struct HttpHeader {
+    pub name: String,
+    pub value: String,
+}
+
+impl std::fmt::Debug for HttpHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpHeader").field("name", &self.name).finish_non_exhaustive()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Request {
@@ -20,6 +35,9 @@ pub enum Request {
         /// Extra links for the same file per url, same order; empty means none.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         mirrors: Vec<Vec<String>>,
+        /// Request headers sent with every url of this command, to the link's own host only.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        headers: Vec<HttpHeader>,
     },
     List,
     /// Gives a paused or failed download a new link and queues it.
@@ -298,7 +316,7 @@ mod tests {
         round(Request::QueueStop { queue: QueueRef::Name("Night".into()) }, r#"{"op":"queue_stop","queue":"Night"}"#);
         round(Request::QueueRunNow { queue: QueueRef::Id(1) }, r#"{"op":"queue_run_now","queue":1}"#);
         round(
-            Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![], mirrors: vec![] },
+            Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] },
             r#"{"op":"add","urls":["u"],"queue":"Night","best_time":false}"#,
         );
     }
@@ -306,15 +324,15 @@ mod tests {
     #[test]
     fn add_still_takes_numeric_or_missing_queue() {
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":[],"queue":2}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec![], queue: Some(QueueRef::Id(2)), best_time: false, sha256: vec![], mirrors: vec![] });
+        assert_eq!(r, Request::Add { urls: vec![], queue: Some(QueueRef::Id(2)), best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] });
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":[]}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec![], queue: None, best_time: false, sha256: vec![], mirrors: vec![] });
+        assert_eq!(r, Request::Add { urls: vec![], queue: None, best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] });
     }
 
     #[test]
     fn add_best_time_is_optional() {
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":["u"],"best_time":true}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec!["u".into()], queue: None, best_time: true, sha256: vec![], mirrors: vec![] });
+        assert_eq!(r, Request::Add { urls: vec!["u".into()], queue: None, best_time: true, sha256: vec![], mirrors: vec![], headers: vec![] });
     }
 
     #[test]
