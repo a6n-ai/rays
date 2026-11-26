@@ -62,7 +62,7 @@ extension Tile {
     static let stats = Tile(symbol: "chart.bar.fill", color: TilePalette.green, glyphScale: 0.44, system: .app("/System/Applications/Stocks.app"))
     static let shortcuts = Tile(symbol: "square.stack.3d.up.fill", color: TilePalette.indigo, glyphScale: 0.48, system: .app("/System/Applications/Shortcuts.app"))
     static let general = Tile(symbol: "gearshape.fill", color: TilePalette.gray, glyphScale: 0.58, system: .pane("GeneralSettings"))
-    static let ai = Tile(symbol: "apple.intelligence", color: TilePalette.purple, glyphScale: 0.58)
+    static let ai = Tile(symbol: "apple.intelligence", color: TilePalette.purple, glyphScale: 0.58, system: .pane("SiriPreferenceExtension"))
     static let browsers = Tile(symbol: "safari.fill", color: TilePalette.indigo, glyphScale: 0.6, system: .pane("Network"))
 
     static let appearance = Tile(symbol: "circle.lefthalf.filled", color: TilePalette.gray, system: .pane("Appearance"))
