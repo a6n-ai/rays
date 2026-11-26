@@ -138,7 +138,7 @@ struct SearchView: View {
         .contextMenu {
             Button("Open") { open(hit) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([hit.url]) }
-            Button("Copy Path") {
+            Button("Copy path") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(hit.url.path(percentEncoded: false), forType: .string)
             }

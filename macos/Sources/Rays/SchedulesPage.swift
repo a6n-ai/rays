@@ -63,7 +63,7 @@ struct SchedulesPage: View {
             Section {
                 HeroCard(.schedules, title: "Schedules", subtitle: heroSubtitle,
                          learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues#schedules")) {
-                    HeroActions { Menu("New Schedule") { addMenu } }
+                    HeroActions { Menu("New schedule") { addMenu } }
                 }
                 .cardRow(.only)
             }

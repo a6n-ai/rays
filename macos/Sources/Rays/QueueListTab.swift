@@ -51,7 +51,7 @@ struct QueueListTab: View {
                 HeroCard(.queues, title: "Queues", subtitle: "Group downloads and start them together, now or on a schedule.",
                          learnMore: URL(string: "https://rays.a6n.ai/docs/app/queues")) {
                     HeroActions {
-                        Button("New Queue", action: newQueue)
+                        Button("New queue", action: newQueue)
                         HeroMenu {
                             Button("Start all queues", systemImage: "play.circle") { model.setAllQueues(running: true) }
                             Button("Stop all queues", systemImage: "stop.circle") { model.setAllQueues(running: false) }

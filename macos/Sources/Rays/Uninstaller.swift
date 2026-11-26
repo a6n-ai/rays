@@ -60,7 +60,7 @@ struct UninstallSection: View {
             .help(Uninstaller.canUninstall ? "Remove Rays from this Mac" : "Only a copy in Applications can uninstall itself.")
             .confirmationDialog("Uninstall Rays?", isPresented: $confirm, titleVisibility: .visible) {
                 Button("Uninstall", role: .destructive) { start(deleteData: false) }
-                Button("Uninstall and Delete Data", role: .destructive) { start(deleteData: true) }
+                Button("Uninstall and delete data", role: .destructive) { start(deleteData: true) }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Rays stops sorting your folders, removes its browser helpers and the dl command, and moves itself to the Trash. Your downloads and sorted files stay where they are. Delete Data also removes download history and settings.")

@@ -84,7 +84,7 @@ struct AddBar: View {
         }
         .background {
             // Zero-size, invisible button: exists only to own the ⌘L shortcut.
-            Button("Add Link") { fieldFocused = true }
+            Button("Add link") { fieldFocused = true }
                 .keyboardShortcut("l", modifiers: .command)
                 .opacity(0)
                 .frame(width: 0, height: 0)
@@ -221,7 +221,7 @@ struct AddBar: View {
         // Always the round icon; a pasted link fills it with the accent colour instead of growing a label.
         Menu {
             Picker("Queue", selection: Binding(get: { target }, set: { chosen = $0 })) {
-                Label("Download Now", systemImage: "arrow.down.circle").tag(UInt64(0))
+                Label("Download now", systemImage: "arrow.down.circle").tag(UInt64(0))
                 ForEach(model.sortedQueues) { option in
                     Label(option.config.name, systemImage: QueueAppearances.shared.appearance(for: option).symbol).tag(option.id)
                 }

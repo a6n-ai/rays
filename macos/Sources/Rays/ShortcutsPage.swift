@@ -60,7 +60,7 @@ struct ShortcutsPage: View {
                 Section("Other ways to send links to Rays") {
                     way(.shortcuts, "Share menu",
                         "Choose Rays in the Share menu of Safari or any app. Turn it on in System Settings > General > Login Items & Extensions > Sharing.") {
-                        Button("Open Sharing Settings") {
+                        Button("Open sharing settings") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences")!)
                         }
                     }

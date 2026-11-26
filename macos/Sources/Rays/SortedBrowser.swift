@@ -169,7 +169,7 @@ private struct ItemMenu: View {
     var body: some View {
         Button("Open") { urls.forEach(open) }
         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(Array(urls)) }
-        Button("Copy Path") {
+        Button("Copy path") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(urls.map { $0.path(percentEncoded: false) }.joined(separator: "\n"), forType: .string)
         }

@@ -35,7 +35,7 @@ struct RaysApp: App {
                 }
             }
             CommandGroup(after: .help) {
-                Button("Send Feedback…") { Feedback.sendFeedback() }
+                Button("Send feedback…") { Feedback.sendFeedback() }
             }
         }
 
@@ -192,7 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .map { "\($0.name): stopping loses \(byteText($0.done)) of progress." }
                 .joined(separator: "\n") + "\n\nStop anyway?"
             alert.addButton(withTitle: "Cancel")
-            alert.addButton(withTitle: "Quit Anyway")
+            alert.addButton(withTitle: "Quit anyway")
             guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         }
         model.shutdown()

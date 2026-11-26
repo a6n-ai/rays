@@ -20,7 +20,7 @@ enum WakePermission {
         alert.messageText = "Let Rays wake your Mac for scheduled queues?"
         alert.informativeText = "Rays needs your administrator password once. It adds a rule that lets Rays set and cancel wake times, and nothing else. You can remove it in Settings > Downloads."
         alert.addButton(withTitle: "Continue…")
-        alert.addButton(withTitle: "Not Now")
+        alert.addButton(withTitle: "Not now")
         guard alert.runModal() == .alertFirstButtonReturn else { return false }
         guard let user = validatedUser(NSUserName()) else { return false }
         let script = installScript(user: user, target: file, visudo: "/usr/sbin/visudo")
@@ -63,7 +63,7 @@ enum WakePermission {
     }
     private static let serial = DispatchQueue(label: "app.rays.wake")
 
-    /// Some queue has Wake on but the rule file is gone, so the toggle should offer "Set Up Again".
+    /// Some queue has Wake on but the rule file is gone, so the toggle should offer "Set up again".
     static var isMissingForWakeQueues: Bool {
         wantLock.lock(); defer { wantLock.unlock() }
         return !wanting.isEmpty && !FileManager.default.fileExists(atPath: file)

@@ -182,7 +182,7 @@ struct ModelDetailView: View {
                     Text("This model is gated. Add your Hugging Face token in Settings")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Open Settings") { openSettings() }
+                    Button("Open System Settings") { openSettings() }
                 }
             }
             if let bannerText {
@@ -227,14 +227,14 @@ struct ModelDetailView: View {
     private var queuePicker: some View {
         Menu {
             Picker("Queue", selection: Binding(get: { queueId }, set: { chosenQueue = $0 })) {
-                Label("Download Now", systemImage: "arrow.down.circle").tag(UInt64(0))
+                Label("Download now", systemImage: "arrow.down.circle").tag(UInt64(0))
                 ForEach(model.sortedQueues) { option in
                     Label(option.config.name, systemImage: QueueAppearances.shared.appearance(for: option).symbol).tag(option.id)
                 }
             }
             .pickerStyle(.inline)
         } label: {
-            Label(model.queues.first { $0.id == queueId }?.config.name ?? "Download Now",
+            Label(model.queues.first { $0.id == queueId }?.config.name ?? "Download now",
                   systemImage: model.queues.first { $0.id == queueId }.map { QueueAppearances.shared.appearance(for: $0).symbol } ?? "arrow.down.circle")
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -245,7 +245,7 @@ struct ModelDetailView: View {
         .glassEffect(.regular.interactive(), in: .capsule)
         .help("Queue")
         .accessibilityLabel("Queue")
-        .accessibilityValue(model.queues.first { $0.id == queueId }?.config.name ?? "Download Now")
+        .accessibilityValue(model.queues.first { $0.id == queueId }?.config.name ?? "Download now")
         .fixedSize()
     }
 

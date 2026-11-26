@@ -8,7 +8,7 @@ struct BrowsersTab: View {
         Form {
             Section {
                 SettingRow(title: "Rays browser extension", hint: "Right-click any link and choose Download with Rays.") {
-                    Button("Install All Helpers") { model.installAllHelpers(model.states) }
+                    Button("Install all helpers") { model.installAllHelpers(model.states) }
                         .buttonStyle(.glassProminent)
                         .disabled(!model.states.contains { $0.browser.engine != .safari && $0.helper != .ok })
                     Button("Check again") { model.refresh() }
@@ -109,20 +109,20 @@ private struct BrowserStatus: View {
             addonLine
             HStack(spacing: 8) {
                 if state.helper != .ok {
-                    Button(state.helper == .missing ? "Install Helper" : "Repair Helper", action: install)
+                    Button(state.helper == .missing ? "Install helper" : "Repair helper", action: install)
                         .buttonStyle(.glass)
                 }
                 if state.addon != .added, BrowserCheck.storeURL(for: state.browser.engine) != nil {
-                    Button("Get Extension") { BrowserCheck.openStore(in: state.browser) }
+                    Button("Get extension") { BrowserCheck.openStore(in: state.browser) }
                         .buttonStyle(.glassProminent)
                         .help(state.browser.engine == .firefox ? "Opens Rays on Firefox Add-ons." : "Opens Rays in the Chrome Web Store.")
                 }
                 if state.helper != .missing {
-                    Button("Remove Helper", role: .destructive) { confirmRemove = true }
+                    Button("Remove helper", role: .destructive) { confirmRemove = true }
                         .buttonStyle(.glass)
                         .confirmationDialog("Remove the Rays helper from \(state.browser.name)?",
                                             isPresented: $confirmRemove, titleVisibility: .visible) {
-                            Button("Remove Helper", role: .destructive, action: remove)
+                            Button("Remove helper", role: .destructive, action: remove)
                             Button("Cancel", role: .cancel) {}
                         } message: {
                             Text(state.browser.engine == .firefox
@@ -192,11 +192,11 @@ private struct RemoveAllHelpersRow: View {
     var body: some View {
         SettingRow(title: "Remove all helpers",
                    hint: "Disconnects Rays from every browser.") {
-            Button("Remove All Helpers", role: .destructive) { confirm = true }
+            Button("Remove all helpers", role: .destructive) { confirm = true }
                 .buttonStyle(.glass)
                 .confirmationDialog("Remove the Rays helper from all browsers?", isPresented: $confirm,
                                     titleVisibility: .visible) {
-                    Button("Remove All Helpers", role: .destructive) { model.removeAllHelpers() }
+                    Button("Remove all helpers", role: .destructive) { model.removeAllHelpers() }
                     Button("Cancel", role: .cancel) {}
                 } message: {
                     Text("Download with Rays stops working in your browsers until you install the helpers again.")

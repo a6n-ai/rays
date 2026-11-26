@@ -107,10 +107,10 @@ struct JobRow: View {
         .confirmationDialog(
             "Remove \(job.name)?", isPresented: $confirmRemove, titleVisibility: .visible
         ) {
-            Button("Remove and Delete Partial File", role: .destructive) {
+            Button("Remove and delete partial file", role: .destructive) {
                 model.remove(job.id, deletePartial: true)
             }
-            Button("Remove and Keep Partial File") { model.removeUndoable([job]) }
+            Button("Remove and keep partial file") { model.removeUndoable([job]) }
             Button("Cancel", role: .cancel) {}
         }
     }
@@ -208,7 +208,7 @@ struct JobRow: View {
         if let hint = model.slowHint(for: job) {
             HStack(spacing: 6) {
                 Text(hint).foregroundStyle(.secondary)
-                Button("Move to Best time") { model.moveToBestTime(job.id) }
+                Button("Move to best time") { model.moveToBestTime(job.id) }
                     .buttonStyle(.link)
                 Button { model.dismissHint(job.id) } label: { Image(systemName: "xmark") }
                     .buttonStyle(.plain)
@@ -417,16 +417,16 @@ struct JobRow: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(job.url, forType: .string)
         } label: {
-            Label("Copy Link", systemImage: "link")
+            Label("Copy link", systemImage: "link")
         }
         if job.state == .paused || job.isFailed {
-            Button { askForLink() } label: { Label("Update Link…", systemImage: "link.badge.plus") }
+            Button { askForLink() } label: { Label("Update link…", systemImage: "link.badge.plus") }
         }
         Menu {
             Button {
                 model.moveToQueue(job: job.id, queue: 0)
             } label: {
-                if job.queueId == 0 { Label("No Queue", systemImage: "checkmark") } else { Text("No Queue") }
+                if job.queueId == 0 { Label("No queue", systemImage: "checkmark") } else { Text("No queue") }
             }
             Divider()
             ForEach(model.sortedQueues) { queue in

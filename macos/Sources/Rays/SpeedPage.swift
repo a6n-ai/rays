@@ -10,7 +10,7 @@ struct SpeedPage: View {
         Group {
             if nav.sub == "history" { SpeedHistoryTab() } else { SpeedOverview() }
         }
-        .navigationTitle(nav.sub == "history" ? "Speed History" : "Speed")
+        .navigationTitle(nav.sub == "history" ? "Speed History" : "Speed test")
         .task { model.loadSpeedHistory() }
     }
 }
@@ -42,7 +42,7 @@ private struct SpeedOverview: View {
                 HeroCard(.speed, title: "Speed test", subtitle: subtitle, caption: model.automaticTestRunning ? "Automatic test" : nil,
                          learnMore: URL(string: "https://rays.a6n.ai/docs/app/speed/")) {
                     HeroActions {
-                        Button(model.testing ? "Stop Test" : "Run Test") {
+                        Button(model.testing ? "Stop test" : "Run test") {
                             model.testing ? model.cancelSpeedTest() : model.requestSpeedTest()
                         }
                         .disabled(model.automaticTestRunning)

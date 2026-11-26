@@ -173,7 +173,7 @@ struct FolderView: View {
                 NSWorkspace.shared.activateFileViewerSelecting(Array(urls))
             }
             .disabled(urls.isEmpty)
-            Button("Copy Path") {
+            Button("Copy path") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(urls.map { $0.path(percentEncoded: false) }.joined(separator: "\n"), forType: .string)
             }

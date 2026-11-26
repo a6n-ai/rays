@@ -225,7 +225,7 @@ struct MenuBarPanel: View {
                 MenuItem("Cloud", tile: .cloud) { show(.openCloud) }
                 MenuItem("Queues", tile: .queues) { go(.queues) }
                 MenuItem("Schedules", tile: .schedules) { go(.schedules) }
-                MenuItem("Speed Test", tile: .speed) { go(.speed) }
+                MenuItem("Speed test", tile: .speed) { go(.speed) }
                 MenuItem("Stats", tile: .stats) { go(.stats) }
                 MenuItem("Shortcuts", tile: .shortcuts) { go(.shortcuts) }
             }
@@ -283,7 +283,7 @@ struct MenuBarPanel: View {
             }
         }
         HStack {
-            Button("See All in Rays") { show(.openDownloads) }
+            Button("See all in Rays") { show(.openDownloads) }
             Spacer()
             Button("Clear") { clearedID = Int(model.jobs.map(\.id).max() ?? 0) }
                 .disabled(recent.allSatisfy(\.isActive))

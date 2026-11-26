@@ -24,7 +24,7 @@ struct QueueSettingsTab: View {
                    status: installed ? .ok : .off) {
             HStack(spacing: 8) {
                 Text(installed ? "Set up" : "Not set up").foregroundStyle(.secondary)
-                Button("Set Up…") { Task { await run { _ = await WakePermission.ensure() } } }
+                Button("Set up…") { Task { await run { _ = await WakePermission.ensure() } } }
                     .disabled(installed || busy)
                 Button("Remove") {
                     Task {

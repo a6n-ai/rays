@@ -45,14 +45,14 @@ struct DownloadsView: View {
                 titleVisibility: .visible
             ) {
                 if removal.contains(where: \.isDone) {
-                    Button("Remove and Move Files to Trash", role: .destructive) {
+                    Button("Remove and move files to Trash", role: .destructive) {
                         model.removeAndTrash(removal)
                         removal = []
                         selection = []
                     }
                 }
                 if removal.contains(where: \.hasPartial) {
-                    Button("Remove and Delete Partial Files", role: .destructive) { confirmRemoval(deletePartial: true) }
+                    Button("Remove and delete partial files", role: .destructive) { confirmRemoval(deletePartial: true) }
                 }
                 Button(removal.contains(where: \.hasPartial) ? "Remove and Keep Partial Files" : "Remove from List") {
                     confirmRemoval(deletePartial: false)
@@ -84,7 +84,7 @@ struct DownloadsView: View {
             } description: {
                 Text(error)
             } actions: {
-                Button("Try Again") { model.restart() }
+                Button("Try again") { model.restart() }
             }
         } else if queue != nil && visible.isEmpty {
             if inQueue.isEmpty {

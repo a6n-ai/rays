@@ -91,7 +91,7 @@ struct SidebarView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Label("Rays needs access to Downloads", systemImage: "lock")
                             .font(.callout)
-                        Button("Open Privacy Settings") {
+                        Button("Open privacy settings") {
                             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
                                 NSWorkspace.shared.open(url)
                             }

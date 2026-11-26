@@ -82,7 +82,7 @@ struct ModelsView: View {
                     HeroCard(.models, title: "Models",
                              subtitle: "Find models on Hugging Face and download them.",
                              learnMore: URL(string: "https://rays.a6n.ai/docs/app/models/")) {
-                        HeroActions { Button("Open Folder") { AIModelsFolder.reveal(folder) } }
+                        HeroActions { Button("Open folder") { AIModelsFolder.reveal(folder) } }
                     }
                         .padding(.horizontal, 12)
                         .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 10, style: .continuous))
@@ -155,7 +155,7 @@ struct ModelsView: View {
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Try Again") { Task { await search() } }
+                    Button("Try again") { Task { await search() } }
                 }
             }
         } else if results.isEmpty {

@@ -46,8 +46,8 @@ enum Feedback {
         let alert = NSAlert()
         alert.messageText = "Rays quit unexpectedly"
         alert.informativeText = "Send the crash report to a6n to help fix it? Mail opens with the report attached, and nothing is sent until you press Send. The report can include names of files and folders on your Mac."
-        alert.addButton(withTitle: "Send Report…")
-        alert.addButton(withTitle: "Don't Send")
+        alert.addButton(withTitle: "Send report…")
+        alert.addButton(withTitle: "Don't send")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         compose(subject: "Rays crash report", body: "What were you doing when Rays quit?\n\n\n--\n\(about)", attachments: [crash.url])
     }

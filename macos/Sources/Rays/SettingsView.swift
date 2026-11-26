@@ -98,7 +98,7 @@ struct SaveFolderRow: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         panel.directoryURL = folder
         guard panel.runModal() == .OK, let url = panel.url else { return }
         change(to: url)

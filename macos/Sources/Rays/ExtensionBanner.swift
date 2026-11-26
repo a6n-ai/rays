@@ -56,12 +56,12 @@ struct ExtensionBanner: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Button("Not Now") {
+            Button("Not now") {
                 dismissed = (dismissedIDs.union(needing.map(\.id))).sorted().joined(separator: ",")
             }
             .buttonStyle(.glass)
             if helpersReady {
-                Button("Get Extension") { needing.forEach { BrowserCheck.openStore(in: $0.browser) } }
+                Button("Get extension") { needing.forEach { BrowserCheck.openStore(in: $0.browser) } }
                     .buttonStyle(.glassProminent)
                     .help("Opens the Rays extension in each browser's store")
             } else {

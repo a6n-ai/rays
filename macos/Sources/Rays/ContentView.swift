@@ -123,13 +123,13 @@ struct ContentView: View {
         }
         .confirmationDialog(model.confirmTestTitle,
                             isPresented: $bound.confirmHotspot, titleVisibility: .visible) {
-            Button("Run Test") { Task { await model.runSpeedTest(force: true) } }
+            Button("Run test") { Task { await model.runSpeedTest(force: true) } }
             Button("Cancel", role: .cancel) {}
         }
         .alert("Let Rays test your speed a few times each night for a week? About 1 GB in total.",
                isPresented: $bound.nightPromptShown) {
             Button("Allow") { model.answerNightPrompt(allow: true) }
-            Button("Not Now", role: .cancel) { model.answerNightPrompt(allow: false) }
+            Button("Not now", role: .cancel) { model.answerNightPrompt(allow: false) }
         }
         .onChange(of: model.queues.map(\.config)) { drafts.reconcile(model.queues) }
         .onReceive(NotificationCenter.default.publisher(for: .openSorter)) { _ in destination = .sorter }
@@ -204,7 +204,7 @@ struct DownloadsHeroActions: View {
 
     var body: some View {
         HeroActions {
-            Button("Clear Finished", action: clearFinished)
+            Button("Clear finished", action: clearFinished)
                 .disabled(!hasFinished)
                 .help("Remove finished downloads from the list. Files stay on disk.")
             HeroMenu {
@@ -221,7 +221,7 @@ struct DownloadsHeroActions: View {
                         }
                     }
                 }
-                Button("Open Downloads Folder in Finder") { NSWorkspace.shared.open(EngineModel.downloadsURL) }
+                Button("Open Downloads folder in Finder") { NSWorkspace.shared.open(EngineModel.downloadsURL) }
             }
         }
     }

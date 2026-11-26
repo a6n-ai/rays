@@ -93,7 +93,7 @@ struct ListControls: View {
             }
             .fixedSize()
             if let removeMissing {
-                Button(action: removeMissing) { Label("Remove Missing", systemImage: "trash.slash") }
+                Button(action: removeMissing) { Label("Remove missing", systemImage: "trash.slash") }
                     .help("Remove finished downloads whose file was moved or deleted. Files that are still there stay.")
             }
     }

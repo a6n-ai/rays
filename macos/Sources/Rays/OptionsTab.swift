@@ -69,7 +69,7 @@ struct OptionsTab: View {
                 Label("Permission missing", systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.orange)
-                Button("Set Up Again") { Task { _ = await WakePermission.ensure(); await refreshWake() } }
+                Button("Set up again") { Task { _ = await WakePermission.ensure(); await refreshWake() } }
                     .controlSize(.small)
             }
         }

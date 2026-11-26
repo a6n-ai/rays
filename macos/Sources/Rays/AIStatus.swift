@@ -99,7 +99,7 @@ struct AIStatusRow: View {
             }
             Spacer(minLength: 0)
             if readiness == .notEnabled {
-                Button("Open Settings") {
+                Button("Open System Settings") {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.Siri-Settings.extension") {
                         NSWorkspace.shared.open(url)
                     }

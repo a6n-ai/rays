@@ -11,22 +11,27 @@ struct SpeedCard: View {
             Spacer(minLength: 0)
             if let progress = model.speedProgress {
                 ProgressView().controlSize(.mini)
-                if progress.bps > 0 { badge(SpeedFormat.mbps(progress.bps, whole: true)) }
+                if progress.bps > 0 { badge(progress.bps) }
             } else if let test = model.lastTest {
-                badge(SpeedFormat.mbps(test.bps, whole: true))
+                badge(test.bps)
             }
         }
         .contextMenu {
             if model.testing {
-                Button("Stop Speed Test", systemImage: "stop.fill") { model.cancelSpeedTest() }
+                Button("Stop speed test", systemImage: "stop.fill") { model.cancelSpeedTest() }
             } else {
-                Button("Run Speed Test", systemImage: "play.fill") { model.requestSpeedTest() }
+                Button("Run speed test", systemImage: "play.fill") { model.requestSpeedTest() }
                     .disabled(model.automaticTestRunning)
             }
         }
     }
 
-    private func badge(_ text: String) -> some View {
-        Text(text).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+    /// Number only, so it never truncates; the unit lives in the help text and accessibility label.
+    private func badge(_ bps: UInt64) -> some View {
+        let full = SpeedFormat.mbps(bps, whole: true)
+        return Text(full.replacingOccurrences(of: " Mb/s", with: ""))
+            .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+            .help(full)
+            .accessibilityLabel(full)
     }
 }

@@ -101,7 +101,7 @@ struct BucketsForm: View {
             if let error { ErrorLine(text: error) }
             Spacer()
             if adding { ProgressView().controlSize(.small) }
-            Button("Add Bucket", action: add)
+            Button("Add bucket", action: add)
                 .disabled(!canAdd)
                 .keyboardShortcut(.defaultAction)
         }

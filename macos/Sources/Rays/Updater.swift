@@ -247,7 +247,7 @@ struct UpdateSettingsSection: View {
                     .buttonStyle(.glassProminent)
                     .disabled(updater.status == .installing)
                 } else {
-                    Button("Check for Updates") { Task { await updater.check() } }
+                    Button("Check for updates") { Task { await updater.check() } }
                         .buttonStyle(.glass)
                         .disabled(updater.status == .checking)
                 }

@@ -24,7 +24,7 @@ struct SorterFolderPage: View {
             Section {
                 HeroCard(.folder, title: folder.name, subtitle: URL(filePath: folder.path).tildePath) {
                     HeroActions {
-                        Button("Sort Now") { Task { await model.sortNow(folder) } }
+                        Button("Sort now") { Task { await model.sortNow(folder) } }
                             .disabled(model.busy || model.loadFailed || !readiness.isReady)
                             .help(readiness.isReady ? "Sort new files in \(folder.name) now" : readiness.title)
                         Button("Show in Finder") { NSWorkspace.shared.open(URL(filePath: folder.path)) }
@@ -93,7 +93,7 @@ struct SorterFolderPage: View {
             isPresented: $confirmingRemoval,
             titleVisibility: .visible
         ) {
-            Button("Remove Folder", role: .destructive) {
+            Button("Remove folder", role: .destructive) {
                 Task {
                     await model.remove(folder)
                     if model.error == nil { nav.replaceSub(nil) }
@@ -116,9 +116,9 @@ private struct CategoryRow: View {
         let custom = model.destination(for: folder, category: category.name)
         let target = URL(filePath: custom ?? URL(filePath: folder.path).appending(path: category.name).path)
         Menu {
-            Button("Choose Folder…", systemImage: "folder.badge.plus", action: chooseDestination)
+            Button("Choose folder…", systemImage: "folder.badge.plus", action: chooseDestination)
             if custom != nil {
-                Button("Use Inside \(folder.name)", systemImage: "arrow.uturn.backward") {
+                Button("Use inside \(folder.name)", systemImage: "arrow.uturn.backward") {
                     Task { await model.resetDestination(folder, category: category.name) }
                 }
             }
@@ -159,7 +159,7 @@ private struct CategoryRow: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.prompt = "Use Folder"
+        panel.prompt = "Use folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await model.setDestination(folder, category: category.name, path: url.path(percentEncoded: false)) }
     }

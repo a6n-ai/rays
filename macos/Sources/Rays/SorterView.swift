@@ -64,10 +64,10 @@ struct SorterView: View {
                          subtitle: "Files new downloads into folders by what is inside them.",
                          learnMore: Self.docs) {
                     HeroActions {
-                        Button("Add Folder…", action: chooseFolder)
+                        Button("Add folder…", action: chooseFolder)
                             .disabled(model.busy || model.loadFailed)
                             .help("Add a folder to sort")
-                        Button("Sort All Now") { Task { await sortAll() } }
+                        Button("Sort all now") { Task { await sortAll() } }
                             .disabled(model.busy || !AIReadinessStore.shared.value.isReady)
                             .help(AIReadinessStore.shared.value.isReady ? "Sort new files in every watched folder now" : AIReadinessStore.shared.value.title)
                         HeroMenu {
@@ -212,7 +212,7 @@ struct SorterView: View {
             }
             .buttonStyle(.plain)
         case .add:
-            addRow("Add Folder…", action: chooseFolder).disabled(model.busy || model.loadFailed)
+            addRow("Add folder…", action: chooseFolder).disabled(model.busy || model.loadFailed)
         case .quick(let url):
             addRow("Add \(url.lastPathComponent)") { Task { await model.addFolder(url.path(percentEncoded: false)) } }
                 .disabled(model.busy)
@@ -269,7 +269,7 @@ struct SorterView: View {
         .confirmationDialog("Remove \(removing.map { URL(filePath: $0.path).lastPathComponent } ?? "this folder") from the sorter?",
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             titleVisibility: .visible) {
-            Button("Remove Folder", role: .destructive) {
+            Button("Remove folder", role: .destructive) {
                 if let folder = removing { Task { await model.remove(folder) } }
                 removing = nil
             }
@@ -279,7 +279,7 @@ struct SorterView: View {
         }
         .confirmationDialog("Remove the sorter from all folders?", isPresented: $confirmRemoveAll,
                             titleVisibility: .visible) {
-            Button("Remove Sorter", role: .destructive) {
+            Button("Remove sorter", role: .destructive) {
                 Task { for folder in model.status?.folders ?? [] { await model.remove(folder) } }
             }
             Button("Cancel", role: .cancel) {}
@@ -340,7 +340,7 @@ struct SorterView: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.prompt = "Add Folder"
+        panel.prompt = "Add folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await model.addFolder(url.path(percentEncoded: false)) }
     }
@@ -467,7 +467,7 @@ private struct MoveRow: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Open", open)
         .accessibilityAction(named: "Show in Finder", reveal)
-        .accessibilityAction(named: "Move Back", revert)
+        .accessibilityAction(named: "Move back", revert)
     }
 
     @ViewBuilder private var menu: some View {
@@ -488,10 +488,10 @@ private struct MoveRow: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(url.path(percentEncoded: false), forType: .string)
         } label: {
-            Label("Copy Path", systemImage: "doc.on.doc")
+            Label("Copy path", systemImage: "doc.on.doc")
         }
         Divider()
-        Button(action: revert) { Label("Move Back", systemImage: "arrow.uturn.backward") }
+        Button(action: revert) { Label("Move back", systemImage: "arrow.uturn.backward") }
         Divider()
     }
 
@@ -566,7 +566,7 @@ private struct UpdateAllRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
-            Button("Update All", action: updateAll)
+            Button("Update all", action: updateAll)
                 .buttonStyle(.glassProminent)
                 .disabled(busy)
         }

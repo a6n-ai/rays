@@ -282,7 +282,7 @@ private struct CloudItems: View {
                 .disabled(files.isEmpty)
         }
         if let copyLinks {
-            Button("Copy Link") { copyLinks(ids) }.disabled(ids.isEmpty)
+            Button("Copy link") { copyLinks(ids) }.disabled(ids.isEmpty)
         }
     }
 }
@@ -320,7 +320,7 @@ private struct BucketBrowser: View {
                     NSPasteboard.general.setString(ids.sorted().map { "s3://\(bucket)/\($0)" }.joined(separator: "\n"), forType: .string)
                 })
             if let nextToken, !loading {
-                Button("Load More") { Task { await load(token: nextToken) } }.padding(8)
+                Button("Load more") { Task { await load(token: nextToken) } }.padding(8)
             }
         }
         .task(id: "\(prefix)|\(reload)") { await load(token: nil) }
