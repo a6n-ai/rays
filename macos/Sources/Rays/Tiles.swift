@@ -21,7 +21,7 @@ struct Tile: Hashable {
 
 /// The closest real macOS icon for a concept: a System Settings pane, an app, or a folder.
 enum SystemIcon: Hashable {
-    case pane(String), app(String), home(String), file(String), bundled(String)
+    case pane(String), app(String), home(String), file(String), bundled(String), mark(String)
 
     private static let panes = "/System/Library/ExtensionKit/Extensions/"
 
@@ -32,13 +32,16 @@ enum SystemIcon: Hashable {
         case .home(let sub): FileManager.default.homeDirectoryForCurrentUser.appending(path: sub).path(percentEncoded: false)
         case .file(let path): path
         case .bundled(let name): Bundle.main.resourceURL?.appending(path: "Tiles/\(name).png").path(percentEncoded: false) ?? ""
+        case .mark(let name): Bundle.main.resourceURL?.appending(path: "Marks/\(name).png").path(percentEncoded: false) ?? ""
         }
     }
 
     /// App and folder icons carry transparent padding; panes are full-bleed squircles.
     var bleed: CGFloat {
-        switch self { case .pane, .bundled, .file: 1.04; default: 1.22 }
+        switch self { case .mark: 1; case .pane, .bundled, .file: 1.04; default: 1.22 }
     }
+
+    var isMark: Bool { if case .mark = self { true } else { false } }
 
     @MainActor private static var cache: [SystemIcon: NSImage?] = [:]
 
@@ -46,7 +49,7 @@ enum SystemIcon: Hashable {
     @MainActor var image: NSImage? {
         if let hit = Self.cache[self] { return hit }
         let found: NSImage? = switch self {
-        case .file, .bundled: NSImage(contentsOfFile: path)  // an image file, not the file's Finder icon
+        case .file, .bundled, .mark: NSImage(contentsOfFile: path)  // an image file, not the file's Finder icon
         default: FileManager.default.fileExists(atPath: path) ? NSWorkspace.shared.icon(forFile: path) : nil
         }
         Self.cache[self] = found
@@ -56,7 +59,7 @@ enum SystemIcon: Hashable {
 
 extension Tile {
     static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5, system: .bundled("downloads"))
-    static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5, system: .bundled("models"))
+    static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5, system: .mark("models"))
     static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .bundled("sorter"))
     static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48, system: .bundled("cloud"))
     static let queues = Tile(symbol: "list.bullet", color: TilePalette.orange, glyphScale: 0.46, system: .bundled("queues"))
@@ -109,7 +112,8 @@ struct IconTile: View {
                 .frame(width: size * (tile.system?.bleed ?? 1), height: size * (tile.system?.bleed ?? 1))
                 .frame(width: size, height: size)
                 // One squircle for every icon, so a square-ish system icon (like iCloud's) matches the rest.
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+                // A brand mark shows on its own, with no tile behind it.
+                .clipShape(RoundedRectangle(cornerRadius: tile.system?.isMark == true ? 0 : size * 0.225, style: .continuous))
                 .accessibilityHidden(true)
         } else {
             symbolTile

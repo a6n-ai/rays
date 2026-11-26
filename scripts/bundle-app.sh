@@ -34,6 +34,7 @@ xcrun actool "$root/macos/Resources/AppIcon.icon" --compile "$root/$app/Contents
 ictool="$(xcode-select -p)/../Applications/Icon Composer.app/Contents/Executables/ictool"
 [ -x "$ictool" ] || { echo "ictool not found (needs Xcode 26 with Icon Composer)" >&2; exit 1; }
 mkdir -p "$app/Contents/Resources/Tiles"
+cp -R "$root/macos/Resources/Marks" "$app/Contents/Resources/Marks"
 for tile in "$root"/macos/Resources/Tiles/*.icon; do
   name=$(basename "$tile" .icon)
   "$ictool" "$tile" --export-image --output-file "$root/$app/Contents/Resources/Tiles/$name.png" \
