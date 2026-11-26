@@ -58,25 +58,21 @@ struct SidebarView: View {
                 SidebarLabel("Downloads", symbol: "arrow.down", color: TilePalette.blue)
                     .activeDot(model.hasActivity)
                     .tag(Destination.downloads)
-                // Always shown, not a DisclosureGroup: a sidebar List ignores its saved expansion and can hide a selected child.
                 SidebarLabel("Models", symbol: "cube.fill", color: TilePalette.purple)
-                    .padding(.leading, 18)
                     .tag(Destination.models)
                 SidebarLabel("Sorter", symbol: "sparkles", color: TilePalette.pink)
                     .tag(Destination.sorter)
                 SidebarLabel("Cloud", symbol: "cloud.fill", color: TilePalette.sky)
                     .tag(Destination.cloud)
-            } header: {
-                Text("Rays")
             }
-            Section("Queues") {
+            Section {
                 SidebarLabel("Queues", symbol: "list.bullet", color: TilePalette.orange)
                     .activeDot(model.queuesRunning)
                     .tag(Destination.queues)
-                SidebarLabel("Schedules", symbol: "calendar", color: TilePalette.red)
+                SidebarLabel("Schedules", symbol: "calendar", color: TilePalette.orange)
                     .tag(Destination.schedules)
             }
-            Section("Tools") {
+            Section {
                 SpeedCard().tag(Destination.speed)
                 SidebarLabel("Stats", symbol: "chart.bar.fill", color: TilePalette.green)
                     .tag(Destination.stats)
