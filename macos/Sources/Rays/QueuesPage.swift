@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Queues page: the list of queues, their activity, and the queue settings. A queue opens as a pushed detail.
+/// The Queues page: the list of queues with the queue settings card, and their activity. A queue opens as a pushed detail.
 struct QueuesPage: View {
     let isDropTargeted: Bool
     let drafts: QueueDrafts
@@ -9,7 +9,7 @@ struct QueuesPage: View {
     @AppStorage("queueSection") private var queueSection = QueueSection.downloads
     @State private var selected: UInt64?
 
-    enum QueuesSection: String { case queues, activity, settings }
+    enum QueuesSection: String { case queues, activity }
 
     var body: some View {
         NavigationStack {
@@ -17,7 +17,6 @@ struct QueuesPage: View {
                 switch section {
                 case .queues: QueueListTab(drafts: drafts, open: { open($0, nil) })
                 case .activity: ActivityTab(open: { open($0, nil) })
-                case .settings: QueueSettingsTab()
                 }
             }
             .navigationTitle("Queues")
@@ -42,8 +41,7 @@ struct QueuesPage: View {
         ToolbarItem(placement: .principal) {
             ToolbarIconGroup {
                 ForEach([(QueuesSection.queues, "list.bullet", "Queues"),
-                         (QueuesSection.activity, "clock.arrow.circlepath", "Activity"),
-                         (QueuesSection.settings, "slider.horizontal.3", "Queue settings")], id: \.0) { item in
+                         (QueuesSection.activity, "clock.arrow.circlepath", "Activity")], id: \.0) { item in
                     Button {
                         section = item.0
                         selected = nil

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The top of a queue's page, above its sections: an editable name, totals, the state when not open, and the enabled switch.
+/// The compact hero of a queue's page, above its sections: an editable name, totals, the state when not open, and the enabled switch.
 struct QueueHeader: View {
     let queue: QueueView
     let items: Int
@@ -10,12 +10,12 @@ struct QueueHeader: View {
     @Environment(EngineModel.self) private var model
 
     var body: some View {
-        HStack(alignment: .top, spacing: LayoutMetrics.gap) {
-            QueueTile(queue: queue, size: 44)
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: LayoutMetrics.gap) {
+            QueueTile(queue: queue, size: TileSize.hero)
+            VStack(alignment: .leading, spacing: 2) {
                 TextField("Queue name", text: $draft.name)
                     .textFieldStyle(.plain)
-                    .font(.title2.weight(.semibold))
+                    .font(.body.weight(.semibold))
                 Text("\(items) items · \(queue.running) downloading · \(byteText(queue.totalBytes)) total")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -45,7 +45,7 @@ struct QueueHeader: View {
                 .help("Enabled")
         }
         .padding(.horizontal, LayoutMetrics.margin)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
     }
 }
 
