@@ -58,6 +58,13 @@ private struct OpenSettingsAtLaunch: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = EngineModel()
+    /// SwiftUI owns the delegate, so `NSApp.delegate` is not this class; App Intents reach the model through here.
+    static weak var shared: AppDelegate?
+
+    override init() {
+        super.init()
+        Self.shared = self
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Backs the "Download with Rays" item in every app's Services menu (declared in Info.plist).
@@ -110,7 +117,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model.pendingAdd = links.joined(separator: "\n")
                 Self.showInDock()
             }
-            return
         }
         guard urls.contains(where: { $0.scheme == "rays" && $0.host() == "install-helpers" }) else { return }
         for browser in BrowserCheck.browsers where browser.engine != .safari && BrowserCheck.appURL(for: browser) != nil {

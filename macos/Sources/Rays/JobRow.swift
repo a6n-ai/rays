@@ -12,6 +12,7 @@ struct JobRow: View {
     @State private var isHovered = false
     @State private var showRelink = false
     @State private var newLink = ""
+    @State private var confirmRestart = false
 
     private enum Primary {
         case pause, stop, resume, retry, reveal, removeFromList
@@ -106,10 +107,14 @@ struct JobRow: View {
         .accessibilityActions { if let primary { Button(primary.title) { perform(primary) } } }
         .alert("Update link", isPresented: $showRelink) {
             TextField("https://", text: $newLink)
-            Button("Update") { model.relink(job.id, to: newLink) }
+            Button("Update") { model.relink(job.id, to: newLink) { confirmRestart = true } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Paste a new link for \(job.name). The part already saved is kept if the new link is the same file.")
+        }
+        .alert("This link is a different file. Start the download over?", isPresented: $confirmRestart) {
+            Button("Start over") { model.relink(job.id, to: newLink, restart: true) }
+            Button("Cancel", role: .cancel) {}
         }
         .confirmationDialog(
             "Stopping loses \(byteText(job.done)) of progress. Stop anyway?",

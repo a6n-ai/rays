@@ -381,12 +381,19 @@ final class EngineModel {
 
     func resume(_ id: UInt64) { engine?.resume(id: id) }
 
-    func relink(_ id: UInt64, to url: String) {
+    /// `restart` starts over when the new link is a different file; without it the engine refuses and
+    /// `onDifferentFile` runs so the caller can ask.
+    func relink(_ id: UInt64, to url: String, restart: Bool = false, onDifferentFile: (() -> Void)? = nil) {
         Task {
-            do { try await engine?.relink(id: id, url: url.trimmingCharacters(in: .whitespacesAndNewlines)) }
-            catch { notice = "Couldn't update the link: \(error.localizedDescription)" }
+            do { try await engine?.relink(id: id, url: url.trimmingCharacters(in: .whitespacesAndNewlines), restart: restart) }
+            catch {
+                if let onDifferentFile, Self.message(for: error) == Self.differentFileMessage { onDifferentFile() }
+                else { notice = "Couldn't update the link: \(Self.message(for: error))" }
+            }
         }
     }
+
+    static let differentFileMessage = "The new link is a different file"
 
     func remove(_ id: UInt64, deletePartial: Bool) { engine?.remove(id: id, deletePartial: deletePartial) }
 
@@ -585,13 +592,15 @@ enum Links {
     }
 
     /// The links to download and each one's mirrors. A line with several links whose paths end in the same file
-    /// name is one file: the first link is the download, the rest are its mirrors. `mirrors` is empty when no line is.
+    /// name, each on a different host, is one file: the first link is the download, the rest are its mirrors.
+    /// Same-host links with one name (/2023/report.pdf, /2024/report.pdf) stay separate downloads. `mirrors` is empty when no line is.
     static func split(_ text: String) -> (urls: [String], mirrors: [[String]]) {
         var extra = [String: [String]]()
         for line in text.split(whereSeparator: \.isNewline) {
             let links = inText(String(line))
             let names = Set(links.map { URL(string: $0)?.lastPathComponent ?? "" })
-            if links.count > 1, names.count == 1, let name = names.first, !name.isEmpty, name != "/" { extra[links[0]] = Array(links.dropFirst()) }
+            let hosts = Set(links.compactMap { URL(string: $0)?.host()?.lowercased() })
+            if links.count > 1, names.count == 1, hosts.count == links.count, let name = names.first, !name.isEmpty, name != "/" { extra[links[0]] = Array(links.dropFirst()) }
         }
         let taken = Set(extra.values.joined())
         let urls = inText(text).filter { !taken.contains($0) || extra[$0] != nil }

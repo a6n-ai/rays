@@ -84,7 +84,7 @@ final class ClipboardWatcher: NSObject, UNUserNotificationCenterDelegate {
         }
         if info.categoryIdentifier == DownloadNotifier.doneCategory || info.categoryIdentifier == DownloadNotifier.failedCategory {
             guard let id = (info.userInfo["id"] as? NSNumber)?.uint64Value else { return }
-            await MainActor.run { handleDownload(id, action: response.actionIdentifier) }
+            await handleDownload(id, action: response.actionIdentifier)
             return
         }
         guard info.categoryIdentifier == Self.category,
@@ -94,8 +94,14 @@ final class ClipboardWatcher: NSObject, UNUserNotificationCenterDelegate {
         await MainActor.run { model.add(links.joined(separator: "\n")) }
     }
 
-    private func handleDownload(_ id: UInt64, action: String) {
-        guard let job = model.jobs.first(where: { $0.id == id }) else { return }
+    /// A click can launch the app, so the job may not be in the model yet: wait up to 5 s, then just show the app.
+    @MainActor private func handleDownload(_ id: UInt64, action: String) async {
+        var tries = 0
+        while !model.jobs.contains(where: { $0.id == id }), tries < 20 {
+            tries += 1
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        guard let job = model.jobs.first(where: { $0.id == id }) else { return AppDelegate.showInDock() }
         switch action {
         case DownloadNotifier.retry: model.resume(id)
         case DownloadNotifier.reveal: model.reveal(job)

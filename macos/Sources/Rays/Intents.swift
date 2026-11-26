@@ -8,15 +8,14 @@ struct IntentFailure: Error, CustomLocalizedStringResourceConvertible {
 
 /// The running app's model; intents run in the app process, which the system launches when needed.
 @MainActor private func appModel() throws -> EngineModel {
-    guard let model = (NSApp.delegate as? AppDelegate)?.model else { throw IntentFailure(text: "Rays is not ready yet. Open Rays and try again.") }
+    guard let model = AppDelegate.shared?.model else { throw IntentFailure(text: "Rays is not ready yet. Open Rays and try again.") }
     return model
 }
 
-/// A queue for Shortcuts. Id 0 is "No queue": a direct download.
+/// A queue for Shortcuts. AddDownload leaves it empty for a direct download.
 struct QueueEntity: AppEntity {
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Queue"
     static let defaultQuery = QueueEntityQuery()
-    static let none = QueueEntity(id: 0, name: "No queue")
 
     var id: Int
     var name: String
@@ -25,13 +24,11 @@ struct QueueEntity: AppEntity {
 
 struct QueueEntityQuery: EntityQuery {
     @MainActor private func all() -> [QueueEntity] {
-        let queues = ((NSApp.delegate as? AppDelegate)?.model.sortedQueues ?? []).map { QueueEntity(id: Int($0.id), name: $0.config.name) }
-        return [.none] + queues
+        (AppDelegate.shared?.model.sortedQueues ?? []).map { QueueEntity(id: Int($0.id), name: $0.config.name) }
     }
 
     @MainActor func entities(for identifiers: [Int]) async throws -> [QueueEntity] { all().filter { identifiers.contains($0.id) } }
     @MainActor func suggestedEntities() async throws -> [QueueEntity] { all() }
-    func defaultResult() async -> QueueEntity? { .none }
 }
 
 struct AddDownloadIntent: AppIntent {
@@ -47,8 +44,7 @@ struct AddDownloadIntent: AppIntent {
     @MainActor func perform() async throws -> some IntentResult {
         let model = try appModel()
         guard !Links.split(url).urls.isEmpty else { throw IntentFailure(text: "No web link found. Links start with http://, https:// or s3://.") }
-        let id = queue?.id ?? 0
-        model.add(url, queue: id == 0 ? nil : UInt64(id))
+        model.add(url, queue: queue.map { UInt64($0.id) })
         return .result()
     }
 }
@@ -62,7 +58,6 @@ struct StartQueueIntent: AppIntent {
     static var parameterSummary: some ParameterSummary { Summary("Start \(\.$queue)") }
 
     @MainActor func perform() async throws -> some IntentResult {
-        guard queue.id != 0 else { throw IntentFailure(text: "Pick a queue.") }
         (try appModel()).startQueue(UInt64(queue.id))
         return .result()
     }
@@ -77,7 +72,6 @@ struct StopQueueIntent: AppIntent {
     static var parameterSummary: some ParameterSummary { Summary("Stop \(\.$queue)") }
 
     @MainActor func perform() async throws -> some IntentResult {
-        guard queue.id != 0 else { throw IntentFailure(text: "Pick a queue.") }
         (try appModel()).stopQueue(UInt64(queue.id))
         return .result()
     }
