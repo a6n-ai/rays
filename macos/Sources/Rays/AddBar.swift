@@ -312,7 +312,15 @@ enum HeaderLines {
     static func parse(_ text: String) -> (headers: [HttpHeader], badLine: Int?) {
         var headers: [HttpHeader] = []
         for (i, raw) in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).enumerated() {
-            let line = raw.trimmingCharacters(in: .whitespaces)
+            // Smart quotes and dashes from a paste or autocorrect would make a header name or value invalid.
+            let line = String(raw.map { ch -> Character in
+                switch ch {
+                case "\u{201C}", "\u{201D}": "\""
+                case "\u{2018}", "\u{2019}": "'"
+                case "\u{2013}", "\u{2014}": "-"
+                default: ch
+                }
+            }).trimmingCharacters(in: .whitespaces)
             if line.isEmpty { continue }
             guard let colon = line.firstIndex(of: ":") else { return ([], i + 1) }
             let name = line[..<colon].trimmingCharacters(in: .whitespaces)
@@ -386,6 +394,7 @@ struct LinkExtraSheet: View {
                         Text("Headers")
                         TextEditor(text: $value)
                             .font(.body.monospaced())
+                            .autocorrectionDisabled()
                             .scrollContentBackground(.hidden)
                             .padding(4)
                             .frame(height: 84)

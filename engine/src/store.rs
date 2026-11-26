@@ -69,6 +69,8 @@ impl Store {
         conn.pragma_update(None, "busy_timeout", 2000)?;
         // Cleared header values are overwritten on disk, not left in free pages.
         conn.pragma_update(None, "secure_delete", "ON")?;
+        // Do not keep an emptied WAL's space around: old pages (with cleared header values) must not linger.
+        conn.pragma_update(None, "journal_size_limit", 0)?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
             let tx = conn.transaction()?;
@@ -159,6 +161,14 @@ impl Store {
     }
 
     /// Writes every column of `job` to its existing row and bumps `updated_at`.
+    /// Folds the WAL into the database and truncates it, so values just cleared are not left in it. Best effort:
+    /// a busy result (another reader) is ignored.
+    pub fn checkpoint(&self) {
+        if let Ok(conn) = self.lock() {
+            let _ = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |_| Ok(()));
+        }
+    }
+
     pub fn save(&self, job: &Job) -> Result<(), EngineError> {
         let (state, error) = encode_state(&job.state);
         let final_path = final_path_column(job);

@@ -480,6 +480,12 @@ impl Scheduler {
         if !headers.is_empty() && headers.len() != urls.len() {
             return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("headers must match urls".to_owned()) }).collect();
         }
+        let origins: HashSet<Option<String>> =
+            urls.iter().zip(&headers).filter(|(_, h)| !h.is_empty()).map(|(u, _)| reqwest::Url::parse(u).ok().map(|u| u.origin().ascii_serialization())).collect();
+        if origins.len() > 1 {
+            let error = "headers apply to one site; add links for other sites separately";
+            return urls.into_iter().map(|url| AddResult { url, id: None, error: Some(error.to_owned()) }).collect();
+        }
         let (mut fixed, mut sums, mut extra, mut sent) = (fixed_names.into_iter(), sha256s.into_iter(), mirrors.into_iter(), headers.into_iter());
         let results = urls
             .into_iter()
@@ -1081,6 +1087,7 @@ impl Scheduler {
             let _ = std::fs::remove_file(part);
         }
         if let Some(live) = self.find(id) {
+            let mut scrub = false;
             {
                 let mut job = lock(&live.job);
                 job.done = live.done.load(Ordering::Relaxed);
@@ -1089,8 +1096,10 @@ impl Scheduler {
                         job.state = JobState::Done { path: path.to_string_lossy().into_owned() };
                         job.final_path = Some(path);
                         // Saved headers are secrets: gone from memory and the row once the file is here.
+                        scrub = !job.headers.is_empty();
                         job.headers.clear();
                     }
+                    // A failed job keeps its headers so a retry or resume still works.
                     Outcome::Failed(reason) => job.state = JobState::Failed { reason },
                     Outcome::Paused => {
                         if is_active(&job.state) {
@@ -1107,6 +1116,9 @@ impl Scheduler {
                     run.bytes += job.total.unwrap_or(job.done);
                     let _ = self.store.update_run(run.id, run.files, run.bytes, None);
                 }
+            }
+            if scrub {
+                self.store.checkpoint();
             }
             self.hub.state_changed(id);
         }
