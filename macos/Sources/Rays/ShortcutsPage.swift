@@ -18,6 +18,12 @@ struct ShortcutsPage: View {
         Action(symbol: "stop.circle", title: "Stop queue", detail: "Stops one of your queues.", phrase: "Stop a queue in Rays"),
         Action(symbol: "speedometer", title: "Run speed test", detail: "Measures your speed and returns it, for example 212 Mbps.",
                phrase: "Run a speed test in Rays"),
+        Action(symbol: "pause.circle", title: "Pause all downloads", detail: "Pauses every download that can resume.",
+               phrase: "Pause all downloads in Rays"),
+        Action(symbol: "play.circle", title: "Resume all downloads", detail: "Resumes every paused download.",
+               phrase: "Resume all downloads in Rays"),
+        Action(symbol: "doc.on.clipboard", title: "Download copied link", detail: "Downloads the link on the clipboard.",
+               phrase: "Download copied link in Rays"),
     ]
 
     var body: some View {
@@ -25,7 +31,9 @@ struct ShortcutsPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: LayoutMetrics.gap) {
                     header
-                    section("Actions")
+                    section("Ready to use")
+                    Text("These appear in the Shortcuts app and in Spotlight without any setup. Run one from there, or say its phrase to Siri.")
+                        .font(.callout).foregroundStyle(.secondary)
                     VStack(spacing: 0) {
                         ForEach(actions) { row($0) }
                     }

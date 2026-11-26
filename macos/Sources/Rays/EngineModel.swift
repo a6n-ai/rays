@@ -399,6 +399,11 @@ final class EngineModel {
 
     func resume(_ id: UInt64) { engine?.resume(id: id) }
 
+    /// Non-resumable downloads would lose their progress, so pausing everything leaves them running.
+    func pauseAll() { activeJobs.filter { $0.resumable && $0.state != .verifying }.forEach { pause($0.id) } }
+
+    func resumeAll() { jobs.filter { $0.state == .paused }.forEach { resume($0.id) } }
+
     /// `restart` starts over when the new link is a different file; without it the engine refuses and
     /// `onDifferentFile` runs so the caller can ask.
     func relink(_ id: UInt64, to url: String, restart: Bool = false, onDifferentFile: (() -> Void)? = nil) {

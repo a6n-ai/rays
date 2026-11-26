@@ -212,10 +212,9 @@ struct MenuBarPanel: View {
                 MenuItem("Add Links from a File…", symbol: "doc.badge.plus", action: addFromFile)
                 MenuItem("Download Link from Clipboard", symbol: "doc.on.clipboard", action: addFromClipboard)
                 if !model.activeJobs.isEmpty {
-                    // Non-resumable downloads would lose their progress, so Pause All leaves them running.
-                    MenuItem("Pause All", symbol: "pause.circle") { model.activeJobs.filter { $0.resumable && $0.state != .verifying }.forEach { model.pause($0.id) } }
+                    MenuItem("Pause All", symbol: "pause.circle") { model.pauseAll() }
                 } else if !paused.isEmpty {
-                    MenuItem("Resume All", symbol: "play.circle") { paused.forEach { model.resume($0.id) } }
+                    MenuItem("Resume All", symbol: "play.circle") { model.resumeAll() }
                 }
             }
             .padding(6)

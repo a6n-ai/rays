@@ -97,6 +97,41 @@ struct RunSpeedTestIntent: AppIntent {
     }
 }
 
+struct PauseAllIntent: AppIntent {
+    static let title: LocalizedStringResource = "Pause all downloads"
+    static let openAppWhenRun = false
+
+    @MainActor func perform() async throws -> some IntentResult {
+        (try appModel()).pauseAll()
+        return .result()
+    }
+}
+
+struct ResumeAllIntent: AppIntent {
+    static let title: LocalizedStringResource = "Resume all downloads"
+    static let openAppWhenRun = false
+
+    @MainActor func perform() async throws -> some IntentResult {
+        (try appModel()).resumeAll()
+        return .result()
+    }
+}
+
+struct DownloadClipboardIntent: AppIntent {
+    static let title: LocalizedStringResource = "Download copied link"
+    static let description = IntentDescription("Downloads the link or links on the clipboard.")
+    static let openAppWhenRun = false
+
+    @MainActor func perform() async throws -> some IntentResult {
+        let model = try appModel()
+        guard let text = NSPasteboard.general.string(forType: .string), !Links.split(text).urls.isEmpty else {
+            throw IntentFailure(text: "No link on the clipboard")
+        }
+        model.add(text)
+        return .result()
+    }
+}
+
 struct RaysShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: AddDownloadIntent(), phrases: ["Add a download in \(.applicationName)", "Download with \(.applicationName)"],
@@ -107,5 +142,11 @@ struct RaysShortcuts: AppShortcutsProvider {
                     shortTitle: "Stop queue", systemImageName: "stop.circle")
         AppShortcut(intent: RunSpeedTestIntent(), phrases: ["Run a speed test in \(.applicationName)"],
                     shortTitle: "Run speed test", systemImageName: "speedometer")
+        AppShortcut(intent: PauseAllIntent(), phrases: ["Pause all downloads in \(.applicationName)"],
+                    shortTitle: "Pause all downloads", systemImageName: "pause.circle")
+        AppShortcut(intent: ResumeAllIntent(), phrases: ["Resume all downloads in \(.applicationName)"],
+                    shortTitle: "Resume all downloads", systemImageName: "play.circle")
+        AppShortcut(intent: DownloadClipboardIntent(), phrases: ["Download copied link in \(.applicationName)"],
+                    shortTitle: "Download copied link", systemImageName: "doc.on.clipboard")
     }
 }

@@ -20,7 +20,9 @@ Downloads go to `~/Downloads` unless you choose another folder in **Settings > G
 
 ## Shortcuts
 
-Rays adds actions to the Shortcuts app and to Spotlight: **Add download** (a link and an optional queue), **Start queue**, **Stop queue** and **Run speed test**, which returns the speed, for example `212 Mbps`. Unlike the Share menu, **Add download** starts the download at once, because you built the shortcut. **Run speed test** does not run on a hotspot or a network Rays cannot identify; run it from the Speed page and confirm there.
+Rays adds actions to the Shortcuts app and to Spotlight: **Add download** (a link and an optional queue), **Start queue**, **Stop queue**, **Pause all downloads**, **Resume all downloads**, **Download copied link** (the link on the clipboard, or an error if there is none) and **Run speed test**, which returns the speed, for example `212 Mbps`. Unlike the Share menu, **Add download** starts the download at once, because you built the shortcut. **Run speed test** does not run on a hotspot or a network Rays cannot identify; run it from the Speed page and confirm there.
+
+Each of these also appears in the Shortcuts app and in Spotlight as a ready-made shortcut with no setup. Ready-made multi-step shortcuts you could import with one button are not offered, because macOS only imports signed shortcut files and signing needs an iCloud account.
 
 The **Shortcuts** page in the sidebar lists these actions with their Siri phrases, has a button that opens the Shortcuts app, and explains the other ways to send links to Rays.
 
