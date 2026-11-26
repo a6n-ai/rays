@@ -76,10 +76,6 @@ struct SidebarView: View {
                     .tag(Destination.schedules)
             }
             Section("Tools") {
-                if model.hasActivity {
-                    ActivityCard { selection = .downloads }
-                        .transition(.opacity)
-                }
                 SpeedCard().tag(Destination.speed)
                 Label("Shortcuts", systemImage: "square.2.layers.3d")
                     .tag(Destination.shortcuts)
@@ -106,6 +102,15 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // Pinned under the list, so it stays put while the sidebar scrolls.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.hasActivity {
+                ActivityCard { selection = .downloads }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
+                    .transition(.opacity)
+            }
+        }
         .animation(.easeInOut(duration: 0.2), value: model.hasActivity)
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 200)
