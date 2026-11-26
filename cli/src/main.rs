@@ -18,7 +18,7 @@ const USAGE: &str = "usage:
   dl list                       list downloads (also: dl --list)
   dl add [--queue NAME|ID] [--best-time] [--sha256 HEX] [--header 'Name: value']... URL [--mirror URL]...
                                 download links into a queue (default: Main), or the Best time queue;
-                                each --header is sent to every URL's own site (for links that need a login)
+                                --header is for links that need a login; all URLs must be on one site
   dl relink ID URL [--restart]  give a paused or failed download a new link and resume it;
                                 --restart starts over if the new link is a different file
   dl grab URL [--json]          list the downloadable files linked from a web page, one URL per line
