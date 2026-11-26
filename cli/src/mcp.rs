@@ -91,7 +91,8 @@ fn tools() -> Value {
                 "properties": {
                     "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
                     "queue": { "type": "string", "description": "Queue name or id from list_queues. Without it the downloads start now, in no queue." },
-                    "best_time": { "type": "boolean", "default": false, "description": "Add to the Best time queue instead; queue is ignored." }
+                    "best_time": { "type": "boolean", "default": false, "description": "Add to the Best time queue instead; queue is ignored." },
+                    "sha256": { "type": "array", "items": { "type": ["string", "null"] }, "description": "Optional expected SHA-256 (64 hex characters) for each url, same order; null skips one. A download that does not match fails." }
                 },
                 "required": ["urls"]
             }
@@ -193,7 +194,14 @@ fn tools() -> Value {
 fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Result<String, String>> {
     Some(match name {
         "add_downloads" => urls(args)
-            .and_then(|urls| Ok(Request::Add { urls, queue: queue_arg(args)?, best_time: args.get("best_time").and_then(Value::as_bool).unwrap_or(false) }))
+            .and_then(|urls| {
+                let sha256 = match args.get("sha256") {
+                    None | Some(Value::Null) => Vec::new(),
+                    Some(Value::Array(a)) => a.iter().map(|v| v.as_str().map(str::to_owned)).collect(),
+                    _ => return Err("sha256 must be an array of hex strings".into()),
+                };
+                Ok(Request::Add { urls, queue: queue_arg(args)?, best_time: args.get("best_time").and_then(Value::as_bool).unwrap_or(false), sha256 })
+            })
             .and_then(|req| reply_text(ask(&req))),
         "speed_test" => {
             let force = args.get("force").and_then(Value::as_bool).unwrap_or(false);
@@ -353,12 +361,12 @@ mod tests {
             [
                 r#"QueueStop { queue: Name("Night") }"#,
                 "QueueRunNow { queue: Id(3) }",
-                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")), best_time: false }"#,
+                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")), best_time: false, sha256: [] }"#,
                 r#"VerifyModel { dir: "/m" }"#,
                 "Queues",
                 "SpeedTest { force: true }",
                 "Speed",
-                r#"Add { urls: ["https://a/y"], queue: None, best_time: true }"#,
+                r#"Add { urls: ["https://a/y"], queue: None, best_time: true, sha256: [] }"#,
             ]
         );
     }

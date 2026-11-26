@@ -5,7 +5,7 @@ description: "How Rays speeds up downloads on Mac: parallel connections, automat
 
 ## Add links
 
-- **Paste:** press **⌘L**, paste, and press **Return**. Paste as many links as you like, one per line, separated by commas or spaces, or a whole CSV. Rays picks out every `http://` and `https://` link and ignores the text around them. The bar shows how many it found, or **No link found**.
+- **Paste:** press **⌘L**, paste, and press **Return**. Paste as many links as you like, one per line, separated by commas or spaces, or a whole CSV. Rays picks out every `http://` and `https://` link and ignores the text around them. The bar shows how many it found, or **No link found**. To check a file, put its SHA-256 (64 hex characters) on the same line as its link, one link per line. A file that does not match fails with **Checksum didn't match** and is deleted, and a matching one shows **Checksum matched**.
 - **Drop:** drag links, text that contains links, or `.webloc` files onto the window.
 - **Browser:** right-click a link and choose **Download with Rays** ([Browser extension](/docs/app/browser/)).
 - **Terminal:** `dl https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg` ([The dl command](/docs/dl/)).

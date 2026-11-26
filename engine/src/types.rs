@@ -53,6 +53,8 @@ pub struct JobView {
     /// Why a Queued job is not starting: its queue is closed ("Waiting for schedule", "Waiting for Wi-Fi",
     /// "Waiting for charger", "Waiting for idle" or "Queue stopped"). None for other jobs.
     pub waiting: Option<String>,
+    /// True when the job has an expected SHA-256 and the finished file matched it.
+    pub verified: bool,
 }
 
 /// One range of a split download, for drawing a segmented progress bar.

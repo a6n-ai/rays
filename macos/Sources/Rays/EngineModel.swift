@@ -152,7 +152,8 @@ final class EngineModel {
             notice = "No link found. Links start with http://, https:// or s3://."
             return
         }
-        let results = engine.addTo(urls: urls, dir: nil, names: Array(repeating: nil, count: urls.count), queue: queue)
+        let sums = Links.checksums(in: text, for: urls)
+        let results = engine.addWith(urls: urls, dir: nil, names: Array(repeating: nil, count: urls.count), sha256s: sums, queue: queue)
         let rejected = results.filter { $0.id == nil }
         notice = rejected.isEmpty
             ? nil
@@ -549,6 +550,21 @@ enum Links {
         guard url.isFileURL else { return url.absoluteString }
         guard url.pathExtension == "webloc" else { return nil }
         return NSDictionary(contentsOf: url)?["URL"] as? String
+    }
+
+    /// The expected SHA-256 for each link: a line holding one link and one 64-hex word ("url sha256" or
+    /// "sha256 url") gives that link its hash. Empty when no line has one.
+    static func checksums(in text: String, for urls: [String]) -> [String?] {
+        var found = [String: String]()
+        for line in text.split(whereSeparator: \.isNewline) {
+            let words = line.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "," || $0 == ";" }).map(String.init)
+            let hashes = words.filter { $0.count == 64 && $0.allSatisfy(\.isHexDigit) }
+            guard hashes.count == 1 else { continue }
+            let lineLinks = inText(String(line))
+            if lineLinks.count == 1 { found[lineLinks[0]] = hashes[0] }
+        }
+        let sums = urls.map { found[$0] }
+        return sums.contains { $0 != nil } ? sums : []
     }
 
     /// Every http(s) or s3 link in pasted text, in order, without repeats. Handles the usual ways links get

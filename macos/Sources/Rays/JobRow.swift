@@ -228,6 +228,7 @@ struct JobRow: View {
             if let url = model.locate(job) {
                 // Where the file is now matters more than when it finished, so the time is dropped here.
                 parts = [Part(model.location(of: url, job: job), symbol: "folder"), Part(byteText(job.total ?? job.done))]
+                if job.verified { parts.append(Part("Checksum matched", symbol: "checkmark.seal")) }
             } else {
                 parts = model.isInTrash(job)
                     ? [Part("In the Trash", symbol: "trash")]
@@ -259,6 +260,7 @@ struct JobRow: View {
             }
         }
         if reason.hasPrefix("request:") || reason.hasPrefix("timeout") { return "Couldn't reach the server" }
+        if reason == "Checksum didn't match" { return "Checksum didn't match, file deleted" }
         if reason.contains("size mismatch") { return "Download was incomplete" }
         return reason
     }

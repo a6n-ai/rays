@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 const USAGE: &str = "usage:
   dl URL...                     download links with Rays
   dl list                       list downloads (also: dl --list)
-  dl add [--queue NAME|ID] [--best-time] URL...
+  dl add [--queue NAME|ID] [--best-time] [--sha256 HEX] URL...
                                 download links into a queue (default: Main), or the Best time queue
   dl queues [--json]            list queues with state, next start and job counts
   dl queue start|stop|run NAME|ID
@@ -109,7 +109,7 @@ fn main() -> ExitCode {
         [cmd, rest @ ..] if cmd == "status" => return sorter::status(rest),
         [cmd, ..] if ["watch", "unwatch", "config"].contains(&cmd.as_str()) => return sorter::run(&args),
         [a, ..] if a.starts_with('-') => return usage(),
-        urls => Request::Add { urls: urls.to_vec(), queue: None, best_time: false },
+        urls => Request::Add { urls: urls.to_vec(), queue: None, best_time: false, sha256: vec![] },
     };
 
     let reply = match ask_rays(&req) {
@@ -220,13 +220,24 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
     match args {
         [c, rest @ ..] if c == "add" => {
             let (mut queue, mut best_time, mut urls, mut it) = (None, false, Vec::new(), rest.iter());
+            let (mut sha256, mut pending) = (Vec::new(), None);
             while let Some(a) = it.next() {
                 match a.as_str() {
                     "--queue" => queue = Some(QueueRef::parse(it.next().ok_or("--queue needs a name or id")?)),
                     "--best-time" => best_time = true,
+                    "--sha256" => pending = Some(it.next().ok_or("--sha256 needs a hash")?.clone()),
                     f if f.starts_with('-') => return Err(format!("unknown option {f}")),
-                    _ => urls.push(a.clone()),
+                    _ => {
+                        urls.push(a.clone());
+                        sha256.push(pending.take());
+                    }
                 }
+            }
+            if pending.is_some() {
+                return Err("--sha256 goes before the URL it checks".into());
+            }
+            if sha256.iter().all(Option::is_none) {
+                sha256.clear();
             }
             if urls.is_empty() {
                 return Err("add needs at least one URL".into());
@@ -234,7 +245,7 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
             if best_time && queue.is_some() {
                 return Err("use --queue or --best-time, not both".into());
             }
-            Ok(Request::Add { urls, queue, best_time })
+            Ok(Request::Add { urls, queue, best_time, sha256 })
         }
         [c] if c == "speed" => Ok(Request::Speed),
         [c, t] if c == "speed" && t == "test" => Ok(Request::SpeedTest { force: false }),
@@ -367,7 +378,7 @@ fn host_add(msg: &Value) -> Result<Value, String> {
         return Ok(json!({"ok": true, "added": 0, "rejected": []}));
     }
 
-    let resp = ask_rays(&Request::Add { urls, queue: None, best_time: false })?;
+    let resp = ask_rays(&Request::Add { urls, queue: None, best_time: false, sha256: vec![] })?;
     if !resp.ok {
         return Err(resp.error.unwrap_or_else(|| "Rays rejected the request".into()));
     }
@@ -391,16 +402,21 @@ mod tests {
     fn add_queue_flag_parses_name_or_id() {
         assert_eq!(
             queue_command(&args(&["add", "--queue", "Night", "https://a/x", "https://a/y"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false }
+            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![] }
         );
         assert_eq!(
             queue_command(&args(&["add", "https://a/x", "--queue", "3"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into()], queue: Some(QueueRef::Id(3)), best_time: false }
+            Request::Add { urls: vec!["https://a/x".into()], queue: Some(QueueRef::Id(3)), best_time: false, sha256: vec![] }
         );
         assert_eq!(
             queue_command(&args(&["add", "https://a/x"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: false }
+            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: false, sha256: vec![] }
         );
+        assert_eq!(
+            queue_command(&args(&["add", "https://a/x", "--sha256", "ab", "https://a/y"])).unwrap(),
+            Request::Add { urls: vec!["https://a/x".into(), "https://a/y".into()], queue: None, best_time: false, sha256: vec![None, Some("ab".into())] }
+        );
+        assert!(queue_command(&args(&["add", "https://a/x", "--sha256", "ab"])).is_err());
         assert!(queue_command(&args(&["add", "--queue"])).is_err());
         assert!(queue_command(&args(&["add", "--queue", "Night"])).is_err());
     }
@@ -416,7 +432,7 @@ mod tests {
     fn best_time_add_and_speed_commands_parse() {
         assert_eq!(
             queue_command(&args(&["add", "--best-time", "https://a/x"])).unwrap(),
-            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: true }
+            Request::Add { urls: vec!["https://a/x".into()], queue: None, best_time: true, sha256: vec![] }
         );
         assert_eq!(queue_command(&args(&["speed"])).unwrap(), Request::Speed);
         assert_eq!(queue_command(&args(&["speed", "test"])).unwrap(), Request::SpeedTest { force: false });

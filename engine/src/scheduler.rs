@@ -441,6 +441,18 @@ impl Scheduler {
         fixed_names: Vec<Option<String>>,
         queue: Option<u64>,
     ) -> Vec<AddResult> {
+        self.add_with(urls, dir, fixed_names, Vec::new(), queue)
+    }
+
+    /// Like `add_to`, with an expected SHA-256 per url (`sha256s` empty: none). A bad hash rejects only that url.
+    pub fn add_with(
+        self: &Arc<Self>,
+        urls: Vec<String>,
+        dir: Option<PathBuf>,
+        fixed_names: Vec<Option<String>>,
+        sha256s: Vec<Option<String>>,
+        queue: Option<u64>,
+    ) -> Vec<AddResult> {
         let queue_id = queue.unwrap_or(NO_QUEUE);
         if queue_id != NO_QUEUE && !lock(&self.queues).contains_key(&queue_id) {
             return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("no such queue".to_owned()) }).collect();
@@ -454,8 +466,20 @@ impl Scheduler {
         if !fixed_names.is_empty() && fixed_names.len() != urls.len() {
             return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("names must match urls".to_owned()) }).collect();
         }
-        let mut fixed = fixed_names.into_iter();
-        let results = urls.into_iter().map(|url| self.add_one(url, dir.clone(), fixed.next().flatten(), None, queue_id)).collect();
+        if !sha256s.is_empty() && sha256s.len() != urls.len() {
+            return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("checksums must match urls".to_owned()) }).collect();
+        }
+        let (mut fixed, mut sums) = (fixed_names.into_iter(), sha256s.into_iter());
+        let results = urls
+            .into_iter()
+            .map(|url| {
+                let sum = sums.next().flatten().map(|h| h.trim().to_ascii_lowercase());
+                if sum.as_deref().is_some_and(|h| h.len() != 64 || !h.bytes().all(|c| c.is_ascii_hexdigit())) {
+                    return AddResult { url, id: None, error: Some("sha256 must be 64 hex characters".to_owned()) };
+                }
+                self.add_one(url, dir.clone(), fixed.next().flatten(), sum, queue_id)
+            })
+            .collect();
         self.refresh();
         results
     }
@@ -1061,6 +1085,7 @@ impl Scheduler {
             dir: job.dir.as_ref().map(|d| d.to_string_lossy().into_owned()),
             queue_id: job.queue_id,
             waiting: if job.state == JobState::Queued { self.waiting_reason(job.queue_id) } else { None },
+            verified: job.sha256.is_some() && matches!(job.state, JobState::Done { .. }),
         }
     }
 

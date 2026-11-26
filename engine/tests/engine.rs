@@ -240,6 +240,34 @@ fn add_downloads_file_with_matching_sha() {
 }
 
 #[test]
+fn add_with_checks_the_given_sha256() {
+    setup();
+    let origin = Origin::start();
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let good: String = sha(&payload()).iter().map(|b| format!("{b:02x}")).collect();
+    let url = |n: &str| origin.url(&format!("/file/{n}.bin"));
+    let urls = vec![url("a"), url("b"), url("c"), url("d")];
+    let sums = vec![Some(good.to_ascii_uppercase()), Some("0".repeat(64)), Some("xyz".into()), None];
+    let r = engine.add_with(urls, None, vec![None; 4], sums, None);
+    assert_eq!(r[2].error.as_deref(), Some("sha256 must be 64 hex characters"));
+    assert!(r[2].id.is_none());
+    let (a, b, d) = (r[0].id.unwrap(), r[1].id.unwrap(), r[3].id.unwrap());
+    wait_done(&engine, a);
+    assert!(view(&engine, a).unwrap().verified);
+    wait_done(&engine, d);
+    assert!(!view(&engine, d).unwrap().verified);
+    let deadline = Instant::now() + WAIT;
+    while !matches!(view(&engine, b).unwrap().state, JobState::Failed { .. }) {
+        assert!(Instant::now() < deadline, "b never failed");
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(engine.add_with(vec![url("e")], None, vec![None], vec![], None)[0].id.is_some());
+    assert!(engine.add_with(vec![url("f")], None, vec![None], vec![None, None], None)[0].id.is_none());
+    engine.shutdown();
+}
+
+#[test]
 fn same_url_twice_gets_suffixed_name_without_shared_part() {
     setup();
     let origin = Origin::start();
