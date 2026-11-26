@@ -44,8 +44,6 @@ struct ListControls: View {
     /// Shown as a Remove Missing button: clears rows whose finished file was moved or deleted.
     var removeMissing: (() -> Void)? = nil
 
-    static let pageSize = 50
-    private var pages: Int { max(1, (count + Self.pageSize - 1) / Self.pageSize) }
     private var filtered: Bool { (showsKind && kind != .all) || (statuses.first.map { status != $0 } ?? false) }
 
     var body: some View {
@@ -81,11 +79,82 @@ struct ListControls: View {
                     .help("Remove finished downloads whose file was moved or deleted. Files that are still there stay.")
             }
             Spacer()
+            PageBar(count: count, page: $page)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .padding(.horizontal, LayoutMetrics.margin)
+        .padding(.vertical, 6)
+        .onChange(of: kind) { _, _ in page = 0 }
+        .onChange(of: status) { _, _ in page = 0 }
+        .onChange(of: sort) { _, _ in page = 0 }
+    }
+
+    /// The items on the current page. `size` is the `Paging.key` setting, read with @AppStorage by the caller so the list redraws when it changes.
+    static func page<T>(_ items: [T], _ page: Int, _ size: Int) -> ArraySlice<T> {
+        let start = min(items.count, page * size)
+        return items[start..<min(items.count, start + size)]
+    }
+}
+
+/// The page size every list shares.
+enum Paging {
+    static let key = "listPageSize"
+    static let defaultSize = 50
+    static let sizes = [25, 50, 100, 200]
+}
+
+/// Page-size menu, arrows and range for one list. The menu shows only when the list is longer than the smallest size, the arrows
+/// only when it spans several pages. `padded` is for a bar on its own, outside ListControls.
+struct PageBar: View {
+    let count: Int
+    @Binding var page: Int
+    var padded = false
+    @AppStorage(Paging.key) private var size = Paging.defaultSize
+
+    private var pages: Int { max(1, (count + size - 1) / size) }
+
+    var body: some View {
+        Group {
+            if !padded {
+                controls
+            } else if count > Paging.sizes[0] {
+                HStack(spacing: 10) {
+                    Spacer()
+                    controls
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .padding(.horizontal, LayoutMetrics.margin)
+                .padding(.vertical, 6)
+            }
+        }
+        // Back to a page that exists when a filter shrinks the list.
+        .onChange(of: count) { _, _ in page = min(page, pages - 1) }
+        .onChange(of: size) { _, _ in page = 0 }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 10) {
+            if count > Paging.sizes[0] {
+                Menu {
+                    Picker("Per page", selection: $size) {
+                        ForEach(Paging.sizes, id: \.self) { Text("\($0) per page").tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Text("\(size) per page")
+                }
+                .menuStyle(.button)
+                .fixedSize()
+                .help("How many items each list shows at once")
+            }
             if pages > 1 {
                 Button { page -= 1 } label: { Image(systemName: "chevron.left") }
                     .disabled(page == 0)
                     .help("Previous page")
-                Text("\(page * Self.pageSize + 1)–\(min(count, (page + 1) * Self.pageSize)) of \(count)")
+                Text("\(page * size + 1)–\(min(count, (page + 1) * size)) of \(count)")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Button { page += 1 } label: { Image(systemName: "chevron.right") }
@@ -93,21 +162,6 @@ struct ListControls: View {
                     .help("Next page")
             }
         }
-        .menuStyle(.button)
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-        .padding(.horizontal, LayoutMetrics.margin)
-        .padding(.vertical, 6)
-        // Back to a page that exists when a filter shrinks the list.
-        .onChange(of: count) { _, _ in page = min(page, pages - 1) }
-        .onChange(of: kind) { _, _ in page = 0 }
-        .onChange(of: status) { _, _ in page = 0 }
-    }
-
-    /// The items on the current page.
-    static func page<T>(_ items: [T], _ page: Int) -> ArraySlice<T> {
-        let start = min(items.count, page * pageSize)
-        return items[start..<min(items.count, start + pageSize)]
     }
 }
 

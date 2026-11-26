@@ -70,6 +70,8 @@ struct FolderView: View {
     @State private var current: URL
     @State private var entries: [FileEntry] = []
     @State private var selection = Set<URL>()
+    @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
     @State private var tracked = Set<String>()
     @State private var watcher = DirectoryWatcher()
     let onClose: () -> Void
@@ -141,6 +143,7 @@ struct FolderView: View {
         .onExitCommand(perform: goBack)
         .onChange(of: current, initial: true) { _, folder in
             selection = []
+            page = 0
             reload(folder)
             watcher.watch(folder) {
                 reload(folder)
@@ -151,7 +154,7 @@ struct FolderView: View {
     }
 
     private var table: some View {
-        Table(entries, selection: $selection) {
+        Table(Array(ListControls.page(entries, page, pageSize)), selection: $selection) {
             TableColumn("Name") { entry in
                 HStack(spacing: 6) {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: entry.url.path(percentEncoded: false)))
@@ -182,6 +185,7 @@ struct FolderView: View {
         }
         .scrollContentBackground(.hidden)
         .alternatingRowBackgrounds(.disabled)
+        .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: entries.count, page: $page, padded: true) }
         .contextMenu(forSelectionType: URL.self) { urls in
             Button("Open") { selected(urls).forEach(open) }
             Button("Show in Finder") {

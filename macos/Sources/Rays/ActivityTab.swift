@@ -4,6 +4,8 @@ import SwiftUI
 struct ActivityTab: View {
     let open: (UInt64) -> Void
     @Environment(EngineModel.self) private var model
+    @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     private var running: [QueueView] { model.sortedQueues.filter { $0.state == .open && $0.running > 0 } }
 
@@ -25,7 +27,7 @@ struct ActivityTab: View {
                 if model.runs.isEmpty {
                     note("No runs yet")
                 }
-                ForEach(model.runs, id: \.id) { run in
+                ForEach(ListControls.page(model.runs, page, pageSize), id: \.id) { run in
                     historyRow(run).rowStyle()
                 }
             } header: { header("History") }
@@ -34,6 +36,7 @@ struct ActivityTab: View {
         .tint(.gray)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .all)
+        .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: model.runs.count, page: $page, padded: true) }
     }
 
     private func header(_ title: String) -> some View {

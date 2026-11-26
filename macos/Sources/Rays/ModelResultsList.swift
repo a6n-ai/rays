@@ -7,10 +7,13 @@ struct ModelResultsList: View {
     var featured = false
     let open: (String) -> Void
     @State private var selection: String?
+    @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     private static let cardLimit = 6
     private var cards: ArraySlice<HfModel> { featured ? hits.prefix(Self.cardLimit) : [] }
-    private var rows: ArraySlice<HfModel> { hits.dropFirst(cards.count) }
+    private var rest: [HfModel] { Array(hits.dropFirst(cards.count)) }
+    private var rows: ArraySlice<HfModel> { ListControls.page(rest, page, pageSize) }
 
     var body: some View {
         List {
@@ -51,6 +54,8 @@ struct ModelResultsList: View {
         .tint(.gray)
         .scrollContentBackground(.hidden)
         .scrollEdgeEffectStyle(.soft, for: .all)
+        .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: rest.count, page: $page, padded: true) }
+        .onChange(of: hits.map(\.id)) { _, _ in page = 0 }
         .focusable()
         .focusEffectDisabled()
         .onKeyPress(.upArrow) { step(-1) }
@@ -68,10 +73,11 @@ struct ModelResultsList: View {
     }
 
     private func step(_ delta: Int) -> KeyPress.Result {
-        guard !hits.isEmpty else { return .ignored }
-        let current = hits.firstIndex { $0.id == selection }
-        let next = current.map { min(max($0 + delta, 0), hits.count - 1) } ?? (delta > 0 ? 0 : hits.count - 1)
-        selection = hits[next].id
+        let visible = Array(cards) + rows
+        guard !visible.isEmpty else { return .ignored }
+        let current = visible.firstIndex { $0.id == selection }
+        let next = current.map { min(max($0 + delta, 0), visible.count - 1) } ?? (delta > 0 ? 0 : visible.count - 1)
+        selection = visible[next].id
         return .handled
     }
 }

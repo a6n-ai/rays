@@ -12,6 +12,7 @@ struct DownloadsView: View {
     @State private var kind = FileKind.all
     @State private var sort = ListSort.newest
     @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
     @State private var selection = Set<UInt64>()
     @State private var removal: [JobView] = []
     /// The sorter moves finished files out of the downloads folder; rows then show where each one went.
@@ -24,7 +25,7 @@ struct DownloadsView: View {
     private var queueView: QueueView? { model.queues.first { $0.id == queue } }
     private var matching: [JobView] { inQueue.listed(status: status, kind: kind, sort: sort) }
 
-    private var visible: [JobView] { Array(ListControls.page(matching, page)) }
+    private var visible: [JobView] { Array(ListControls.page(matching, page, pageSize)) }
     private var selectedJobs: [JobView] { model.jobs.filter { selection.contains($0.id) } }
 
     var body: some View {

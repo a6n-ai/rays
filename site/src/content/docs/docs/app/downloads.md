@@ -49,7 +49,7 @@ While a download is running, retrying, verifying or about to start, a dot appear
 
 - **Filter** by status (All, Active, Finished, Failed) or by type (Documents, Images, Video, Audio, Archives, Apps and installers, Other).
 - **Sort** by Newest first, Oldest first, Name or Largest first.
-- The list shows 50 downloads per page, with an icon for each file's type. The Sorter's recent moves and the Cloud downloads list use the same controls.
+- Lists show 50 items per page, with an icon for each file's type. When a list is longer than 25 items, a menu next to the page arrows sets 25, 50, 100 or 200 per page for every list in the app. The Sorter's recent moves, the Cloud downloads list and the other long lists use the same controls.
 - The toolbar has three buttons in the middle on every page: **Recent downloads** first, the folder, and settings last.
 - Double-click a finished download to open it.
 - **Remove Missing** clears finished downloads whose file was moved or deleted. Files that are still there stay.

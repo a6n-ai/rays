@@ -10,6 +10,8 @@ struct GrabSheet: View {
     @State private var phase = Phase.loading
     @State private var unchecked = Set<String>()
     @State private var kind = FileKind.all
+    @State private var linkPage = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     private var shown: [GrabbedLink] {
         guard case .found(let links) = phase else { return [] }
@@ -49,10 +51,11 @@ struct GrabSheet: View {
                     ForEach(FileKind.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .fixedSize()
+                .onChange(of: kind) { _, _ in linkPage = 0 }
                 Spacer()
                 Text("\(picked.count) of \(shown.count) selected").foregroundStyle(.secondary).monospacedDigit()
             }
-            List(shown, id: \.url) { link in
+            List(ListControls.page(shown, linkPage, pageSize), id: \.url) { link in
                 Toggle(isOn: Binding(
                     get: { !unchecked.contains(link.url) },
                     set: { if $0 { unchecked.remove(link.url) } else { unchecked.insert(link.url) } }
@@ -63,6 +66,7 @@ struct GrabSheet: View {
                     }
                 }
             }
+            PageBar(count: shown.count, page: $linkPage, padded: true)
         }
     }
 

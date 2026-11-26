@@ -13,18 +13,20 @@ struct SchedulesPage: View {
     @State private var naming = false
     @State private var newName = SchedulesPage.defaultName
     @State private var kind = FileKind.all
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     private var shown: [QueueView] { model.queues.listed(status: status, sort: sort, pinMain: false) }
-    private var upcoming: [QueueView] { shown.filter { $0.config.schedule != nil && $0.config.enabled } }
-    private var paused: [QueueView] { shown.filter { $0.config.schedule != nil && !$0.config.enabled } }
-    private var unscheduled: [QueueView] { shown.filter { $0.config.schedule == nil } }
+    private var pageOfQueues: [QueueView] { Array(ListControls.page(shown, page, pageSize)) }
+    private var upcoming: [QueueView] { pageOfQueues.filter { $0.config.schedule != nil && $0.config.enabled } }
+    private var paused: [QueueView] { pageOfQueues.filter { $0.config.schedule != nil && !$0.config.enabled } }
+    private var unscheduled: [QueueView] { pageOfQueues.filter { $0.config.schedule == nil } }
     private var nothingScheduled: Bool { !model.queues.contains { $0.config.schedule != nil } }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ListControls(statuses: QueueFilter.schedules, status: $status, kind: $kind, showsKind: false,
-                             sorts: [.nextRun, .name], sort: $sort, count: 0, page: $page)
+                             sorts: [.nextRun, .name], sort: $sort, count: shown.count, page: $page)
                 if shown.isEmpty { EmptyState(symbol: "tray", title: "No schedules match") } else { list }
             }
             .navigationTitle("Schedules")

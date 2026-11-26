@@ -85,6 +85,8 @@ struct DownloadedModelsView: View {
     @State private var watcher = DirectoryWatcher()
     @State private var revision = 0
     @State private var checks: [URL: VerifyState] = [:]
+    @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     var body: some View {
         Group {
@@ -96,7 +98,7 @@ struct DownloadedModelsView: View {
                 }
             } else {
                 List {
-                    ForEach(models) { item in
+                    ForEach(ListControls.page(models, page, pageSize)) { item in
                         DownloadedModelRow(
                             item: item,
                             isSelected: selection == item.id,
@@ -120,6 +122,7 @@ struct DownloadedModelsView: View {
                 .tint(.gray)
                 .scrollContentBackground(.hidden)
                 .scrollEdgeEffectStyle(.soft, for: .all)
+                .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: models.count, page: $page, padded: true) }
             }
         }
         .task(id: "\(folder.path)|\(revision)") {

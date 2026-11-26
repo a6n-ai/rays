@@ -396,6 +396,7 @@ private struct CloudDownloads: View {
     @State private var kind = FileKind.all
     @State private var sort = ListSort.newest
     @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     var body: some View {
         let all = model.jobs.filter { $0.url.hasPrefix("s3://") }
@@ -404,7 +405,7 @@ private struct CloudDownloads: View {
             ContentUnavailableView("No cloud downloads yet", systemImage: "cloud",
                                    description: Text("Download a file from Browse and it shows up here."))
         } else {
-            List(Array(ListControls.page(jobs, page)), id: \.id) { job in
+            List(Array(ListControls.page(jobs, page, pageSize)), id: \.id) { job in
                 JobRow(job: job)
                     .listRowInsets(EdgeInsets(
                         top: LayoutMetrics.rowSpacing / 2,

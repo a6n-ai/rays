@@ -11,13 +11,14 @@ struct QueueListTab: View {
     @State private var sort = ListSort.newest
     @State private var page = 0
     @State private var kind = FileKind.all
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     private var shown: [QueueView] { model.queues.listed(status: status, sort: sort) }
 
     var body: some View {
         VStack(spacing: 0) {
             ListControls(statuses: QueueFilter.queues, status: $status, kind: $kind, showsKind: false,
-                         sorts: [.name, .newest, .nextRun], sort: $sort, count: 0, page: $page)
+                         sorts: [.name, .newest, .nextRun], sort: $sort, count: shown.count, page: $page)
             if shown.isEmpty { EmptyState(symbol: "tray", title: "No queues match") } else { list }
         }
         .confirmationDialog(
@@ -44,7 +45,7 @@ struct QueueListTab: View {
 
     private var list: some View {
         List {
-            ForEach(shown) { queue in
+            ForEach(ListControls.page(shown, page, pageSize)) { queue in
                 QueueRow(queue: queue, isDirty: drafts.isDirty(queue.id), onDelete: { deleting = queue })
                     .contentShape(Rectangle())
                     .onTapGesture { open(queue.id) }

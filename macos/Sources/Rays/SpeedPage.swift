@@ -204,6 +204,7 @@ private struct SpeedHistoryTab: View {
     @State private var sort = ListSort.newest
     @State private var kind = FileKind.all
     @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     private var shown: [SpeedSample] {
         let kept = model.speedHistory.filter {
@@ -225,7 +226,7 @@ private struct SpeedHistoryTab: View {
                            message: "Run a test, or download something. Rays keeps 60 days.")
             } else {
                 List {
-                    ForEach(ListControls.page(shown, page).enumerated().map { (id: "\(page)-\($0.offset)", sample: $0.element) }, id: \.id) { entry in
+                    ForEach(ListControls.page(shown, page, pageSize).enumerated().map { (id: "\(page)-\($0.offset)", sample: $0.element) }, id: \.id) { entry in
                         let (id, sample) = (entry.id, entry.sample)
                         row(sample)
                             .hoverHighlight()

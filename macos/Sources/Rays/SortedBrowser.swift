@@ -143,6 +143,8 @@ struct SortedItemsView: View {
     var order: SortedOrder = .name
     let openFolder: (URL) -> Void
     @State private var columnOrder = [KeyPathComparator(\SortedItem.name, comparator: .localizedStandard)]
+    @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     var body: some View {
         if layout == .table {
@@ -150,7 +152,7 @@ struct SortedItemsView: View {
         } else {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 92, maximum: 112), spacing: 12)], spacing: 14) {
-                    ForEach(order.sorted(items)) { item in
+                    ForEach(ListControls.page(order.sorted(items), page, pageSize)) { item in
                         Button { open(item.url) } label: { GridTile(item: item) }
                         .buttonStyle(.plain)
                         .help("Open \(item.name)")
@@ -160,6 +162,8 @@ struct SortedItemsView: View {
                 }
                 .padding(20)
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: items.count, page: $page, padded: true) }
+            .onChange(of: order) { _, _ in page = 0 }
         }
     }
 
@@ -241,12 +245,15 @@ struct FinderTable: View {
     @Binding var order: [KeyPathComparator<SortedItem>]
     let openFolder: (URL) -> Void
     @State private var selection = Set<SortedItem.ID>()
+    @State private var page = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
 
     var body: some View {
         // Folders stay on top, as in Finder's default list view.
-        let rows = items.sorted { a, b in
+        let sorted = items.sorted { a, b in
             a.isFolder != b.isFolder ? a.isFolder : order.compare(a, b) == .orderedAscending
         }
+        let rows = Array(ListControls.page(sorted, page, pageSize))
         Table(rows, selection: $selection, sortOrder: $order) {
             TableColumn("Name", value: \.name, comparator: .localizedStandard) { item in
                 HStack(spacing: 6) {
@@ -277,6 +284,8 @@ struct FinderTable: View {
             ids.forEach(open)
         }
         .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) { PageBar(count: items.count, page: $page, padded: true) }
+        .onChange(of: order) { _, _ in page = 0 }
     }
 
     private func open(_ url: URL) {

@@ -31,6 +31,7 @@ struct SorterView: View {
     @State private var recentKind = FileKind.all
     @State private var recentSort = ListSort.newest
     @State private var recentPage = 0
+    @AppStorage(Paging.key) private var pageSize = Paging.defaultSize
     @State private var recentSelection: Int?
     /// Moves removed from the list, one key per line. Kept in the app so the sorter's log stays untouched.
     @AppStorage("sorterHiddenMoves") private var hiddenMoves = ""
@@ -62,7 +63,7 @@ struct SorterView: View {
             } else {
                 // Same list as Downloads: inset style, hidden separators, rows that highlight on hover.
                 List {
-                    ForEach(Array(ListControls.page(moves, recentPage).enumerated()), id: \.offset) { index, move in
+                    ForEach(Array(ListControls.page(moves, recentPage, pageSize).enumerated()), id: \.offset) { index, move in
                         MoveRow(move: move, isSelected: recentSelection == index) { hide([move]) }
                             .contentShape(Rectangle())
                             .onTapGesture { recentSelection = index }
