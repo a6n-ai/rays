@@ -90,8 +90,7 @@ struct CommandLineSection: View {
 
     var body: some View {
         Section {
-            SettingRow(symbol: "terminal.fill", color: Color(nsColor: .darkGray),
-                       title: "Command line tool", hint: hint) {
+            SettingRow(.commandLine, title: "Command line tool", hint: hint) {
                 switch state {
                 case .installed(let link):
                     Button("Remove") { run { try CommandLineTool.uninstall(link) } }

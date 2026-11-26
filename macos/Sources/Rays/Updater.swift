@@ -239,8 +239,7 @@ struct UpdateSettingsSection: View {
 
     var body: some View {
         Section {
-            SettingRow(symbol: "arrow.triangle.2.circlepath", color: .blue,
-                       title: "Rays \(updater.current)", hint: statusText) {
+            SettingRow(.updates, title: "Rays \(updater.current)", hint: statusText) {
                 if let release = updater.available {
                     Button("Update to \(release.version)") {
                         Task { await updater.install(release) { model.downloadDMG($0) } }

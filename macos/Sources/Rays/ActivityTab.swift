@@ -83,7 +83,7 @@ struct ActivityTab: View {
     }
 
     @ViewBuilder private func historyTile(_ queue: QueueView?) -> some View {
-        if let queue { QueueTile(queue: queue) } else { ModelTile(symbol: "trash", color: .gray) }
+        if let queue { QueueTile(queue: queue) } else { IconTile(.trash, size: TileSize.list) }
     }
 
     private func row(leading: some View, title: String, detail: String, @ViewBuilder trailing: () -> some View) -> some View {

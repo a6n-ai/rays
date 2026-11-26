@@ -27,7 +27,7 @@ struct ModelHeaderCard: View {
 
     var body: some View {
         HStack(spacing: LayoutMetrics.gap) {
-            ModelTile(kind: kind, size: 56)
+            IconTile(kind.tile, size: 56)
             VStack(alignment: .leading, spacing: 4) {
                 Text(hfNameParts(repo.id).name)
                     .font(.title3.weight(.semibold))

@@ -37,6 +37,14 @@ struct ContentView: View {
                         destination = .stats
                     } else if path == "shortcuts" {
                         destination = .shortcuts
+                    } else if path == "general" {
+                        destination = .general
+                    } else if path == "ai" {
+                        destination = .ai
+                    } else if path == "browsers" {
+                        destination = .browsers
+                    } else if path == "home" {
+                        destination = .home
                     } else if path == "models" {
                         destination = .models
                     } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
@@ -60,6 +68,10 @@ struct ContentView: View {
                     case .speed?: lastFolder = "speed"
                     case .stats?: lastFolder = "stats"
                     case .shortcuts?: lastFolder = "shortcuts"
+                    case .home?: lastFolder = "home"
+                    case .general?: lastFolder = "general"
+                    case .ai?: lastFolder = "ai"
+                    case .browsers?: lastFolder = "browsers"
                     default: lastFolder = ""
                     }
                 }
@@ -78,7 +90,7 @@ struct ContentView: View {
                 }
         }
         .containerBackground(.thinMaterial, for: .window)
-        .frame(minWidth: 640, idealWidth: 760, minHeight: 440, idealHeight: 520)
+        .frame(minWidth: 640, idealWidth: 760, minHeight: 560, idealHeight: 720)
         .overlay {
             if isDropTargeted {
                 DropPanel()
@@ -138,6 +150,14 @@ struct ContentView: View {
                     StatsPage()
                 case .shortcuts?:
                     ShortcutsPage()
+                case .home?:
+                    HomePlaceholder()
+                case .general?:
+                    SettingsPagePlaceholder(tile: .general, title: "General")
+                case .ai?:
+                    SettingsPagePlaceholder(tile: .ai, title: "AI")
+                case .browsers?:
+                    SettingsPagePlaceholder(tile: .browsers, title: "Browsers")
                 case .schedules?:
                     SchedulesPage(isDropTargeted: isDropTargeted, drafts: drafts)
                 case .queues?:

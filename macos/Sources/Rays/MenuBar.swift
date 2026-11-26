@@ -220,14 +220,14 @@ struct MenuBarPanel: View {
             .padding(6)
             Divider()
             VStack(spacing: 0) {
-                MenuItem("Downloads", symbol: "arrow.down.circle") { show(.openDownloads) }
-                MenuItem("Sorter", symbol: "wand.and.stars") { show(.openSorter) }
-                MenuItem("Cloud", symbol: "cloud") { show(.openCloud) }
-                MenuItem("Queues", symbol: "list.bullet.rectangle") { go(.queues) }
-                MenuItem("Schedules", symbol: "calendar.badge.clock") { go(.schedules) }
-                MenuItem("Speed Test", symbol: "gauge.with.dots.needle.67percent") { go(.speed) }
-                MenuItem("Stats", symbol: "chart.bar.xaxis") { go(.stats) }
-                MenuItem("Shortcuts", symbol: "square.2.layers.3d") { go(.shortcuts) }
+                MenuItem("Downloads", tile: .downloads) { show(.openDownloads) }
+                MenuItem("Sorter", tile: .sorter) { show(.openSorter) }
+                MenuItem("Cloud", tile: .cloud) { show(.openCloud) }
+                MenuItem("Queues", tile: .queues) { go(.queues) }
+                MenuItem("Schedules", tile: .schedules) { go(.schedules) }
+                MenuItem("Speed Test", tile: .speed) { go(.speed) }
+                MenuItem("Stats", tile: .stats) { go(.stats) }
+                MenuItem("Shortcuts", tile: .shortcuts) { go(.shortcuts) }
             }
             .padding(6)
             Divider()
@@ -382,6 +382,7 @@ struct MenuBarPanel: View {
 private struct MenuItem: View {
     let title: String
     let symbol: String
+    var tile: Tile?
     var shortcut: String?
     let action: () -> Void
     @State private var hovering = false
@@ -393,10 +394,21 @@ private struct MenuItem: View {
         self.action = action
     }
 
+    init(_ title: String, tile: Tile, action: @escaping () -> Void) {
+        self.title = title
+        self.symbol = tile.symbol
+        self.tile = tile
+        self.action = action
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: symbol).frame(width: 18).foregroundStyle(hovering ? .white : .secondary)
+                if let tile {
+                    IconTile(tile, size: TileSize.menu)
+                } else {
+                    Image(systemName: symbol).frame(width: 18).foregroundStyle(hovering ? .white : .secondary)
+                }
                 Text(title)
                 Spacer()
                 if let shortcut { Text(shortcut).foregroundStyle(hovering ? .white.opacity(0.8) : .secondary) }

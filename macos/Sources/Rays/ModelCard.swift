@@ -13,7 +13,7 @@ struct ModelCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                ModelTile(kind: kind, size: 32)
+                IconTile(kind.tile, size: TileSize.list)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(parts.name)
                         .font(.callout.weight(.semibold))

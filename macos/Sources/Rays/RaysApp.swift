@@ -13,7 +13,7 @@ struct RaysApp: App {
                 .environment(appDelegate.model)
                 .background(OpenSettingsAtLaunch())
         }
-        .defaultSize(width: 760, height: 520)
+        .defaultSize(width: 760, height: 720)
         .windowToolbarStyle(.unified)
         .onChange(of: appearance, initial: true) { _, new in NSApp.appearance = new.nsAppearance }
         .commands {
@@ -145,11 +145,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Earlier builds opened at 640x480 and macOS keeps that size, so `defaultSize` never applies.
     /// Set the new default size once; afterwards the size the user picks is kept.
     private func sizeWindowOnce() {
-        let key = "windowSized760"
+        let key = "windowSized760x720"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
         DispatchQueue.main.async {
             guard let window = NSApp.windows.first(where: { $0.isVisible && $0.title == "Rays" }) else { return }
-            let target = NSSize(width: 760, height: 520)
+            let visible = (window.screen ?? NSScreen.main)?.visibleFrame.size ?? NSSize(width: 760, height: 720)
+            let target = NSSize(width: min(760, visible.width), height: min(720, visible.height))
             var frame = window.frame
             frame.origin.y += frame.height - target.height
             frame.size = target

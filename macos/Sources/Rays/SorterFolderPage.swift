@@ -9,7 +9,7 @@ struct SorterFolderPage: View {
     @State private var confirmingRemoval = false
     @AppStorage("sorterShowDestinations") private var showDestinations = false
 
-    static let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo]
+    static let colors: [Color] = [TilePalette.blue, TilePalette.green, TilePalette.orange, TilePalette.purple, TilePalette.pink, TilePalette.teal, TilePalette.indigo]
 
     var body: some View {
         if let folder = model.status?.folders.first(where: { $0.path == path }) {
@@ -144,7 +144,7 @@ private struct CategoryRow: View {
             .disabled(!FileManager.default.fileExists(atPath: target.path))
         } label: {
             HStack(spacing: 10) {
-                SettingIcon(symbol: "folder.fill", color: color)
+                IconTile(Tile(symbol: "folder.fill", color: color))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(category.name)
                         .foregroundStyle(.primary)

@@ -15,7 +15,7 @@ struct SortingTab: View {
             }
 
             Section {
-                SettingRow(symbol: "timer", color: .orange, title: "Sort new files after",
+                SettingRow(.sortDelay, title: "Sort new files after",
                            hint: "Rays waits this long after a file arrives, so you can open or move it first.") {
                     Picker("Sort new files after", selection: Binding(
                         get: { sorter.status?.waitSeconds ?? 10 },
@@ -30,7 +30,7 @@ struct SortingTab: View {
             }
 
             Section {
-                SettingRow(symbol: "character.cursor.ibeam", color: .purple, title: "Rename files from their content",
+                SettingRow(.rename, title: "Rename files from their content",
                            hint: "Off keeps every file's original name. Files are still sorted into folders.") {
                     Toggle("Rename files from their content", isOn: Binding(
                         get: { sorter.status?.renameFiles ?? true },
@@ -42,8 +42,7 @@ struct SortingTab: View {
             }
 
             Section {
-                SettingRow(symbol: "folder.badge.gearshape", color: .blue,
-                           title: watched == 1 ? "1 folder watched" : "\(watched) folders watched",
+                SettingRow(.watchedFolders, title: watched == 1 ? "1 folder watched" : "\(watched) folders watched",
                            hint: folders.isEmpty ? "Add folders to sort in the Sorter page."
                                                  : folders.map(\.name).joined(separator: ", ")) {
                     Button("Open Sorter", action: openSorter)

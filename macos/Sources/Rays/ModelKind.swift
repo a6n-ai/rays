@@ -34,21 +34,22 @@ enum ModelKind: CaseIterable {
         }
     }
 
-    var color: Color {
-        switch self {
-        case .text: .blue
-        case .vision: .purple
-        case .image: .pink
-        case .video: .orange
-        case .speech: .green
-        case .voice: .teal
-        case .audio: .mint
-        case .embeddings: .indigo
-        case .visionTasks: .yellow
-        case .other: .gray
+    var tile: Tile {
+        let color: Color = switch self {
+        case .text: TilePalette.blue
+        case .vision: TilePalette.purple
+        case .image: TilePalette.pink
+        case .video: TilePalette.orange
+        case .speech: TilePalette.green
+        case .voice: TilePalette.teal
+        case .audio: TilePalette.sky
+        case .embeddings: TilePalette.indigo
+        case .visionTasks: TilePalette.red
+        case .other: TilePalette.gray
         }
+        return Tile(symbol: symbol, color: color)
     }
-
+    var color: Color { tile.color }
     var label: String {
         switch self {
         case .text: "Text"
@@ -90,35 +91,6 @@ enum ModelFilter: CaseIterable {
         case .audio: [.speech, .voice, .audio].contains(kind)
         default: kind == representative
         }
-    }
-}
-
-/// An app-icon-like square: gradient fill, white symbol.
-struct ModelTile: View {
-    let symbol: String
-    let color: Color
-    var size: CGFloat = LayoutMetrics.iconSize
-
-    init(kind: ModelKind, size: CGFloat = LayoutMetrics.iconSize) {
-        self.init(symbol: kind.symbol, color: kind.color, size: size)
-    }
-
-    init(symbol: String, color: Color, size: CGFloat = LayoutMetrics.iconSize) {
-        self.symbol = symbol
-        self.color = color
-        self.size = size
-    }
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-            .fill(color.gradient)
-            .frame(width: size, height: size)
-            .overlay {
-                Image(systemName: symbol)
-                    .font(.system(size: size * 0.44, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityHidden(true)
     }
 }
 

@@ -11,6 +11,10 @@ enum Destination: Hashable {
     case speed
     case stats
     case shortcuts
+    case home
+    case general
+    case ai
+    case browsers
 }
 
 struct SidebarFolder: Identifiable {
@@ -55,28 +59,31 @@ struct SidebarView: View {
         VStack(spacing: 0) {
         List(selection: $selection) {
             Section {
-                SidebarLabel("Downloads", symbol: "arrow.down", color: TilePalette.blue)
+                HomeRow().tag(Destination.home)
+            }
+            Section {
+                SidebarLabel("Downloads", tile: .downloads)
                     .activeDot(model.hasActivity)
                     .tag(Destination.downloads)
-                SidebarLabel("Models", symbol: "cube.fill", color: TilePalette.purple)
+                SidebarLabel("Models", tile: .models)
                     .tag(Destination.models)
-                SidebarLabel("Sorter", symbol: "sparkles", color: TilePalette.pink)
+                SidebarLabel("Sorter", tile: .sorter)
                     .tag(Destination.sorter)
-                SidebarLabel("Cloud", symbol: "cloud.fill", color: TilePalette.sky)
+                SidebarLabel("Cloud", tile: .cloud)
                     .tag(Destination.cloud)
             }
             Section {
-                SidebarLabel("Queues", symbol: "list.bullet", color: TilePalette.orange)
+                SidebarLabel("Queues", tile: .queues)
                     .activeDot(model.queuesRunning)
                     .tag(Destination.queues)
-                SidebarLabel("Schedules", symbol: "calendar", color: TilePalette.orange)
+                SidebarLabel("Schedules", tile: .schedules)
                     .tag(Destination.schedules)
             }
             Section {
                 SpeedCard().tag(Destination.speed)
-                SidebarLabel("Stats", symbol: "chart.bar.fill", color: TilePalette.green)
+                SidebarLabel("Stats", tile: .stats)
                     .tag(Destination.stats)
-                SidebarLabel("Shortcuts", symbol: "square.2.layers.3d.fill", color: TilePalette.indigo)
+                SidebarLabel("Shortcuts", tile: .shortcuts)
                     .tag(Destination.shortcuts)
             }
             Section("Folders", isExpanded: $foldersExpanded) {
@@ -185,22 +192,55 @@ private struct FolderNode: View {
 /// A sidebar row label with a System Settings style icon: a white symbol on a small tile of the item's colour.
 struct SidebarLabel: View {
     let title: String
-    let symbol: String
-    let color: Color
+    let tile: Tile
 
-    init(_ title: String, symbol: String, color: Color) {
-        (self.title, self.symbol, self.color) = (title, symbol, color)
+    init(_ title: String, tile: Tile) {
+        (self.title, self.tile) = (title, tile)
     }
 
     var body: some View {
         Label {
             Text(title)
         } icon: {
-            Image(systemName: symbol)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 20, height: 20)
-                .background(color.gradient, in: .rect(cornerRadius: 5))
+            IconTile(tile, size: TileSize.sidebar)
         }
+    }
+}
+
+/// The top sidebar row, like the Apple Account row in System Settings: app icon, name, version.
+struct HomeRow: View {
+    private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: TileSize.list, height: TileSize.list)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Rays").font(.body.weight(.semibold))
+                Text("Version \(version)").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// Stands in for the Home page until its task.
+struct HomePlaceholder: View {
+    var body: some View {
+        HeroCard(.downloads, title: "Rays", subtitle: "Home is coming.", style: .home)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Stands in for the General, AI and Browsers pages until Task 7.
+struct SettingsPagePlaceholder: View {
+    let tile: Tile
+    let title: String
+
+    var body: some View {
+        HeroCard(tile, title: title, subtitle: "This page is coming.", style: .centered)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

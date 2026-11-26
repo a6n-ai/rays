@@ -25,69 +25,15 @@ struct SettingsView: View {
     }
 }
 
-struct SettingIcon: View {
-    let symbol: String
-    let color: Color
-
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 22, height: 22)
-            .background(color, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .accessibilityHidden(true)
-    }
-}
-
-struct SettingRow<Control: View>: View {
-    let symbol: String
-    let color: Color
-    let title: String
-    let hint: String
-    @ViewBuilder let control: Control
-
-    init(symbol: String, color: Color, title: String, hint: String, @ViewBuilder control: () -> Control) {
-        self.symbol = symbol
-        self.color = color
-        self.title = title
-        self.hint = hint
-        self.control = control()
-    }
-
-    var body: some View {
-        LabeledContent {
-            control
-        } label: {
-            HStack(spacing: 10) {
-                SettingIcon(symbol: symbol, color: color)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                    Text(hint)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
 private struct GeneralTab: View {
-    @Environment(EngineModel.self) private var model
     @AppStorage(AppearanceChoice.key) private var appearance = AppearanceChoice.system
-    @AppStorage(SettingsKey.downloadsDir) private var customFolder = ""
-    @AppStorage(SettingsKey.sorterPath) private var sorterPath = Sorter.defaultPath
     @AppStorage(SettingsKey.menuBar) private var showsMenuBar = true
-    @AppStorage(SettingsKey.clipboard) private var offersCopiedLinks = true
-    @AppStorage(SettingsKey.notifyDone) private var notifiesWhenDone = true
     let sorter: SorterModel
-    @State private var folderError: String?
-
-    private var folder: URL { EngineModel.downloadsURL }
 
     var body: some View {
         Form {
             Section {
-                SettingRow(symbol: "circle.lefthalf.filled", color: Color(nsColor: .systemGray),
+                SettingRow(.appearance,
                            title: "Appearance", hint: "Match your Mac, or always light or dark.") {
                     Picker("Appearance", selection: $appearance) {
                         ForEach(AppearanceChoice.allCases) { Text($0.title).tag($0) }
@@ -97,48 +43,18 @@ private struct GeneralTab: View {
                     .fixedSize()
                 }
 
-                SettingRow(symbol: "folder.fill", color: .blue,
-                           title: "Save downloads to", hint: "New downloads go here.") {
-                    HStack(spacing: 8) {
-                        Text(folder.tildePath)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .help(folder.path(percentEncoded: false))
-                        Button("Change…", action: chooseFolder)
-                            .buttonStyle(.glass)
-                            .accessibilityLabel("Choose download folder")
-                        Button("Reset") { change(to: nil) }
-                            .buttonStyle(.glass)
-                            .disabled(customFolder.isEmpty)
-                            .help("Use the Downloads folder")
-                    }
-                }
-                if let folderError {
-                    ErrorLine(text: folderError)
-                }
+                SaveFolderRow(sorter: sorter)
 
-                SettingRow(symbol: "menubar.arrow.down.rectangle", color: .indigo,
+                SettingRow(.menuBar,
                            title: "Show in menu bar", hint: "See and pause downloads from the menu bar. Closing the window keeps Rays running.") {
                     Toggle("Show in menu bar", isOn: $showsMenuBar)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
 
-                SettingRow(symbol: "doc.on.clipboard", color: .teal,
-                           title: "Offer copied download links",
-                           hint: "When you copy a link to a file, like a .zip or .dmg, a notification offers to download it. macOS asks once to let Rays read copied links.") {
-                    Toggle("Offer copied download links", isOn: $offersCopiedLinks)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
+                CopiedLinksRow()
 
-                SettingRow(symbol: "bell.badge", color: .orange,
-                           title: "Notify when downloads finish",
-                           hint: "A notification when a download finishes or fails, with buttons to open it, show it in Finder or retry. Many at once become one summary.") {
-                    Toggle("Notify when downloads finish", isOn: $notifiesWhenDone)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
+                NotifyRow()
             }
 
             CommandLineSection()
@@ -151,6 +67,38 @@ private struct GeneralTab: View {
         }
         .scrollContentBackground(.hidden)
         .formStyle(.grouped)
+    }
+}
+
+struct SaveFolderRow: View {
+    @Environment(EngineModel.self) private var model
+    @AppStorage(SettingsKey.downloadsDir) private var customFolder = ""
+    @AppStorage(SettingsKey.sorterPath) private var sorterPath = Sorter.defaultPath
+    let sorter: SorterModel
+    @State private var folderError: String?
+
+    private var folder: URL { EngineModel.downloadsURL }
+
+    var body: some View {
+        SettingRow(.folder,
+                   title: "Save downloads to", hint: "New downloads go here.") {
+            HStack(spacing: 8) {
+                Text(folder.tildePath)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(folder.path(percentEncoded: false))
+                Button("Change…", action: chooseFolder)
+                    .buttonStyle(.glass)
+                    .accessibilityLabel("Choose download folder")
+                Button("Reset") { change(to: nil) }
+                    .buttonStyle(.glass)
+                    .disabled(customFolder.isEmpty)
+                    .help("Use the Downloads folder")
+            }
+        }
+        if let folderError {
+            ErrorLine(text: folderError)
+        }
     }
 
     private func chooseFolder() {
@@ -177,11 +125,70 @@ private struct GeneralTab: View {
     }
 }
 
-/// Also the Download settings page of the Downloads view.
-struct DownloadsTab: View {
+struct CopiedLinksRow: View {
+    @AppStorage(SettingsKey.clipboard) private var offersCopiedLinks = true
+
+    var body: some View {
+        SettingRow(.clipboard,
+                   title: "Offer copied download links",
+                   hint: "When you copy a link to a file, like a .zip or .dmg, a notification offers to download it. macOS asks once to let Rays read copied links.") {
+            Toggle("Offer copied download links", isOn: $offersCopiedLinks)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+    }
+}
+
+struct NotifyRow: View {
+    @AppStorage(SettingsKey.notifyDone) private var notifiesWhenDone = true
+
+    var body: some View {
+        SettingRow(.notifications,
+                   title: "Notify when downloads finish",
+                   hint: "A notification when a download finishes or fails, with buttons to open it, show it in Finder or retry. Many at once become one summary.") {
+            Toggle("Notify when downloads finish", isOn: $notifiesWhenDone)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+    }
+}
+
+struct MaxRunningRow: View {
     @Environment(EngineModel.self) private var model
     @AppStorage(SettingsKey.maxRunning) private var maxRunning = 3
+
+    var body: some View {
+        SettingRow(.concurrency,
+                   title: "Downloads at once", hint: "How many files download at the same time.") {
+            Picker("Downloads at once", selection: Binding(get: { maxRunning }, set: { model.setMaxRunning($0) })) {
+                ForEach(1...10, id: \.self) { Text($0 == 3 ? "3 (Recommended)" : "\($0)").tag($0) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+        }
+    }
+}
+
+struct PartsRow: View {
+    @Environment(EngineModel.self) private var model
     @AppStorage(SettingsKey.connections) private var connections = 4
+
+    var body: some View {
+        SettingRow(.parts,
+                   title: "Parts per file", hint: "Big files download in parts at once. 4 works well for most sites.") {
+            Picker("Parts per file", selection: Binding(get: { connections }, set: { model.setConnections($0) })) {
+                ForEach(1...16, id: \.self) { Text($0 == 4 ? "4 (Recommended)" : "\($0)").tag($0) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+        }
+    }
+}
+
+struct SpeedLimitRow: View {
+    @Environment(EngineModel.self) private var model
     @AppStorage(SettingsKey.speedLimit) private var speedLimit = 0
     @State private var customMode = false
     @State private var customMB = 0.0
@@ -194,65 +201,29 @@ struct DownloadsTab: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                SettingRow(symbol: "square.stack.3d.down.right.fill", color: .green,
-                           title: "Downloads at once", hint: "How many files download at the same time.") {
-                    Picker("Downloads at once", selection: Binding(get: { maxRunning }, set: { model.setMaxRunning($0) })) {
-                        ForEach(1...10, id: \.self) { Text($0 == 3 ? "3 (Recommended)" : "\($0)").tag($0) }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
+        Group {
+            SettingRow(.speedLimit,
+                       title: "Speed limit", hint: "Leave some internet for everything else on your Mac.") {
+                Picker("Speed limit", selection: limitSelection) {
+                    ForEach(SpeedPreset.all) { Text($0.title).tag($0.bytes) }
+                    Text("Custom…").tag(customTag)
                 }
-
-                SettingRow(symbol: "point.3.connected.trianglepath.dotted", color: .purple,
-                           title: "Parts per file", hint: "Big files download in parts at once. 4 works well for most sites.") {
-                    Picker("Parts per file", selection: Binding(get: { connections }, set: { model.setConnections($0) })) {
-                        ForEach(1...16, id: \.self) { Text($0 == 4 ? "4 (Recommended)" : "\($0)").tag($0) }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                }
-
-                ReplaceExistingRow()
+                .labelsHidden()
+                .fixedSize()
             }
-
-            Section {
-                SettingRow(symbol: "hare.fill", color: .orange,
-                           title: "Speed limit", hint: "Leave some internet for everything else on your Mac.") {
-                    Picker("Speed limit", selection: limitSelection) {
-                        ForEach(SpeedPreset.all) { Text($0.title).tag($0.bytes) }
-                        Text("Custom…").tag(customTag)
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                if showsCustom {
-                    LabeledContent("Custom limit") {
-                        HStack(spacing: 6) {
-                            TextField("MB/s", value: $customMB, format: .number)
-                                .labelsHidden()
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 80)
-                                .onChange(of: customMB) { _, mb in model.setSpeedLimit(Int(max(0, mb) * 1_000_000)) }
-                            Text("MB/s").foregroundStyle(.secondary)
-                        }
+            if showsCustom {
+                LabeledContent("Custom limit") {
+                    HStack(spacing: 6) {
+                        TextField("MB/s", value: $customMB, format: .number)
+                            .labelsHidden()
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                            .onChange(of: customMB) { _, mb in model.setSpeedLimit(Int(max(0, mb) * 1_000_000)) }
+                        Text("MB/s").foregroundStyle(.secondary)
                     }
                 }
             }
-
-            Section { UnpackSettingsRows() }
-
-            Section { WakePermissionRow() }
-
-            HuggingFaceTokenSection()
-
-            SavedNote()
         }
-        .scrollContentBackground(.hidden)
-        .formStyle(.grouped)
         .onAppear {
             customMB = Double(speedLimit) / 1_000_000
         }
@@ -271,6 +242,31 @@ struct DownloadsTab: View {
                     model.setSpeedLimit(value)
                 }
             })
+    }
+}
+
+/// Also the Download settings page of the Downloads view.
+struct DownloadsTab: View {
+    var body: some View {
+        Form {
+            Section {
+                MaxRunningRow()
+                PartsRow()
+                ReplaceExistingRow()
+            }
+
+            Section { SpeedLimitRow() }
+
+            Section { UnpackSettingsRows() }
+
+            Section { WakePermissionRow() }
+
+            HuggingFaceTokenSection()
+
+            SavedNote()
+        }
+        .scrollContentBackground(.hidden)
+        .formStyle(.grouped)
     }
 }
 
@@ -299,12 +295,12 @@ extension URL {
     var tildePath: String { (path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath }
 }
 
-private struct WakePermissionRow: View {
+struct WakePermissionRow: View {
     @Environment(EngineModel.self) private var model
     @State private var installed: Bool?
 
     var body: some View {
-        SettingRow(symbol: "alarm.fill", color: .red, title: "Wake permission",
+        SettingRow(.wake, title: "Wake permission",
                    hint: "Lets a queue wake your Mac to start on time.") {
             HStack(spacing: 10) {
                 Text(installed == true ? "Installed" : "Not set up").foregroundStyle(.secondary)

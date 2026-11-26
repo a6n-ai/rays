@@ -106,7 +106,7 @@ private struct SpeedOverview: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: LayoutMetrics.gap) {
-            ModelTile(symbol: "gauge.with.dots.needle.67percent", color: .teal, size: 44)
+            IconTile(.speed, size: TileSize.hero)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Speed test").font(.title2.weight(.semibold))
                 Text(subtitle)
@@ -244,7 +244,7 @@ private struct SpeedHistoryTab: View {
         let isTest = sample.source == .test
         let date = Date(timeIntervalSince1970: TimeInterval(sample.at))
         return HStack(spacing: LayoutMetrics.gap) {
-            ModelTile(symbol: isTest ? "gauge.with.dots.needle.67percent" : "arrow.down.circle.fill", color: isTest ? .teal : .blue)
+            IconTile(isTest ? .speed : .downloads, size: TileSize.list)
             VStack(alignment: .leading, spacing: 4) {
                 Text(SpeedFormat.mbps(sample.bps)).font(.body.weight(.semibold)).monospacedDigit().lineLimit(1)
                 HStack(spacing: 12) {

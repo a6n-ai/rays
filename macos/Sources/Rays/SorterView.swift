@@ -588,7 +588,7 @@ private struct UpdateAllRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            SettingIcon(symbol: "exclamationmark.triangle.fill", color: .orange)
+            IconTile(.warning)
             VStack(alignment: .leading, spacing: 4) {
                 Text(count == 1 ? "1 folder needs an update" : "\(count) folders need an update")
                     .font(.callout.weight(.semibold))

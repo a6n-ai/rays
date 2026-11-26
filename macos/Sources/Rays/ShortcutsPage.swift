@@ -80,7 +80,7 @@ struct ShortcutsPage: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: LayoutMetrics.gap) {
-            ModelTile(symbol: "square.2.layers.3d", color: .indigo, size: 44)
+            IconTile(.shortcuts, size: TileSize.hero)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Shortcuts").font(.title2.weight(.semibold))
                 Text("Rays adds actions to the Shortcuts app and to Siri, so you can start downloads and queues from your own automations.")

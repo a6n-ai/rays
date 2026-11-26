@@ -103,7 +103,7 @@ private struct ModelResultRow: View {
 
     var body: some View {
         HStack(spacing: LayoutMetrics.gap) {
-            ModelTile(kind: ModelKind(pipelineTag: hit.pipelineTag))
+            IconTile(ModelKind(pipelineTag: hit.pipelineTag).tile, size: TileSize.list)
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.body.weight(.semibold))

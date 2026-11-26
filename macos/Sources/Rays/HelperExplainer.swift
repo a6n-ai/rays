@@ -9,13 +9,13 @@ struct HelperExplainer: View {
             VStack(alignment: .leading, spacing: 14) {
                 flow
                     .padding(.top, 6)
-                point("checkmark.shield.fill", .green, "What it does",
+                point("checkmark.shield.fill", TilePalette.green, "What it does",
                       "Lets the Rays extension hand a link to the Rays app when you choose Download with Rays.")
-                point("eye.slash.fill", .blue, "What it doesn't do",
+                point("eye.slash.fill", TilePalette.blue, "What it doesn't do",
                       "It doesn't read your browsing, run in the background, or talk to the internet. It only lets our extension reach Rays.")
-                point("square.stack.fill", .orange, "One click for every browser",
+                point("square.stack.fill", TilePalette.orange, "One click for every browser",
                       "Each browser keeps its own helper file. Install All Helpers writes them all at once; Firefox and Zen share one.")
-                point("trash.fill", .gray, "Easy to remove",
+                point(Tile.trash.symbol, Tile.trash.color, "Easy to remove",
                       "Each helper is one small file named ai.a6n.rays.json in the browser's NativeMessagingHosts folder. Delete it to undo.")
             }
             .padding(.vertical, 4)
@@ -27,11 +27,11 @@ struct HelperExplainer: View {
     /// Extension → Helper → Rays, the path a link takes.
     private var flow: some View {
         HStack(spacing: 8) {
-            step("puzzlepiece.extension.fill", .indigo, "Extension", "You right-click a link")
+            step(.browsers, "Extension", "You right-click a link")
             arrow
-            step("link", .purple, "Helper", "Browser lets the link out")
+            step(Tile(symbol: "link", color: TilePalette.purple), "Helper", "Browser lets the link out")
             arrow
-            step("arrow.down.circle.fill", .blue, "Rays", "Download starts")
+            step(.downloads, "Rays", "Download starts")
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -44,13 +44,9 @@ struct HelperExplainer: View {
             .foregroundStyle(.tertiary)
     }
 
-    private func step(_ symbol: String, _ color: Color, _ title: String, _ caption: String) -> some View {
+    private func step(_ tile: Tile, _ title: String, _ caption: String) -> some View {
         VStack(spacing: 6) {
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
-                .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            IconTile(tile, size: 40)
             Text(title).font(.callout.weight(.semibold))
             Text(caption)
                 .font(.caption)
@@ -63,7 +59,7 @@ struct HelperExplainer: View {
 
     private func point(_ symbol: String, _ color: Color, _ title: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            SettingIcon(symbol: symbol, color: color)
+            IconTile(Tile(symbol: symbol, color: color))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.callout.weight(.semibold))
                 Text(text).font(.callout).foregroundStyle(.secondary)

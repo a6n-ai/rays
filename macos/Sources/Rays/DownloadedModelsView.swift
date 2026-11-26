@@ -265,7 +265,7 @@ private struct DownloadedModelRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: LayoutMetrics.gap) {
-                ModelTile(symbol: "shippingbox.fill", color: .gray)
+                IconTile(.localModel, size: TileSize.list)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name)
                         .font(.body.weight(.semibold))

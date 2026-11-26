@@ -6,8 +6,7 @@ struct ReplaceExistingRow: View {
     @AppStorage(SettingsKey.replaceExisting) private var replaceExisting = false
 
     var body: some View {
-        SettingRow(symbol: "doc.on.doc", color: .blue,
-                   title: "If a file with the same name exists", hint: "Applies to every download.") {
+        SettingRow(.duplicates, title: "If a file with the same name exists", hint: "Applies to every download.") {
             Picker("If a file with the same name exists", selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) })) {
                 Text("Keep both").tag(false)
                 Text("Replace (old file goes to the Trash)").tag(true)
@@ -72,8 +71,7 @@ struct ModelSettingsView: View {
         Form {
             Section {
                 ReplaceExistingRow()
-                SettingRow(symbol: "shippingbox.fill", color: .indigo,
-                           title: "AI Models folder", hint: (folder.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath) {
+                SettingRow(.modelsFolder, title: "AI Models folder", hint: (folder.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath) {
                     Button("Show in Finder") { AIModelsFolder.reveal(folder) }
                 }
             }

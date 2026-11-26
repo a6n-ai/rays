@@ -7,15 +7,15 @@ struct ProviderIcon: View {
 
     var body: some View {
         let (symbol, color) = Self.style(provider)
-        SettingIcon(symbol: symbol, color: color)
+        IconTile(Tile(symbol: symbol, color: color))
     }
 
     static func style(_ provider: String) -> (String, Color) {
         switch provider {
-        case "aws": ("shippingbox.fill", Color(hex: 0xFF9900))
+        case "aws": ("shippingbox.fill", Color(hex: 0xC96A00))
         case "r2": ("cloud.fill", Color(hex: 0xF38020))
         case "b2": ("flame.fill", Color(hex: 0xE21E29))
-        case "wasabi": ("leaf.fill", Color(hex: 0x3CB04A))
+        case "wasabi": ("leaf.fill", Color(hex: 0x2A8F37))
         case "spaces": ("drop.fill", Color(hex: 0x0080FF))
         case "gcs": ("g.circle.fill", Color(hex: 0x4285F4))
         case "hetzner": ("h.square.fill", Color(hex: 0xD50C2D))
@@ -24,7 +24,7 @@ struct ProviderIcon: View {
         case "ovh": ("o.circle.fill", Color(hex: 0x123F6D))
         case "oracle": ("o.square.fill", Color(hex: 0xC74634))
         case "alibaba": ("a.square.fill", Color(hex: 0xFF6A00))
-        case "supabase": ("bolt.fill", Color(hex: 0x3ECF8E))
+        case "supabase": ("bolt.fill", Color(hex: 0x178A5C))
         case "tigris": ("pawprint.fill", Color(hex: 0x6F4EF2))
         case "minio": ("m.circle.fill", Color(hex: 0xC72E49))
         default: ("externaldrive.fill", Color(nsColor: .systemGray))

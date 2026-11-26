@@ -47,7 +47,7 @@ struct StatsPage: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: LayoutMetrics.gap) {
-            ModelTile(symbol: "chart.bar.xaxis", color: .green, size: 44)
+            IconTile(.stats, size: TileSize.hero)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Stats").font(.title2.weight(.semibold))
                 Text("How much you downloaded, and from where.")

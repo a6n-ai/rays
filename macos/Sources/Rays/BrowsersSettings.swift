@@ -7,8 +7,7 @@ struct BrowsersTab: View {
     var body: some View {
         Form {
             Section {
-                SettingRow(symbol: "puzzlepiece.extension.fill", color: .indigo,
-                           title: "Rays browser extension", hint: "Right-click any link and choose Download with Rays.") {
+                SettingRow(.browsers, title: "Rays browser extension", hint: "Right-click any link and choose Download with Rays.") {
                     Button("Install All Helpers") { model.installAllHelpers(model.states) }
                         .buttonStyle(.glassProminent)
                         .disabled(!model.states.contains { $0.browser.engine != .safari && $0.helper != .ok })
@@ -189,7 +188,7 @@ private struct RemoveAllHelpersRow: View {
     @State private var confirm = false
 
     var body: some View {
-        SettingRow(symbol: "trash.fill", color: .gray, title: "Remove all helpers",
+        SettingRow(.trash, title: "Remove all helpers",
                    hint: "Disconnects Rays from every browser. Nothing else in your browsers changes.") {
             Button("Remove All Helpers", role: .destructive) { confirm = true }
                 .buttonStyle(.glass)

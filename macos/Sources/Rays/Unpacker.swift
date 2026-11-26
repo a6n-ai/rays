@@ -66,15 +66,13 @@ struct UnpackSettingsRows: View {
     @AppStorage(SettingsKey.trashUnpackedArchive) private var trash = false
 
     var body: some View {
-        SettingRow(symbol: "archivebox.fill", color: .brown,
-                   title: "Unpack archives when done",
+        SettingRow(.unpack, title: "Unpack archives when done",
                    hint: "A finished .zip, .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz or .7z is unpacked into a folder next to it.") {
             Toggle("Unpack archives when done", isOn: $unpack)
                 .toggleStyle(.switch)
                 .labelsHidden()
         }
-        SettingRow(symbol: "trash.fill", color: .orange,
-                   title: "Move the archive to the Trash after unpacking",
+        SettingRow(.trash, title: "Move the archive to the Trash after unpacking",
                    hint: "The archive stays if unpacking fails.") {
             Toggle("Move the archive to the Trash after unpacking", isOn: $trash)
                 .toggleStyle(.switch)

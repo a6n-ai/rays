@@ -57,10 +57,10 @@ enum AIReadiness: Equatable {
 
     var color: Color {
         switch self {
-        case .ready: .green
-        case .downloading: .blue
-        case .notEligible: .red
-        default: .orange
+        case .ready: TilePalette.green
+        case .downloading: TilePalette.blue
+        case .notEligible: TilePalette.red
+        default: TilePalette.orange
         }
     }
 }
@@ -92,7 +92,7 @@ struct AIStatusRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            SettingIcon(symbol: readiness.symbol, color: readiness.color)
+            IconTile(Tile(symbol: readiness.symbol, color: readiness.color))
             VStack(alignment: .leading, spacing: 2) {
                 Text(readiness.title).font(.callout.weight(.semibold))
                 Text(readiness.hint).font(.callout).foregroundStyle(.secondary)

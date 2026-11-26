@@ -10,7 +10,7 @@ struct QueueAppearance: Codable, Equatable {
     static let shared = QueueAppearances()
     static let keyPrefix = "queueAppearance."
     /// Blue is Main's colour; the rest are handed to new queues in turn.
-    static let cycle = ["orange", "purple", "teal", "pink", "green", "indigo", "red", "yellow"]
+    static let cycle = ["orange", "purple", "teal", "pink", "green", "indigo", "red", "sky"]
     static let colors = ["blue"] + cycle
     static let symbols = ["tray.full.fill", "bolt.fill", "moon.stars.fill", "calendar", "clock.fill", "cube.fill",
                           "film.fill", "music.note", "photo.fill", "doc.fill", "shippingbox.fill", "externaldrive.fill",
@@ -33,15 +33,15 @@ struct QueueAppearance: Codable, Equatable {
 
     static func color(named name: String) -> Color {
         switch name {
-        case "orange": .orange
-        case "purple": .purple
-        case "teal": .teal
-        case "pink": .pink
-        case "green": .green
-        case "indigo": .indigo
-        case "red": .red
-        case "yellow": .yellow
-        default: .blue
+        case "orange": TilePalette.orange
+        case "purple": TilePalette.purple
+        case "teal": TilePalette.teal
+        case "pink": TilePalette.pink
+        case "green": TilePalette.green
+        case "indigo": TilePalette.indigo
+        case "red": TilePalette.red
+        case "sky", "yellow": TilePalette.sky
+        default: TilePalette.blue
         }
     }
 
@@ -81,7 +81,7 @@ struct QueueTile: View {
 
     var body: some View {
         let look = QueueAppearances.shared.appearance(for: queue)
-        ModelTile(symbol: look.symbol, color: QueueAppearances.color(named: look.color), size: size)
+        IconTile(Tile(symbol: look.symbol, color: QueueAppearances.color(named: look.color)), size: size)
     }
 }
 
