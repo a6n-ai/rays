@@ -27,6 +27,7 @@ Any MCP client:
 |---|---|---|
 | `add_downloads` | `urls`: list of http, https or `s3://bucket/key` links; `queue` (optional name or id); `best_time` (boolean); `sha256` (optional list, one expected SHA-256 per URL, `null` to skip one); `mirrors` (optional list of link lists, one per URL, extra links for the same file) | Adds them to Rays. They start now, in no queue, unless `queue` is set. With `best_time` they go to the Best time queue instead, and `queue` is ignored. Returns ids and any rejected links. A download whose file does not match its `sha256` fails. |
 | `relink` | `id`: download id; `url`: the new link | Gives a paused or failed download a new link and queues it. The partial file is kept when the new link reports the same size, otherwise the download restarts. |
+| `grab_links` | `url`: a web page link | Lists the downloadable files linked from the page, each with url, name and kind (file extension). Fails if the link is itself a file. Download the ones you want with `add_downloads`. |
 | `list_downloads` | none | Downloads with id, state, bytes done and total, and file name. |
 | `list_queues` | none | Queues with id, name, state (open, waiting for time, waiting for condition, stopped or off), next start and counts of queued and running downloads. |
 | `start_queue` | `queue`: name or id | Starts a queue. On a scheduled queue this is the same as `run_queue_now`. |

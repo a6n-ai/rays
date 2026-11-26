@@ -868,6 +868,10 @@ impl Scheduler {
         signer.list(&self.client, prefix, token.as_deref()).await
     }
 
+    pub async fn grab_links(&self, page_url: &str) -> Result<Vec<crate::grab::GrabbedLink>, EngineError> {
+        crate::grab::grab(&self.client, page_url).await
+    }
+
     pub async fn hf_search(self: &Arc<Self>, query: &str) -> Result<Vec<hf::HfModel>, EngineError> {
         let token = self.hf_token_off_thread().await;
         hf::search(&self.client, &self.hf_base, token.as_deref(), query).await

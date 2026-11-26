@@ -18,6 +18,7 @@ const USAGE: &str = "usage:
   dl add [--queue NAME|ID] [--best-time] [--sha256 HEX] URL [--mirror URL]...
                                 download links into a queue (default: Main), or the Best time queue
   dl relink ID URL              give a paused or failed download a new link and resume it
+  dl grab URL [--json]          list the downloadable files linked from a web page, one URL per line
   dl queues [--json]            list queues with state, next start and job counts
   dl queue start|stop|run NAME|ID
                                 start, stop or run a queue now
@@ -69,6 +70,7 @@ fn read_timeout(req: &Request) -> Duration {
     match req {
         Request::VerifyModel { .. } => Duration::from_secs(3600),
         Request::SpeedTest { .. } => Duration::from_secs(60),
+        Request::Grab { .. } => Duration::from_secs(30),
         _ => Duration::from_secs(10),
     }
 }
@@ -96,7 +98,7 @@ fn main() -> ExitCode {
         }
         [a] if a == "mcp" => return mcp::serve(),
         [a] if a == "--list" || a == "list" => Request::List,
-        [cmd, ..] if ["add", "relink", "queues", "queue", "verify", "speed"].contains(&cmd.as_str()) => match queue_command(&args) {
+        [cmd, ..] if ["add", "relink", "grab", "queues", "queue", "verify", "speed"].contains(&cmd.as_str()) => match queue_command(&args) {
             Ok(req) => req,
             Err(e) => {
                 eprintln!("dl: {e}");
@@ -136,6 +138,16 @@ fn main() -> ExitCode {
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&rows).unwrap_or_default());
+        return ExitCode::SUCCESS;
+    }
+    if args[0] == "grab" {
+        if args.iter().any(|a| a == "--json") {
+            println!("{}", serde_json::to_string_pretty(&reply.grabbed).unwrap_or_default());
+        } else {
+            for l in &reply.grabbed {
+                println!("{}", l.url);
+            }
+        }
         return ExitCode::SUCCESS;
     }
     if let Some(speed) = &reply.speed {
@@ -257,6 +269,8 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
             Ok(Request::Add { urls, queue, best_time, sha256, mirrors })
         }
         [c, id, url] if c == "relink" => Ok(Request::Relink { id: id.parse().map_err(|_| "relink takes a download id and a URL")?, url: url.clone() }),
+        [c, url] if c == "grab" && !url.starts_with('-') => Ok(Request::Grab { url: url.clone() }),
+        [c, url, f] if c == "grab" && f == "--json" && !url.starts_with('-') => Ok(Request::Grab { url: url.clone() }),
         [c] if c == "speed" => Ok(Request::Speed),
         [c, t] if c == "speed" && t == "test" => Ok(Request::SpeedTest { force: false }),
         [c, t, f] if c == "speed" && t == "test" && f == "--force" => Ok(Request::SpeedTest { force: true }),
@@ -488,6 +502,8 @@ mod tests {
         assert!(queue_command(&args(&["queue", "delete", "2"])).is_err());
         assert_eq!(queue_command(&args(&["relink", "7", "https://x/f"])).unwrap(), Request::Relink { id: 7, url: "https://x/f".into() });
         assert!(queue_command(&args(&["relink", "x", "https://x/f"])).is_err());
+        assert_eq!(queue_command(&args(&["grab", "https://x/p", "--json"])).unwrap(), Request::Grab { url: "https://x/p".into() });
+        assert!(queue_command(&args(&["grab"])).is_err());
         assert_eq!(queue_command(&args(&["verify", "/m/x"])).unwrap(), Request::VerifyModel { dir: "/m/x".into() });
     }
 

@@ -1,6 +1,6 @@
 //! Unix socket listener for the `dl` CLI. See design doc "Socket protocol".
 use crate::hf::{self, VerifyStatus};
-use crate::protocol::{self, Added, BestTimeLine, BucketLine, JobLine, ListingLine, ObjectLine, ProviderLine, QueueLine, QueueRef, Rejected, Request, Response, SpeedLine, SpeedTestLine, VerifyLine};
+use crate::protocol::{self, Added, BestTimeLine, BucketLine, GrabLine, JobLine, ListingLine, ObjectLine, ProviderLine, QueueLine, QueueRef, Rejected, Request, Response, SpeedLine, SpeedTestLine, VerifyLine};
 use crate::s3::{self, BucketConfig};
 use crate::scheduler::Scheduler;
 use crate::speed::{BestTime, Confidence};
@@ -107,6 +107,10 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             ..Default::default()
         },
         Ok(Request::Relink { id, url }) => done(sched.relink(id, &url).await),
+        Ok(Request::Grab { url }) => match sched.grab_links(&url).await {
+            Ok(links) => Response { ok: true, grabbed: links.into_iter().map(|l| GrabLine { url: l.url, name: l.name, kind: l.kind }).collect(), ..Default::default() },
+            Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
+        },
         Ok(Request::Queues) => Response { ok: true, queues: sched.queues().into_iter().filter_map(queue_line).collect(), ..Default::default() },
         Ok(Request::Speed) => Response {
             ok: true,

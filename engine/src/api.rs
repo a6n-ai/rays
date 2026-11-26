@@ -222,6 +222,12 @@ impl Engine {
         let sched = Arc::clone(&self.sched);
         self.rt.spawn(async move { sched.relink(id, &url).await }).await.map_err(join_error)?
     }
+    /// Files linked from a web page; fails with "That link is a file, not a page" when the link is a file.
+    pub async fn grab_links(&self, page_url: String) -> Result<Vec<crate::grab::GrabbedLink>, EngineError> {
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { sched.grab_links(&page_url).await }).await.map_err(join_error)?
+    }
+
     pub fn remove(&self, id: JobId, delete_partial: bool) {
         self.sched.remove(id, delete_partial);
     }

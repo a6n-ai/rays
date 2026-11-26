@@ -9,6 +9,7 @@ struct AddBar: View {
     @State private var input = ""
     /// A queue picked from the menu for the next paste only; submitting clears it.
     @State private var chosen: UInt64?
+    @State private var grabPage: String?
     @Namespace private var glass
     let isTargeted: Bool
     /// The queue a paste goes to unless the menu picks another: the page's queue, or 0 for a direct download.
@@ -56,6 +57,9 @@ struct AddBar: View {
                 .keyboardShortcut("l", modifiers: .command)
                 .opacity(0)
                 .frame(width: 0, height: 0)
+        }
+        .sheet(isPresented: Binding(get: { grabPage != nil }, set: { if !$0 { grabPage = nil } })) {
+            if let grabPage { GrabSheet(page: grabPage) }
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: isTargeted)
         .animation(reduceMotion ? nil : .smooth, value: model.notice)
@@ -119,6 +123,12 @@ struct AddBar: View {
             } label: {
                 Label(bestTimeTitle, systemImage: "moon.stars")
             }
+            Button {
+                grabPage = links.first
+            } label: {
+                Label("Find links on page…", systemImage: "doc.text.magnifyingglass")
+            }
+            .disabled(links.count != 1 || !split.mirrors.joined().isEmpty)
         } label: {
             HStack(spacing: 6) {
                 Label("Download", systemImage: "arrow.down")

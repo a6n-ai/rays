@@ -24,6 +24,8 @@ pub enum Request {
     List,
     /// Gives a paused or failed download a new link and queues it.
     Relink { id: u64, url: String },
+    /// Lists the downloadable files linked from a web page.
+    Grab { url: String },
     Queues,
     /// The last speed test and the best time of day to download.
     Speed,
@@ -116,6 +118,8 @@ pub struct Response {
     pub summary: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub listing: Option<ListingLine>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grabbed: Vec<GrabLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed: Option<SpeedLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -191,6 +195,13 @@ pub struct BucketLine {
     pub region: String,
     pub access_key_id: String,
     pub path_style: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct GrabLine {
+    pub url: String,
+    pub name: String,
+    pub kind: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]

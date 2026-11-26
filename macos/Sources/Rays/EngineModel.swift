@@ -163,6 +163,11 @@ final class EngineModel {
 
     func clearNotice() { notice = nil }
 
+    func grabLinks(_ page: String) async throws -> [GrabbedLink] {
+        guard let engine else { return [] }
+        return try await engine.grabLinks(pageUrl: page)
+    }
+
     var providers: [ProviderPreset] { engine?.providers() ?? [] }
 
     /// The preset's endpoint for this region and extra field, or nil while something it needs is missing.

@@ -38,7 +38,7 @@ fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, Str
             "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL),
             "capabilities": { "tools": {} },
             "serverInfo": { "name": "rays", "version": env!("CARGO_PKG_VERSION") },
-            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, relink to give a paused or failed download a new link, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders, speed_test to measure download speed and best_time for the fastest time of day to download."
+            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, relink to give a paused or failed download a new link, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, grab_links to list the files linked from a web page, sorter_status and sort_folder to file downloads into folders, speed_test to measure download speed and best_time for the fastest time of day to download."
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),
@@ -165,6 +165,12 @@ fn tools() -> Value {
             "annotations": { "readOnlyHint": true }
         },
         {
+            "name": "grab_links",
+            "description": "List the downloadable files (archives, installers, video, audio, images, documents, models) linked from a web page: url, name and kind (file extension). Fails if the link is itself a file. Download the ones you want with add_downloads.",
+            "inputSchema": { "type": "object", "properties": { "url": { "type": "string", "description": "An http or https page link." } }, "required": ["url"] },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
             "name": "sorter_status",
             "description": "Watched folders, sorter categories, settings and recent moves, as JSON.",
             "inputSchema": { "type": "object", "properties": {} },
@@ -241,6 +247,10 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
         },
         "list_downloads" => reply_text(ask(&Request::List)),
         "list_buckets" => reply_text(ask(&Request::Buckets)),
+        "grab_links" => match args.get("url").and_then(Value::as_str) {
+            Some(url) => reply_text(ask(&Request::Grab { url: url.to_owned() })),
+            None => Err("url is required".into()),
+        },
         "browse_bucket" => browse(args).and_then(|req| reply_text(ask(&req))),
         "sorter_status" => sorter::output(&["status".into(), "--json".into()]),
         "sort_folder" => sort_args(args).and_then(|a| sorter::output(&a)),
@@ -291,7 +301,7 @@ fn reply_text(reply: Result<Response, String>) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dl_engine::protocol::{Added, JobLine, ListingLine, ObjectLine};
+    use dl_engine::protocol::{Added, GrabLine, JobLine, ListingLine, ObjectLine};
 
     fn fake(req: &Request) -> Result<Response, String> {
         Ok(match req {
@@ -314,6 +324,7 @@ mod tests {
                 }),
                 ..Default::default()
             },
+            Request::Grab { url } => Response { ok: true, grabbed: vec![GrabLine { url: format!("{url}a.zip"), name: "a.zip".into(), kind: "zip".into() }], ..Default::default() },
             other => panic!("unexpected request {other:?}"),
         })
     }
@@ -328,6 +339,14 @@ mod tests {
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("media-p/a.bin") && text.contains("p/sub/"), "{text}");
         let r = ask(r#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"browse_bucket","arguments":{}}}"#).unwrap();
+        assert_eq!(r["result"]["isError"], true);
+    }
+
+    #[test]
+    fn grab_links_returns_the_list_and_needs_a_url() {
+        let r = ask(r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"grab_links","arguments":{"url":"https://x/"}}}"#).unwrap();
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("https://x/a.zip"));
+        let r = ask(r#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"grab_links","arguments":{}}}"#).unwrap();
         assert_eq!(r["result"]["isError"], true);
     }
 
@@ -351,6 +370,7 @@ mod tests {
                 "list_downloads",
                 "list_buckets",
                 "browse_bucket",
+                "grab_links",
                 "sorter_status",
                 "sort_folder",
                 "speed_test",

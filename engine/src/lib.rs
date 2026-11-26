@@ -12,6 +12,8 @@ pub mod download;
 #[cfg(feature = "full")]
 pub mod events;
 #[cfg(feature = "full")]
+pub mod grab;
+#[cfg(feature = "full")]
 pub mod hf;
 #[cfg(feature = "full")]
 pub mod ipc;
