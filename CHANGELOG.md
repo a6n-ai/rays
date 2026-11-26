@@ -1,6 +1,6 @@
 # Release notes
 
-## 0.1.23 (26 Nov 2026)
+## 0.1.24 (26 Nov 2026)
 
 - **Find links on a page.** Paste a web page link and choose **Find links on a page…** from the new **+** menu in the add bar. Rays lists every file the page links to, so you can filter by type, pick the ones you want and download them or add them to a queue. `dl grab` and the MCP tool `grab_links` do the same.
 - **Mirrors.** Several links to the same file on one line, each from a different site, become one download. Each connection uses the fastest link, and a link that fails is dropped while the others carry on. `dl add URL --mirror URL2` and an MCP `mirrors` option.
