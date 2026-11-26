@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Explains the app's Shortcuts actions and the other ways to send links to Rays.
 struct ShortcutsPage: View {
-    @Environment(\.openSettings) private var openSettings
+    @Environment(EngineModel.self) private var model
 
     private struct Action: Identifiable {
         let tile: Tile, title: String, detail: String, phrase: String
@@ -68,11 +68,10 @@ struct ShortcutsPage: View {
                         "Select a link, then choose Download with Rays from the app's Services menu.")
                     way(.browsers, "Browser extension", "Right-click any link in your browser and choose Download with Rays.") {
                         Button("Browser settings") {
-                            UserDefaults.standard.set("browsers", forKey: "settingsTab")
-                            openSettings()
+                            model.requestedDestination = .browsers
                         }
                     }
-                    way(.commandLine, "Command line", "Run dl add followed by a link. Install dl in Settings > General.")
+                    way(.commandLine, "Command line", "Run dl add followed by a link. Install dl on the General page.")
                 }
             }
             .formStyle(.grouped)

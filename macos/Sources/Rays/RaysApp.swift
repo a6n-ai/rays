@@ -11,7 +11,7 @@ struct RaysApp: App {
         Window("Rays", id: "main") {
             ContentView()
                 .environment(appDelegate.model)
-                .background(OpenSettingsAtLaunch())
+                .accentChoice()
         }
         .defaultSize(width: 760, height: 720)
         .windowToolbarStyle(.unified)
@@ -34,18 +34,16 @@ struct RaysApp: App {
                     .pickerStyle(.inline)
                 }
             }
+            CommandGroup(replacing: .appSettings) {
+                SettingsCommand(model: appDelegate.model)
+            }
             CommandGroup(after: .help) {
                 Button("Send feedback…") { Feedback.sendFeedback() }
             }
         }
 
-        Settings {
-            SettingsView()
-                .environment(appDelegate.model)
-        }
-
         MenuBarExtra(isInserted: $showsMenuBar) {
-            MenuBarPanel().environment(appDelegate.model)
+            MenuBarPanel().environment(appDelegate.model).accentChoice()
         } label: {
             MenuBarLabel().environment(appDelegate.model)
         }
@@ -53,14 +51,23 @@ struct RaysApp: App {
     }
 }
 
-// Opens Settings at launch; used for screenshots and support.
-private struct OpenSettingsAtLaunch: View {
-    @Environment(\.openSettings) private var openSettings
+/// The app menu's "Settings…" (⌘,): the General page in the main window, which opens first if it is closed.
+private struct SettingsCommand: View {
+    @Environment(\.openWindow) private var openWindow
+    let model: EngineModel
 
     var body: some View {
-        Color.clear.task {
-            if UserDefaults.standard.bool(forKey: "RaysOpenSettings") { openSettings() }
-        }
+        Button("Settings…") { model.show(.general, openWindow: openWindow) }
+            .keyboardShortcut(",")
+    }
+}
+
+extension EngineModel {
+    /// Selects a page in the main window and brings it forward. A window that is closed opens on that page.
+    func show(_ page: Destination, openWindow: OpenWindowAction) {
+        requestedDestination = page
+        AppDelegate.showInDock()
+        openWindow(id: "main")
     }
 }
 
@@ -109,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `rays://add?url=<encoded>` (repeatable), from the Share extension, puts the links in the add bar.
     /// `rays://install-helpers`, from the browser extension when its helper is missing: installs the helper for every
-    /// installed browser (each only lets the Rays extension in) and shows Settings > Browsers with the result.
+    /// installed browser (each only lets the Rays extension in) and shows the Browsers page with the result.
     func application(_ application: NSApplication, open urls: [URL]) {
         let adds = urls.filter { $0.scheme == "rays" && $0.host() == "add" }
         if !adds.isEmpty {
@@ -131,9 +138,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for browser in BrowserCheck.browsers where browser.engine != .safari && BrowserCheck.appURL(for: browser) != nil {
             try? BrowserCheck.installHelper(browser)
         }
-        UserDefaults.standard.set("browsers", forKey: "settingsTab")
+        model.requestedDestination = .browsers
         Self.showInDock()
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NotificationCenter.default.post(name: .openMainWindow, object: nil)
     }
 
     /// Puts Rays back in the Dock and in front, for a window opened from the menu bar.

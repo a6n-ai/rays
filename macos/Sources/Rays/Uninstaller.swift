@@ -63,7 +63,7 @@ struct UninstallSection: View {
                 Button("Uninstall and delete data", role: .destructive) { start(deleteData: true) }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Rays stops sorting your folders, removes its browser helpers and the dl command, and moves itself to the Trash. Your downloads and sorted files stay where they are. Delete Data also removes download history and settings.")
+                Text("Rays stops sorting your folders, removes its browser helpers and the dl command, and moves itself to the Trash. Your downloads and sorted files stay where they are. Uninstall and delete data also removes download history and settings.")
             }
             ForEach(problems, id: \.self) { ErrorLine(text: $0) }
         } footer: {

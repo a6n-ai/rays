@@ -1,11 +1,14 @@
 import AppKit
 import SwiftUI
 
-struct BrowsersTab: View {
+struct BrowsersPage: View {
     @State private var model = BrowserCheckModel()
 
     var body: some View {
         Form {
+            Section {
+                HeroCard(.browsers, title: "Browsers", subtitle: "Add the Rays extension to send links from your browser.")
+            }
             Section {
                 SettingRow(title: "Rays browser extension", hint: "Right-click any link and choose Download with Rays.") {
                     Button("Install all helpers") { model.installAllHelpers(model.states) }
@@ -37,10 +40,9 @@ struct BrowsersTab: View {
             ForEach(model.others) { other in
                 Section { OtherBrowserRow(browser: other) }
             }
-            SavedNote()
         }
-        .scrollContentBackground(.hidden)
         .formStyle(.grouped)
+        .navigationTitle("Browsers")
         .controlSize(.small)
         .toggleStyle(SettingSwitchStyle())
         .onAppear { model.refresh() }

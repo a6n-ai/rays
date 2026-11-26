@@ -51,6 +51,10 @@ struct ContentView: View {
                     } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
                         destination = .folder(URL(filePath: path, directoryHint: .isDirectory))
                     }
+                    if let requested = model.requestedDestination {
+                        destination = requested
+                        model.requestedDestination = nil
+                    }
                     nav.visit(destination)
                 }
                 .onChange(of: model.pendingAdd) { _, new in if new != nil { destination = .downloads } }
@@ -163,11 +167,11 @@ struct ContentView: View {
                 case .home?:
                     HomePage(selection: $destination)
                 case .general?:
-                    SettingsPagePlaceholder(tile: .general, title: "General")
+                    GeneralPage()
                 case .ai?:
-                    SettingsPagePlaceholder(tile: .ai, title: "AI")
+                    AIPage()
                 case .browsers?:
-                    SettingsPagePlaceholder(tile: .browsers, title: "Browsers")
+                    BrowsersPage()
                 case .schedules?:
                     SchedulesPage(isDropTargeted: isDropTargeted, drafts: drafts)
                 case .queues?:
@@ -325,13 +329,13 @@ extension Notification.Name {
     static let focusAddBar = Notification.Name("ai.a6n.rays.focusAddBar")
     static let openDownloads = Notification.Name("ai.a6n.rays.openDownloads")
     static let openCloud = Notification.Name("ai.a6n.rays.openCloud")
+    static let openMainWindow = Notification.Name("ai.a6n.rays.openMainWindow")
 }
 
 /// First-run / empty Downloads: the three ways to start a download, as glass tiles of equal size.
 /// Glass sits only on things you can press; the background stays the window's material.
 struct WelcomeEmpty: View {
-    @Environment(\.openSettings) private var openSettings
-    @AppStorage("settingsTab") private var settingsTab = "general"
+    @Environment(EngineModel.self) private var model
     @Namespace private var glass
 
     var body: some View {
@@ -357,8 +361,7 @@ struct WelcomeEmpty: View {
                     }
                     tile("tray.and.arrow.down", .green, "Drop files", "Links or .webloc", action: nil)
                     tile("puzzlepiece.extension", .purple, "From your browser", "Right-click a link") {
-                        settingsTab = "browsers"
-                        openSettings()
+                        model.requestedDestination = .browsers
                     }
                 }
             }

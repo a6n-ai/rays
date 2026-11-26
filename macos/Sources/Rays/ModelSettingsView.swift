@@ -14,22 +14,6 @@ struct ReplaceExistingRow: View {
     }
 }
 
-struct HuggingFaceTokenSection: View {
-    var body: some View {
-        Section {
-            HuggingFaceTokenRows()
-        } header: {
-            Text("Hugging Face")
-        } footer: {
-            Text(HuggingFaceTokenRows.note)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-/// The token field and its error line. `card` lays it out as a settings-card row with the note under the title;
-/// otherwise it is bare rows for a Form section that shows the note as its footer.
 struct HuggingFaceTokenRows: View {
     static let note = "For gated and private models. Sent only to huggingface.co, kept in Keychain."
 

@@ -116,6 +116,7 @@ private struct DockTile: View {
 /// The menu bar icon: Rays' own icon, with the overall percent while downloading when sizes are known.
 struct MenuBarLabel: View {
     @Environment(EngineModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         HStack(spacing: 3) {
@@ -131,6 +132,8 @@ struct MenuBarLabel: View {
             }
         }
         .accessibilityLabel(model.activeJobs.isEmpty ? "Rays" : "Rays, \(model.activeJobs.count) downloading")
+        // The label outlives the window, so it can reopen it for a request that arrives while the window is closed.
+        .onReceive(NotificationCenter.default.publisher(for: .openMainWindow)) { _ in openWindow(id: "main") }
     }
 
     /// The stacked pages from Rays' icon as a template image, so the menu bar draws it white or black to match.
@@ -188,7 +191,6 @@ struct MenuBarLabel: View {
 struct MenuBarPanel: View {
     @Environment(EngineModel.self) private var model
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
     @State private var link = ""
     /// Clear hides what is listed now from this panel only; ids grow, so newer downloads show again.
     @AppStorage("menuBarClearedID") private var clearedID = 0
@@ -233,10 +235,7 @@ struct MenuBarPanel: View {
             Divider()
             VStack(spacing: 0) {
                 MenuItem("Open Rays", symbol: "macwindow") { show(nil) }
-                MenuItem("Settings…", symbol: "gearshape") {
-                    AppDelegate.showInDock()
-                    openSettings()
-                }
+                MenuItem("Settings…", symbol: "gearshape") { model.show(.general, openWindow: openWindow) }
                 MenuItem("Quit Rays", symbol: "power", shortcut: "⌘Q") { NSApp.terminate(nil) }
             }
             .padding(6)

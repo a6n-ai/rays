@@ -1,68 +1,6 @@
 import AppKit
 import SwiftUI
 
-struct SettingsView: View {
-    @AppStorage("settingsTab") private var tab = "general"
-    @State private var sorter = SorterModel()
-
-    var body: some View {
-        TabView(selection: $tab) {
-            Tab("General", systemImage: "gearshape", value: "general") {
-                GeneralTab(sorter: sorter)
-            }
-            Tab("Downloads", systemImage: "arrow.down.circle", value: "downloads") {
-                DownloadsTab()
-            }
-            Tab("Sorting", systemImage: "sparkles", value: "sorting") {
-                SortingTab(sorter: sorter)
-            }
-            Tab("Browsers", systemImage: "globe", value: "browsers") {
-                BrowsersTab()
-            }
-        }
-        .containerBackground(.thinMaterial, for: .window)
-        .frame(width: 520)
-    }
-}
-
-private struct GeneralTab: View {
-    @AppStorage(AppearanceChoice.key) private var appearance = AppearanceChoice.system
-    @AppStorage(SettingsKey.menuBar) private var showsMenuBar = true
-    let sorter: SorterModel
-
-    var body: some View {
-        Form {
-            Section {
-                SettingRow(title: "Appearance") {
-                    RadioChoice(title: "Appearance", selection: $appearance, choices: AppearanceChoice.allCases) { Text($0.title) }
-                }
-
-                SaveFolderRow(sorter: sorter)
-
-                SettingRow(title: "Show in menu bar", hint: "Closing the window keeps Rays running.") {
-                    Toggle("Show in menu bar", isOn: $showsMenuBar)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-
-                CopiedLinksRow()
-
-                NotifyRow()
-            }
-
-            CommandLineSection()
-
-            UpdateSettingsSection()
-
-            UninstallSection()
-
-            SavedNote()
-        }
-        .scrollContentBackground(.hidden)
-        .formStyle(.grouped)
-    }
-}
-
 struct SaveFolderRow: View {
     @Environment(EngineModel.self) private var model
     @AppStorage(SettingsKey.downloadsDir) private var customFolder = ""
@@ -171,42 +109,6 @@ struct SpeedLimitRow: View {
     var body: some View {
         SettingRow(title: "Speed limit", hint: "0 means no limit.") {
             SpeedLimitField(bytes: Binding(get: { speedLimit }, set: { model.setSpeedLimit($0) }))
-        }
-    }
-}
-
-/// Also the Download settings page of the Downloads view.
-struct DownloadsTab: View {
-    var body: some View {
-        Form {
-            Section {
-                MaxRunningRow()
-                PartsRow()
-                ReplaceExistingRow()
-            }
-
-            Section { SpeedLimitRow() }
-
-            Section { UnpackSettingsRows() }
-
-            Section { WakePermissionRow() }
-
-            HuggingFaceTokenSection()
-
-            SavedNote()
-        }
-        .scrollContentBackground(.hidden)
-        .formStyle(.grouped)
-    }
-}
-
-struct SavedNote: View {
-    var body: some View {
-        Section {
-            Text("Changes save automatically.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

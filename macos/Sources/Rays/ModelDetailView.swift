@@ -6,7 +6,7 @@ struct ModelDetailView: View {
     let repo: HfRepo
     let destinations: [String: [String: String]]
     @Environment(EngineModel.self) private var model
-    @Environment(\.openSettings) private var openSettings
+    @Environment(NavHistory.self) private var nav
     @AppStorage(SettingsKey.replaceExisting) private var replaceExisting = false
     @State private var selected: Set<String>
     /// nil means the default folder under AI Models.
@@ -179,10 +179,10 @@ struct ModelDetailView: View {
         VStack(alignment: .trailing, spacing: 6) {
             if needsToken {
                 HStack {
-                    Text("This model is gated. Add your Hugging Face token in Settings")
+                    Text("This model is gated. Add your Hugging Face token in the Models settings")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Open System Settings") { openSettings() }
+                    Button("Open Models") { UserDefaults.standard.set(true, forKey: "settingsCard.models"); nav.replaceSub(nil) }
                 }
             }
             if let bannerText {

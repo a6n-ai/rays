@@ -53,7 +53,7 @@ struct SidebarView: View {
     @AppStorage("sidebarFoldersExpanded") private var foldersExpanded = false
     @State private var denied = false
     @State private var activations = 0
-    @Environment(\.openSettings) private var openSettings
+    @AppStorage(SidebarIconSize.key) private var iconSize = SidebarIconSize.medium
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,6 +86,14 @@ struct SidebarView: View {
                 SidebarLabel("Shortcuts", tile: .shortcuts)
                     .tag(Destination.shortcuts)
             }
+            Section {
+                SidebarLabel("General", tile: .general)
+                    .tag(Destination.general)
+                SidebarLabel("AI", tile: .ai)
+                    .tag(Destination.ai)
+                SidebarLabel("Browsers", tile: .browsers)
+                    .tag(Destination.browsers)
+            }
             Section("Folders", isExpanded: $foldersExpanded) {
                 if denied {
                     VStack(alignment: .leading, spacing: 6) {
@@ -108,6 +116,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .environment(\.sidebarRowSize, iconSize.rowSize)
         // Pinned under the list, so it stays put while the sidebar scrolls.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // Animated here, not on the List: an animated List diff crashed in AppKit (0.1.24).
@@ -193,6 +202,7 @@ private struct FolderNode: View {
 struct SidebarLabel: View {
     let title: String
     let tile: Tile
+    @AppStorage(SidebarIconSize.key) private var iconSize = SidebarIconSize.medium
 
     init(_ title: String, tile: Tile) {
         (self.title, self.tile) = (title, tile)
@@ -202,7 +212,7 @@ struct SidebarLabel: View {
         Label {
             Text(title)
         } icon: {
-            IconTile(tile, size: TileSize.sidebar)
+            IconTile(tile, size: iconSize.tile)
         }
     }
 }
@@ -223,16 +233,5 @@ struct HomeRow: View {
             }
         }
         .padding(.vertical, 2)
-    }
-}
-
-/// Stands in for the General, AI and Browsers pages until Task 7.
-struct SettingsPagePlaceholder: View {
-    let tile: Tile
-    let title: String
-
-    var body: some View {
-        HeroCard(tile, title: title, subtitle: "This page is coming.", style: .centered)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
