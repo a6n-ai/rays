@@ -58,7 +58,7 @@ extension Tile {
     static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5, system: .bundled("downloads"))
     static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5, system: .bundled("models"))
     static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .bundled("sorter"))
-    static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48, system: .file("/System/Library/PrivateFrameworks/AOSUI.framework/Versions/A/Resources/iCloud.icns"))
+    static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48, system: .bundled("cloud"))
     static let queues = Tile(symbol: "list.bullet", color: TilePalette.orange, glyphScale: 0.46, system: .bundled("queues"))
     static let schedules = Tile(symbol: "calendar.badge.clock", color: TilePalette.orange, glyphScale: 0.52, system: .bundled("schedules"))
     static let speed = Tile(symbol: "gauge.with.dots.needle.67percent", color: TilePalette.teal, glyphScale: 0.6, system: .bundled("speed"))
