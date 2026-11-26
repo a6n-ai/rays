@@ -9,6 +9,7 @@ enum Destination: Hashable {
     case queues
     case schedules
     case speed
+    case shortcuts
 }
 
 struct SidebarFolder: Identifiable {
@@ -80,6 +81,8 @@ struct SidebarView: View {
                         .transition(.opacity)
                 }
                 SpeedCard().tag(Destination.speed)
+                Label("Shortcuts", systemImage: "square.2.layers.3d")
+                    .tag(Destination.shortcuts)
             }
             Section("Folders", isExpanded: $foldersExpanded) {
                 if denied {

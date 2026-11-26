@@ -5,6 +5,8 @@ description: "How Rays speeds up downloads on Mac: parallel connections, automat
 
 ## Add links
 
+The **+** button at the left of the add bar lists everything you can add: paste links, find links on a page, a cloud bucket, a Hugging Face model, and a checksum or mirror for a link. While you type, a line above the bar counts the links, checksums, mirrors and cloud links Rays found. The menu on the **Download** button picks the queue.
+
 - **Paste:** press **⌘L**, paste, and press **Return**. Paste as many links as you like, one per line, separated by commas or spaces, or a whole CSV. Rays picks out every `http://` and `https://` link and ignores the text around them. The bar shows how many it found, or **No link found**. To check a file, put its SHA-256 (64 hex characters) on the same line as its link, one link per line. A file that does not match fails with **Checksum didn't match** and is deleted, and a matching one shows **Checksum matched**.
 - **Find links on a page:** paste one web page link, open the menu on the download button and choose **Find links on page…**. Rays reads the page and lists the files it links to, all checked. Filter by type, uncheck what you do not want, then choose **Download now** or **Add to queue**. If the link is a file instead of a page, Rays says so.
 - **Share menu:** in Safari, Finder or any app with a Share button, choose **Share** then **Rays** to put the selected links in the add bar in Rays. Press **Download** there to start them.
@@ -19,6 +21,8 @@ Downloads go to `~/Downloads` unless you choose another folder in **Settings > G
 ## Shortcuts
 
 Rays adds actions to the Shortcuts app and to Spotlight: **Add download** (a link and an optional queue), **Start queue**, **Stop queue** and **Run speed test**, which returns the speed, for example `212 Mbps`. Unlike the Share menu, **Add download** starts the download at once, because you built the shortcut. **Run speed test** does not run on a hotspot or a network Rays cannot identify; run it from the Speed page and confirm there.
+
+The **Shortcuts** page in the sidebar lists these actions with their Siri phrases, has a button that opens the Shortcuts app, and explains the other ways to send links to Rays.
 
 ## How Rays downloads
 

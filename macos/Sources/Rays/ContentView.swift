@@ -33,6 +33,8 @@ struct ContentView: View {
                         destination = .queues
                     } else if path == "speed" {
                         destination = .speed
+                    } else if path == "shortcuts" {
+                        destination = .shortcuts
                     } else if path == "models" {
                         destination = .models
                     } else if !path.isEmpty, FileManager.default.fileExists(atPath: path) {
@@ -54,6 +56,7 @@ struct ContentView: View {
                     case .queues?: lastFolder = "queues"
                     case .schedules?: lastFolder = "schedules"
                     case .speed?: lastFolder = "speed"
+                    case .shortcuts?: lastFolder = "shortcuts"
                     default: lastFolder = ""
                     }
                 }
@@ -121,6 +124,8 @@ struct ContentView: View {
                     ModelsView()
                 case .speed?:
                     SpeedPage()
+                case .shortcuts?:
+                    ShortcutsPage()
                 case .schedules?:
                     SchedulesPage(isDropTargeted: isDropTargeted, drafts: drafts)
                 case .queues?:
