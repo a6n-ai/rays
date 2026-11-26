@@ -19,6 +19,8 @@ pub enum Request {
         sha256: Vec<Option<String>>,
     },
     List,
+    /// Gives a paused or failed download a new link and queues it.
+    Relink { id: u64, url: String },
     Queues,
     /// The last speed test and the best time of day to download.
     Speed,

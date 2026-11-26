@@ -17,6 +17,7 @@ const USAGE: &str = "usage:
   dl list                       list downloads (also: dl --list)
   dl add [--queue NAME|ID] [--best-time] [--sha256 HEX] URL...
                                 download links into a queue (default: Main), or the Best time queue
+  dl relink ID URL              give a paused or failed download a new link and resume it
   dl queues [--json]            list queues with state, next start and job counts
   dl queue start|stop|run NAME|ID
                                 start, stop or run a queue now
@@ -95,7 +96,7 @@ fn main() -> ExitCode {
         }
         [a] if a == "mcp" => return mcp::serve(),
         [a] if a == "--list" || a == "list" => Request::List,
-        [cmd, ..] if ["add", "queues", "queue", "verify", "speed"].contains(&cmd.as_str()) => match queue_command(&args) {
+        [cmd, ..] if ["add", "relink", "queues", "queue", "verify", "speed"].contains(&cmd.as_str()) => match queue_command(&args) {
             Ok(req) => req,
             Err(e) => {
                 eprintln!("dl: {e}");
@@ -247,6 +248,7 @@ fn queue_command(args: &[String]) -> Result<Request, String> {
             }
             Ok(Request::Add { urls, queue, best_time, sha256 })
         }
+        [c, id, url] if c == "relink" => Ok(Request::Relink { id: id.parse().map_err(|_| "relink takes a download id and a URL")?, url: url.clone() }),
         [c] if c == "speed" => Ok(Request::Speed),
         [c, t] if c == "speed" && t == "test" => Ok(Request::SpeedTest { force: false }),
         [c, t, f] if c == "speed" && t == "test" && f == "--force" => Ok(Request::SpeedTest { force: true }),
@@ -465,6 +467,8 @@ mod tests {
         assert_eq!(queue_command(&args(&["queue", "run", "Night"])).unwrap(), Request::QueueRunNow { queue: QueueRef::Name("Night".into()) });
         assert_eq!(queue_command(&args(&["queue", "stop", "2"])).unwrap(), Request::QueueStop { queue: QueueRef::Id(2) });
         assert!(queue_command(&args(&["queue", "delete", "2"])).is_err());
+        assert_eq!(queue_command(&args(&["relink", "7", "https://x/f"])).unwrap(), Request::Relink { id: 7, url: "https://x/f".into() });
+        assert!(queue_command(&args(&["relink", "x", "https://x/f"])).is_err());
         assert_eq!(queue_command(&args(&["verify", "/m/x"])).unwrap(), Request::VerifyModel { dir: "/m/x".into() });
     }
 

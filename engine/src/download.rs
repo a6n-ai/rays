@@ -84,7 +84,11 @@ pub fn host_port(url: &str) -> Option<String> {
 /// The failure text for a status. `answered` is the URL that answered, after redirects, so a CDN's 401 keeps its status;
 /// `job_url` is the URL the job asked for, which names the model.
 /// `error_code` is Hugging Face's `X-Error-Code` header: it separates a gated repo from one that does not exist, both of which answer 401 without a token.
-fn http_failure(hf: &HfAccess, job_url: &str, answered: &str, status: u16, error_code: Option<&str>) -> String {
+/// Prefix of the failure text when a link that was already transferring starts refusing; `JobView::link_expired` keys on it.
+pub const LINK_EXPIRED: &str = "Link expired";
+
+/// `started` is true when bytes of the file are already on disk: a 403, 404 or 410 then means the link expired.
+fn http_failure(hf: &HfAccess, job_url: &str, answered: &str, status: u16, error_code: Option<&str>, started: bool) -> String {
     let sent_token = hf.token.is_some() && hf.covers(job_url);
     match status {
         401 if hf.covers(answered) && sent_token => "Hugging Face rejected the saved token. Check it in Settings".into(),
@@ -96,6 +100,7 @@ fn http_failure(hf: &HfAccess, job_url: &str, answered: &str, status: u16, error
             Some(page) => format!("Accept this model's license at {page}"),
             None => "Accept this model's license on huggingface.co".into(),
         },
+        403 | 404 | 410 if started => format!("{LINK_EXPIRED} (HTTP {status})"),
         _ => format!("HTTP {status}"),
     }
 }
@@ -357,7 +362,7 @@ async fn run_attempt(
             env.note_retry_after(&resp);
             return Err(Stop::Retry(format!("HTTP {status}")));
         }
-        _ => return Err(Stop::Failed(http_failure(&env.hf, &url, resp.url().as_str(), status, error_code(&resp)))),
+        _ => return Err(Stop::Failed(http_failure(&env.hf, &url, resp.url().as_str(), status, error_code(&resp), have > 0))),
     }
 
     let ranged = status == 206;
@@ -1186,7 +1191,7 @@ async fn segment_attempt(
                     shared.env.note_retry_after(&resp);
                     return Err(Stop::Retry(format!("HTTP {status}")));
                 }
-                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, resp.url().as_str(), status, error_code(&resp)))),
+                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, resp.url().as_str(), status, error_code(&resp), shared.env.live.done.load(Ordering::Relaxed) > 0))),
             }
             resp
         }
@@ -1424,9 +1429,11 @@ mod tests {
     fn license_text_falls_back_without_a_repo() {
         let hf = HfAccess { host: "huggingface.co:443".into(), token: None };
         let url = "https://huggingface.co/resolve/abc/w.gguf";
-        assert_eq!(http_failure(&hf, url, url, 403, None), "Accept this model's license on huggingface.co");
+        assert_eq!(http_failure(&hf, url, url, 403, None, false), "Accept this model's license on huggingface.co");
+        assert_eq!(http_failure(&hf, "https://a.test/f", "https://a.test/f", 403, None, true), "Link expired (HTTP 403)");
+        assert_eq!(http_failure(&hf, "https://a.test/f", "https://a.test/f", 404, None, false), "HTTP 404");
         let url = "https://huggingface.co/org/repo/x/resolve/abc/w.gguf";
-        assert_eq!(http_failure(&hf, url, url, 403, None), "Accept this model's license on huggingface.co");
+        assert_eq!(http_failure(&hf, url, url, 403, None, false), "Accept this model's license on huggingface.co");
     }
 
     /// Drives `Grow` on a synthetic link: `speed(n)` bytes/s with `n` connections. Returns the count held most

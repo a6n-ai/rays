@@ -374,6 +374,13 @@ final class EngineModel {
 
     func resume(_ id: UInt64) { engine?.resume(id: id) }
 
+    func relink(_ id: UInt64, to url: String) {
+        Task {
+            do { try await engine?.relink(id: id, url: url.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            catch { notice = "Couldn't update the link: \(error.localizedDescription)" }
+        }
+    }
+
     func remove(_ id: UInt64, deletePartial: Bool) { engine?.remove(id: id, deletePartial: deletePartial) }
 
     /// Finished files go to the Trash (so the user can put them back); unfinished ones lose their partial file.
@@ -601,6 +608,10 @@ extension JobView {
 
     var isDone: Bool {
         if case .done = state { true } else { false }
+    }
+
+    var isFailed: Bool {
+        if case .failed = state { true } else { false }
     }
 
     var isFinished: Bool {

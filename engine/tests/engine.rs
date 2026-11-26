@@ -239,6 +239,56 @@ fn add_downloads_file_with_matching_sha() {
     engine.shutdown();
 }
 
+fn relink(engine: &Engine, id: JobId, url: String) -> Result<(), EngineError> {
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("test runtime");
+    rt.block_on(engine.relink(id, url))
+}
+
+/// A job stalled after `STALL_AT` bytes on `origin`, paused, with its bytes on disk.
+fn paused_with_bytes(engine: &Engine, origin: &Origin) -> (JobId, u64) {
+    origin.set_stall(true);
+    let id = add_one(engine, origin.url("/file/x.bin"));
+    wait_view(engine, id, "running with bytes", |v| v.state == JobState::Running && v.done > 0);
+    engine.pause(id);
+    let v = wait_view(engine, id, "paused", |v| v.state == JobState::Paused);
+    (id, v.done)
+}
+
+#[test]
+fn relink_with_the_same_size_keeps_the_bytes_and_resumes() {
+    setup();
+    let (old, new) = (Origin::start(), Origin::start());
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let (id, kept) = paused_with_bytes(&engine, &old);
+    assert!(kept > 0);
+    relink(&engine, id, new.url("/file/x.bin")).expect("relink");
+    let v = view(&engine, id).unwrap();
+    assert_eq!(v.done, kept);
+    assert_eq!(v.url, new.url("/file/x.bin"));
+    let path = wait_done(&engine, id);
+    assert_eq!(sha_of(&path), sha(&payload()));
+    engine.shutdown();
+}
+
+#[test]
+fn relink_with_a_different_size_restarts() {
+    setup();
+    let old = Origin::start();
+    let other = payload_of(SIZE + 4096);
+    let new = Origin::serve_data(Arc::new(other.clone()));
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let (id, kept) = paused_with_bytes(&engine, &old);
+    assert!(kept > 0);
+    relink(&engine, id, new.url("/file/x.bin")).expect("relink");
+    assert!(view(&engine, id).unwrap().done < kept);
+    let path = wait_done(&engine, id);
+    assert_eq!(sha_of(&path), sha(&other));
+    assert!(relink(&engine, id, new.url("/file/x.bin")).is_err(), "a finished job cannot be relinked");
+    engine.shutdown();
+}
+
 #[test]
 fn add_with_checks_the_given_sha256() {
     setup();

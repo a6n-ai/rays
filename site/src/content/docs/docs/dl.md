@@ -23,6 +23,7 @@ dl URL...                     download links with Rays
 dl s3://BUCKET/KEY            download an object from a bucket added to Rays
 dl list                       list downloads (also: dl --list)
 dl add [--queue NAME|ID] [--sha256 HEX] URL...   download links into a queue
+dl relink ID URL              give a paused or failed download a new link
 dl queues [--json]            list queues
 dl queue start|stop|run NAME|ID
 dl verify FOLDER              check a downloaded model folder

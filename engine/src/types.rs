@@ -55,6 +55,8 @@ pub struct JobView {
     pub waiting: Option<String>,
     /// True when the job has an expected SHA-256 and the finished file matched it.
     pub verified: bool,
+    /// True when the job failed because a link that had started transferring stopped working; "Update link" fixes it.
+    pub link_expired: bool,
 }
 
 /// One range of a split download, for drawing a segmented progress bar.

@@ -10,6 +10,8 @@ struct JobRow: View {
     @State private var confirmStop = false
     @State private var confirmRemove = false
     @State private var isHovered = false
+    @State private var showRelink = false
+    @State private var newLink = ""
 
     private enum Primary {
         case pause, stop, resume, retry, reveal, removeFromList
@@ -102,6 +104,13 @@ struct JobRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(([job.name] + statusParts.map(\.text)).joined(separator: ", "))
         .accessibilityActions { if let primary { Button(primary.title) { perform(primary) } } }
+        .alert("Update link", isPresented: $showRelink) {
+            TextField("https://", text: $newLink)
+            Button("Update") { model.relink(job.id, to: newLink) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Paste a new link for \(job.name). The part already saved is kept if the new link is the same file.")
+        }
         .confirmationDialog(
             "Stopping loses \(byteText(job.done)) of progress. Stop anyway?",
             isPresented: $confirmStop, titleVisibility: .visible
@@ -184,6 +193,7 @@ struct JobRow: View {
                     Text(Links.clickable(part.text)).foregroundStyle(part.tint)
                 }
             }
+            if job.linkExpired { Button("Update link…") { askForLink() }.buttonStyle(.link) }
             slowHint
         }
         .font(.callout)
@@ -235,7 +245,7 @@ struct JobRow: View {
                     : [Part("Deleted or moved out of Downloads", symbol: "questionmark.folder")]
             }
         case .failed(let reason):
-            parts = [Part(Self.humanFailure(reason))]
+            parts = [Part(job.linkExpired ? "Link expired" : Self.humanFailure(reason))]
         }
         if !job.resumable && (job.isActive || job.state == .paused) {
             parts.append(Part("Can't resume", symbol: "exclamationmark.arrow.circlepath", tint: .orange))
@@ -332,6 +342,13 @@ struct JobRow: View {
         .accessibilityLabel("More actions for \(job.name)")
     }
 
+    private func askForLink() {
+        let pasted = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let isLink = ["http://", "https://"].contains { pasted.lowercased().hasPrefix($0) } && !pasted.contains(where: \.isWhitespace)
+        newLink = isLink ? pasted : ""
+        showRelink = true
+    }
+
     private func perform(_ action: Primary) {
         switch action {
         case .pause: model.pause(job.id)
@@ -359,6 +376,9 @@ struct JobRow: View {
             NSPasteboard.general.setString(job.url, forType: .string)
         } label: {
             Label("Copy Link", systemImage: "link")
+        }
+        if job.state == .paused || job.isFailed {
+            Button { askForLink() } label: { Label("Update Link…", systemImage: "link.badge.plus") }
         }
         Menu {
             Button {

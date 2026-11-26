@@ -106,6 +106,7 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
                 .collect(),
             ..Default::default()
         },
+        Ok(Request::Relink { id, url }) => done(sched.relink(id, &url).await),
         Ok(Request::Queues) => Response { ok: true, queues: sched.queues().into_iter().filter_map(queue_line).collect(), ..Default::default() },
         Ok(Request::Speed) => Response {
             ok: true,

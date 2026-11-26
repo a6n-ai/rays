@@ -217,6 +217,11 @@ impl Engine {
         self.sched.resume(id);
     }
 
+    /// Gives a paused or failed job a new link and queues it; see `Scheduler::relink`.
+    pub async fn relink(&self, id: JobId, url: String) -> Result<(), EngineError> {
+        let sched = Arc::clone(&self.sched);
+        self.rt.spawn(async move { sched.relink(id, &url).await }).await.map_err(join_error)?
+    }
     pub fn remove(&self, id: JobId, delete_partial: bool) {
         self.sched.remove(id, delete_partial);
     }

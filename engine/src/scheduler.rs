@@ -602,6 +602,57 @@ impl Scheduler {
         }
     }
 
+    /// Points a paused, failed or queued job at a new link and queues it. The `.part` is kept when the new link
+    /// reports the same size (and the same ETag when both links have one); otherwise the download restarts.
+    pub async fn relink(self: &Arc<Self>, id: JobId, url: &str) -> Result<(), EngineError> {
+        let invalid = |msg: String| EngineError::InvalidUrl { msg };
+        self.check_url(url).map_err(invalid)?;
+        let live = self.find(id).ok_or_else(|| invalid("no such download".into()))?;
+        let idle = |s: &JobState| matches!(s, JobState::Paused | JobState::Failed { .. } | JobState::Queued);
+        if !idle(&lock(&live.job).state) {
+            return Err(invalid("pause the download before changing its link".into()));
+        }
+        let target = self.sign_for(url).map_err(invalid)?.map_or_else(|| url.to_owned(), |sign| sign());
+        let probe = self.client.get(&target).header(reqwest::header::RANGE, "bytes=0-0").send();
+        let io = |msg: String| EngineError::Io { msg };
+        let resp = tokio::time::timeout(Duration::from_secs(15), probe)
+            .await
+            .map_err(|_| io("the new link did not answer".into()))?
+            .map_err(|e| io(format!("the new link: {e}")))?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(io(format!("the new link answered HTTP {}", status.as_u16())));
+        }
+        let header = |name| resp.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
+        let new_total = header(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.rsplit('/').next()?.parse::<u64>().ok())
+            .or_else(|| if status.as_u16() == 200 { resp.content_length() } else { None });
+        let new_etag = header(reqwest::header::ETAG);
+        let new_modified = header(reqwest::header::LAST_MODIFIED);
+        let mut job = lock(&live.job);
+        if !idle(&job.state) {
+            return Err(invalid("the download started while its link was being checked".into()));
+        }
+        let same_size = job.total == new_total || job.total.is_none();
+        let same_etag = job.etag.is_none() || new_etag.is_none() || job.etag == new_etag;
+        if !(same_size && same_etag) {
+            let _ = std::fs::remove_file(&job.part_path);
+            job.segments.clear();
+            job.done = 0;
+            live.done.store(0, Ordering::Relaxed);
+            job.total = new_total;
+            job.etag = new_etag;
+            job.last_modified = new_modified;
+        }
+        job.url = url.to_owned();
+        job.state = JobState::Queued;
+        let _ = self.store.save(&job);
+        drop(job);
+        self.hub.state_changed(id);
+        self.refresh();
+        Ok(())
+    }
+
     pub fn remove(self: &Arc<Self>, id: JobId, delete_partial: bool) {
         let removed = {
             let mut jobs = lock(&self.jobs);
@@ -1086,6 +1137,7 @@ impl Scheduler {
             queue_id: job.queue_id,
             waiting: if job.state == JobState::Queued { self.waiting_reason(job.queue_id) } else { None },
             verified: job.sha256.is_some() && matches!(job.state, JobState::Done { .. }),
+            link_expired: matches!(&job.state, JobState::Failed { reason } if reason.starts_with(download::LINK_EXPIRED)),
         }
     }
 

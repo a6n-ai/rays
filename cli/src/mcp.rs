@@ -38,7 +38,7 @@ fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, Str
             "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL),
             "capabilities": { "tools": {} },
             "serverInfo": { "name": "rays", "version": env!("CARGO_PKG_VERSION") },
-            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders, speed_test to measure download speed and best_time for the fastest time of day to download."
+            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, relink to give a paused or failed download a new link, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, sorter_status and sort_folder to file downloads into folders, speed_test to measure download speed and best_time for the fastest time of day to download."
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),
@@ -95,6 +95,15 @@ fn tools() -> Value {
                     "sha256": { "type": "array", "items": { "type": ["string", "null"] }, "description": "Optional expected SHA-256 (64 hex characters) for each url, same order; null skips one. A download that does not match fails." }
                 },
                 "required": ["urls"]
+            }
+        },
+        {
+            "name": "relink",
+            "description": "Give a paused or failed download (for example one that failed with Link expired) a new link and queue it. The partial file is kept when the new link reports the same size, otherwise the download restarts.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "id": { "type": "integer", "description": "Download id from list_downloads." }, "url": { "type": "string" } },
+                "required": ["id", "url"]
             }
         },
         {
@@ -207,6 +216,10 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
             let force = args.get("force").and_then(Value::as_bool).unwrap_or(false);
             reply_text(ask(&Request::SpeedTest { force }))
         }
+        "relink" => match (args.get("id").and_then(Value::as_u64), args.get("url").and_then(Value::as_str)) {
+            (Some(id), Some(url)) => reply_text(ask(&Request::Relink { id, url: url.to_owned() })),
+            _ => Err("id and url are required".into()),
+        },
         "best_time" => reply_text(ask(&Request::Speed)),
         "list_queues" => reply_text(ask(&Request::Queues)),
         "start_queue" => queue_req(args, |queue| Request::QueueStart { queue }).and_then(|req| reply_text(ask(&req))),
@@ -319,6 +332,7 @@ mod tests {
             names,
             [
                 "add_downloads",
+                "relink",
                 "list_queues",
                 "start_queue",
                 "stop_queue",
