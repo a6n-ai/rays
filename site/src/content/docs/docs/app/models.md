@@ -41,7 +41,7 @@ Files that already exist with the same name follow the **If a file with the same
 
 ## Verify a download
 
-On the **Downloaded** tab, hover a model or open its **⋯** menu and choose **Verify files**. Rays checks each file against the record it saved when the file downloaded: its size and SHA-256 checksum. The check runs on your Mac and doesn't go online.
+Open **Downloaded models** on the **Models** page, then hover a model or open its **⋯** menu and choose **Verify files**. Rays checks each file against the record it saved when the file downloaded: its size and SHA-256 checksum. The check runs on your Mac and doesn't go online.
 
 The result is one of:
 
@@ -55,7 +55,7 @@ With no record of the download, click **Look up on Hugging Face**. Rays checks t
 
 ## Gated and private models
 
-Some models need a Hugging Face access token. Add it under **Settings > Downloads > Hugging Face > Access token**. It is stored in the macOS Keychain and sent only to huggingface.co.
+Some models need a Hugging Face access token. Add it in the **Settings** card at the top of the **Models** page, in **Hugging Face token**. The card also has **AI Models folder**, where model downloads go. It is stored in the macOS Keychain and sent only to huggingface.co. Where a message below says "Settings", it means this card.
 
 - **Gated, no token:** "This model is gated: add your Hugging Face token in Settings".
 - **Not found, no token:** "Couldn't find this model on Hugging Face. If it's private or gated, add your Hugging Face token in Settings." Hugging Face answers the same way for a repo that doesn't exist and a private one.

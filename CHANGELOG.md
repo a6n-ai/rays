@@ -1,5 +1,19 @@
 # Release notes
 
+## 0.1.27 (27 Nov 2026)
+
+- **Rays looks like System Settings.** Every page starts with a page card, then a folding **Settings** card with that page's own settings, then its content in cards. The sidebar has icon tiles, and where a match exists Rays uses the real macOS icon, such as iCloud, Reminders, Calendar or Software Update. Remove and uninstall actions are red text at the bottom of the page.
+- **Home.** The new top **Rays** row in the sidebar lists every page, with the version and a link to the docs.
+- **Navigation.** The toolbar has only back and forward buttons (⌘[ and ⌘]) and the page title. Activity, History, Files, Browse, Downloaded and Sorted files are rows with › arrows on their pages.
+- **No Settings window.** The sidebar has new **General**, **AI** and **Browsers** pages, and ⌘, opens General. General holds appearance (Light, Dark or Auto), accent colour (Multicolour or one of 8 colours), sidebar icon size, show in menu bar, the command line tool, updates and uninstall. Each other setting moved to its page: Downloads settings (save folder, copied links, notifications, downloads at once, parts, speed limit, unpack, same name) to Downloads, the Hugging Face token to Models, wake permission to Schedules and Queues, and queue defaults to Queues. Speed test settings are on the Speed test page.
+- **Unpack archives when done.** Off by default. A finished `.zip`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz` or `.7z` is unpacked next to itself, and can move the archive to the Trash afterwards. An archive that holds one item gives you that item.
+- **Login headers.** For downloads that need a login: `dl add --header 'Name: value'`, the add sheet's **Headers** field and the MCP `headers` option. Headers are for one site per call and are deleted when the download finishes.
+- **Stats.** A new page shows what you downloaded over 7, 30 or 90 days, the busiest days and your top sites. `dl stats` and the MCP `stats` tool give the same numbers.
+- **Menu bar.** While downloading, the menu bar shows the overall percentage, then the speed.
+- Fixed cards in light mode.
+- Fixed a missing notification, and missing unpacking, for small downloads that finish before their first update.
+- Fixed headers: they are never sent to another site, including after a redirect, and are removed from Rays' saved data when the download ends.
+
 ## 0.1.26 (26 Nov 2026)
 
 - Fixed a crash when downloads were added or removed quickly, for example clicking **Remove** on several rows in a row.

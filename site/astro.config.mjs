@@ -69,7 +69,7 @@ export default defineConfig({
 						{ label: 'Sorter', link: '/docs/app/sorter/', attrs: { 'data-icon': 'sorter' } },
 						{ label: 'Models', link: '/docs/app/models/', attrs: { 'data-icon': 'models' } },
 						{ label: 'Browser extension', link: '/docs/app/browser/', attrs: { 'data-icon': 'browser' } },
-						{ label: 'Settings', link: '/docs/app/settings/', attrs: { 'data-icon': 'settings' } },
+						{ label: 'General, AI and Browsers', link: '/docs/app/settings/', attrs: { 'data-icon': 'settings' } },
 					],
 				},
 				{

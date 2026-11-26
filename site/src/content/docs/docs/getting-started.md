@@ -33,10 +33,21 @@ You can also drop links, text that contains links, or `.webloc` files on the win
 ## 3. Turn on sorting
 
 1. Click **Sorter** in the sidebar.
-2. Check that **On-device AI is ready**.
-3. Under **Folders**, click **Add Folder…** and pick your Downloads folder (or click **Add Desktop**).
+2. Open the **Settings** card and check that **On-device AI is ready**.
+3. Click **Add folder…** and pick your Downloads folder.
 
 From now on, a few seconds after a file lands in that folder, Rays moves it into a folder like Installers, Archives, Images or Work. See [Sorter](/docs/app/sorter/).
+
+## Find your way around
+
+Rays opens on **Home**, the top **Rays** row in the sidebar. Home is a list of every page, grouped in cards, with the version and a link to these docs. Click a row to go there.
+
+- **Sidebar.** Downloads, Models, Sorter and Cloud; Queues and Schedules; Speed test, Stats and Shortcuts; then **General**, **AI** and **Browsers**. Watched folders sit under them.
+- **Every page** starts with a page card that says what the page is and has its main buttons. Below it a folding **Settings** card holds that page's own settings, then the content in cards. Click the Settings card's header to fold or unfold it.
+- **Drill-in rows.** Parts of a page that used to be tabs, such as **Activity**, **History**, **Files**, **Browse**, **Downloaded** and **Sorted files**, are rows with a › arrow. Click one to open it.
+- **Back and forward.** The toolbar has only back and forward buttons (**⌘[** and **⌘]**) and the page title.
+- **Red text** at the bottom of a page, such as **Remove sorter…** or **Uninstall Rays…**, removes or uninstalls something.
+- **Settings.** There is no separate Settings window. Each setting lives on the page it belongs to. App-wide ones are on **General**, and **⌘,** opens it. See [General, AI and Browsers](/docs/app/settings/).
 
 ## Next steps
 

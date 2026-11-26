@@ -32,17 +32,15 @@ Like other categories, AI Models can go to another folder under **Where files go
 
 Sorting runs on your Mac with Apple's on-device model. Nothing is uploaded.
 
-![The Sorter Setup tab: on-device AI ready, sort new files after 10 seconds, rename files from their content, and the Documents and Downloads folders.](../../../../assets/sorter.png)
-
 ## Set up
 
-Open **Sorter** in the sidebar. The **Setup** tab (the sliders icon in the toolbar) has:
+Open **Sorter** in the sidebar. The page card has **Add folder…**, **Sort all now** and a **⋯** menu. Below it, the folding **Settings** card has:
 
 - **On-device AI**: shows whether Apple Intelligence is ready.
 - **Sort new files after**: how long Rays waits after a file arrives, so you can open or move it first. 10 seconds is recommended.
 - **Rename files from their content**: gives files clear names from what is inside them. Turn it off to keep original names; files are still sorted.
-- **Folders**: the folders Rays watches. Each row has icons to sort now, show in Finder, and stop watching. Use **Add Folder…** or **Add Desktop** to add more.
-- **Remove Sorter…**: stops sorting every folder.
+- **Watched folders**, below the Settings card: the folders Rays watches. A row's menu has **Sort now**, **Show in Finder** and **Stop watching…**. Use **Add folder…** in the page card to add more.
+- **Remove sorter…**: red text at the bottom of the page. It stops sorting every folder.
 
 Files that were in a folder before you added it stay where they are. To sort those too, run `dl sort FOLDER --all`.
 
@@ -52,10 +50,10 @@ Click a folder row to open it. Under **Where files go**, pick a category to send
 
 ## Browse sorted files
 
-- **Files** tab (the folder icon): your sorted folders as a Finder-style list or as icons. Double-click a folder to open it, or a file to open it in its app. Right-click for **Open**, **Show in Finder** and **Copy Path**.
-- **Recent** tab (the clock icon): the latest moves. Double-click a row to open the file; the round folder button shows it in Finder. On hover, **Move Back** returns the file to the folder it came from, under its original name, and the sorter leaves it there. **⋯** adds AirDrop, Share and Copy Path.
+- **Sorted files** (a row with a › arrow under the Settings card): your sorted folders as a Finder-style list or as icons. Double-click a folder to open it, or a file to open it in its app. Right-click for **Open**, **Show in Finder** and **Copy Path**.
+- **Recently sorted**, on the Sorter page: the latest moves. Double-click a row to open the file; the round folder button shows it in Finder. On hover, **Move Back** returns the file to the folder it came from, under its original name, and the sorter leaves it there. **⋯** adds AirDrop, Share and Copy Path.
 - A file moved or deleted since it was sorted shows **Moved or deleted since**; its round button removes it from the list, and **Remove Missing** clears them all. This hides the row in Rays only.
 
 ## Update older sorter setups
 
-If you used the sorter before it was built into Rays, the Setup tab shows **Update All**. It switches those folders to the sorter inside Rays. Nothing is moved.
+If you used the sorter before it was built into Rays, the Sorter page shows **Update all**. It switches those folders to the sorter inside Rays. Nothing is moved.

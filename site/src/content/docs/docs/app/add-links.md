@@ -13,9 +13,9 @@ The **+** button at the left of the add bar lists everything you can add: paste 
 - **Browser:** right-click a link and choose **Download with Rays** ([Browser extension](/docs/app/browser/)).
 - **Terminal:** `dl https://github.com/a6n-ai/rays/releases/latest/download/Rays.dmg` ([The dl command](/docs/dl/)).
 
-- **Copy:** copy a download link anywhere on your Mac and Rays offers to download it in a notification. Turn this off with **Offer copied download links** in Settings.
+- **Copy:** copy a download link anywhere on your Mac and Rays offers to download it in a notification. Turn this off with **Offer copied download links** in the Downloads page's Settings card.
 
-Downloads go to `~/Downloads` unless you choose another folder in **Settings > General**.
+Downloads go to `~/Downloads` unless you choose another folder with **Save downloads to** in the Downloads page's Settings card.
 
 ## Links that keep working
 - **Checksums.** Put a SHA-256 (64 hex characters) on the same line as a link, or choose **Add a checksum…** in the **+** menu, with one link per line. When the file finishes, Rays checks it. A file that does not match fails with **Checksum didn't match** and is deleted, and a matching one shows **Checksum matched**. `dl add --sha256` does the same from Terminal.

@@ -1,36 +1,34 @@
 ---
-title: "Rays settings"
-description: "Every Rays setting explained: appearance, download folder, parallel downloads, speed limit, sorting, browser helpers, the dl command and uninstalling."
+title: "General, AI and Browsers"
+description: "The Rays General, AI and Browsers pages: appearance, accent colour, menu bar, command line tool, updates, uninstalling, on-device AI and browser helpers."
 ---
 
-Open Settings with **⌘,** or the gear in the toolbar. Changes save as you make them.
+Rays has no separate Settings window. **General**, **AI** and **Browsers** are pages at the bottom of the sidebar. **⌘,** (or **Settings…** in the Rays menu or menu bar panel) opens **General**. Changes save as you make them.
+
+Every other setting sits on the page it belongs to, in the folding **Settings** card below the page card:
+
+- **Downloads:** save folder, copied links, notifications, downloads at once, parts per file, speed limit, unpack archives and same name. See [Downloads](/docs/app/downloads/).
+- **Models:** AI Models folder and Hugging Face token. See [Models](/docs/app/models/).
+- **Sorter:** on-device AI status, sort delay and rename from content. See [Sorter](/docs/app/sorter/).
+- **Queues:** defaults for new queues and wake permission. See [Queues and schedules](/docs/app/queues/).
+- **Schedules:** wake permission.
+- **Speed test:** automatic tests, night tests and clearing history. See [Speed test and best time](/docs/app/speed/).
+- **Cloud:** adding a bucket. See [S3 buckets](/docs/s3/).
 
 ## General
 
-- **Appearance**: System, Light or Dark.
-- **Download folder**: where new downloads go. **Change…** picks a folder, **Reset** goes back to `~/Downloads`. Downloads already running finish where they started.
-- **Show in menu bar**: the Rays icon in the menu bar, with download progress and quick actions. While it is on, closing the window keeps Rays running.
-- **Offer copied download links**: when you copy a download link, Rays offers to download it in a notification.
-- **Notify when downloads finish**: on by default. Rays posts a notification when a download finishes or fails. Finished ones have **Open** and **Show in Finder**; failed ones have **Retry**. Downloads that end within a couple of seconds of each other are grouped, and more than three become one summary.
-- **Command line tool**: **Install** puts the `dl` command that ships inside Rays on your PATH; **Remove** takes it off. It never replaces another program named `dl`.
-- **Uninstall Rays…**: removes the sorter from every folder, the browser helpers and the `dl` command, then moves Rays to the Trash. **Uninstall and Delete Data** also removes history and settings. Only available when Rays is in Applications.
-- **Updates**: your version, **Check for Updates**, and whether Rays checks automatically. **Update** downloads the new version, checks it, replaces Rays and reopens it. This works without an administrator account: when Rays can't add files to Applications, it replaces its own files in place.
+- **Appearance:** **Light**, **Dark** or **Auto**. Auto follows macOS.
+- **Colour:** the accent colour. **Multicolour** gives each page's icon its own colour. Blue, purple, pink, red, orange, yellow, green and graphite use one colour for the icons.
+- **Sidebar icon size:** small, medium or large.
+- **Show in menu bar:** the Rays icon in the menu bar, with download progress and quick actions. While it is on, closing the window keeps Rays running.
+- **Command line tool:** **Install** puts the `dl` command that ships inside Rays on your PATH; **Remove** takes it off. It never replaces another program named `dl`.
+- **Updates:** your version and **Check for updates**, or **Update to** a new version, and whether Rays checks automatically. An update downloads the new version, checks it, replaces Rays and reopens it. This works without an administrator account: when Rays can't add files to Applications, it replaces its own files in place.
+- **Uninstall Rays…:** red text at the bottom of the page. **Uninstall** removes the sorter from every folder, the browser helpers and the `dl` command, then moves Rays to the Trash. **Uninstall and delete data** also removes history and settings. Only available when Rays is in Applications.
 
-## Downloads
+## AI
 
-- **Downloads at once**: 1 to 10 (3 is recommended).
-- **Parts per file**: 1 to 16 connections per file (4 is recommended).
-- **Speed limit**: off, a preset, or **Custom…** in MB/s.
-
-### Unpack archives
-
-- **Unpack archives when done**: off by default. When a download finishes, Rays unpacks a `.zip`, `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.txz` or `.7z` next to it. Like Archive Utility, an archive that holds one item (often a single folder) gives you that item; anything else goes into a new folder named after the file without its extension. If the name is taken, Rays uses "name 2", "name 3" and so on. Other files, such as a lone `.gz`, `.dmg`, `.pkg` or `.rar`, are left alone.
-- **Move the archive to the Trash after unpacking**: available when unpacking is on. If unpacking fails, Rays removes what it started, keeps the archive and shows "Couldn't unpack" with the file name.
-
-## Sorting
-
-The main [sorter](/docs/app/sorter/) settings: whether on-device AI is ready, how long to wait before sorting, renaming from content, and the folders being watched, with a button to open the Sorter.
+Shows whether Apple Intelligence is ready on this Mac. The [sorter](/docs/app/sorter/) uses it to sort and rename files. If it is off, **Open System Settings** takes you to where you turn it on.
 
 ## Browsers
 
-Lists every browser on your Mac. Install or remove the helper each browser needs for the [extension](/docs/app/browser/), with a status line per browser. Browsers built on Chromium or Firefox that Rays doesn't know by name are set up the same way. Other browsers show why they aren't supported.
+Lists every browser on your Mac. The page card has **Install all helpers** and **Check again**. Install or remove the helper each browser needs for the [extension](/docs/app/browser/), with a status line per browser. Browsers built on Chromium or Firefox that Rays doesn't know by name are set up the same way. Other browsers show why they aren't supported. **How the helper works** explains what the helper does and how to remove it. **Remove all helpers…** is red text at the bottom of the page.

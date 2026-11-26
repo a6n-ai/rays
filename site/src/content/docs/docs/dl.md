@@ -14,7 +14,7 @@ brew trust a6n-ai/tap
 brew install --cask a6n-ai/tap/rays
 ```
 
-With a DMG install, open **Settings > General** and click **Install** next to **Command line tool**.
+With a DMG install, open **General** in the sidebar and click **Install** next to **Command line tool**.
 
 ## Commands
 

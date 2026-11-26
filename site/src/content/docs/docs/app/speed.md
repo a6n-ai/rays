@@ -3,27 +3,27 @@ title: "Speed test and best time"
 description: "Test your download speed, see the hours when your connection is fastest, and send downloads to the best time of night."
 ---
 
-**Speed test** measures how fast your connection is, and **Best time** finds the hours when it is usually fastest. Both live in the sidebar. Under **Tools**, between **Queues** and **Folders**, the **Speed test** row shows the last result, like "84 Mb/s". While a test runs, the row shows a spinner and the live speed.
+**Speed test** measures how fast your connection is, and **Best time** finds the hours when it is usually fastest. Both live in the sidebar. The **Speed test** row, between **Schedules** and **Stats**, shows the last result, like "84 Mb/s". While a test runs, the row shows a spinner and the live speed.
 
 Right-click the row for **Run Speed Test** or **Stop Speed Test**.
 
 ## The Speed page
 
-Click **Speed test** to open the page. Its toolbar has three tabs, **Overview**, **History** and **Settings**, and a play button for **Run test**. The button becomes **Stop** while a test runs.
+Click **Speed test** to open the page. The page card at the top has the **Run test** button, which becomes **Stop** while a test runs. Below it are a folding **Settings** card, a **History** row with a › arrow, and the best time. The toolbar has only back and forward buttons (⌘[ and ⌘]) and the page title.
 
-### Overview
+### The page card
 
-The header shows the last result, for example "84.5 Mb/s · 161 ms latency · Wi-Fi · 3 min ago".
+The card shows the last result, for example "84.5 Mb/s · 161 ms latency · Wi-Fi · 3 min ago".
 
 While a test runs, a progress bar and a live chart of the speed over the 10 seconds show here.
 
-**Best time** sits below the header. It reads "Usually fastest 01:00–05:00 · 14 days" and shows a chart of the typical speed for each hour. Until Rays has enough data, it shows "Not enough data yet" with "3 of 7 days. Rays learns from your downloads and speed tests."
+**Best time** sits below the cards. It reads "Usually fastest 01:00–05:00 · 14 days" and shows a chart of the typical speed for each hour. Until Rays has enough data, it shows "Not enough data yet" with "3 of 7 days. Rays learns from your downloads and speed tests."
 
 ### History
 
-**History** lists speed tests and download samples. Use **Filter** to show **All**, **Speed tests** or **Downloads**, and sort by **Newest** or **Fastest**. Rays keeps 60 days of history.
+Click the **History** row to open the list of speed tests and download samples. Use **Filter** to show **All**, **Speed tests** or **Downloads**, and sort by **Newest** or **Fastest**. Rays keeps 60 days of history.
 
-### Settings
+### Settings card
 
 - **Test automatically every 3 hours.** Off by default. Each test uses about 50 to 200 MB. Rays runs it only on Wi-Fi or Ethernet, and only when nothing is downloading.
 - **Night tests.** Shows "On until <date>" with **Stop night tests**, which ends the week at once, or **Test at night for a week** to start it. See [Best time queue](/docs/app/queues/#best-time-queue) for the first-time question.

@@ -13,7 +13,7 @@ Rays needs **macOS 26 or later**. It is free and open source under the AGPL-3.0 
 
 Rays is not notarized yet, so the first time you open it macOS may say it can't verify the app. Open **System Settings > Privacy & Security**, scroll down, and choose **Open Anyway**. You only do this once.
 
-The optional `dl` command, for Terminal and AI agents, comes inside the app. To use it, open **Settings > General** and click **Install** next to **Command line tool**. macOS may ask for your password once, to add it to `/usr/local/bin`.
+The optional `dl` command, for Terminal and AI agents, comes inside the app. To use it, open **General** in the sidebar and click **Install** next to **Command line tool**. macOS may ask for your password once, to add it to `/usr/local/bin`.
 
 ## Homebrew
 
@@ -26,7 +26,7 @@ Homebrew clears the download quarantine, so there is no Gatekeeper step, and it 
 
 ## Update
 
-Rays checks for a new version each time it opens (at most once an hour) and every 6 hours while it is open. When one is out, a small green note appears at the top of the window; click **Download** to get it. You can also check by hand in **Settings > General > Check for Updates**.
+Rays checks for a new version each time it opens (at most once an hour) and every 6 hours while it is open. When one is out, a small green note appears at the top of the window; click **Download** to get it. You can also check by hand with **Check for updates** under **Updates** on the **General** page.
 
 With Homebrew:
 
@@ -43,7 +43,7 @@ brew uninstall --cask rays          # removes the app and stops Rays' sorter hel
 brew uninstall --zap --cask rays    # also deletes settings, history and browser helpers
 ```
 
-For a DMG install, open **Settings > General** and click **Uninstall Rays…**:
+For a DMG install, open **General** in the sidebar and click **Uninstall Rays…**, the red text at the bottom of the page:
 
 - **Uninstall** stops sorting your folders, removes the browser helpers and the `dl` command, and moves Rays to the Trash.
 - **Uninstall and Delete Data** also removes your download history and settings (`~/Library/Application Support/Rays`).

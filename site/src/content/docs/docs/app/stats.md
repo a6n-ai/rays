@@ -3,7 +3,7 @@ title: "Stats"
 description: "See how much you downloaded over the last 7, 30 or 90 days, which days were busiest and which sites you download from most."
 ---
 
-The **Stats** page adds up your finished downloads. Open it from **Stats** under **Tools** in the sidebar, or from the Rays menu bar panel.
+The **Stats** page adds up your finished downloads. Open it from **Stats** in the sidebar, or from the Rays menu bar panel.
 
 Pick a range at the top: **7 days**, **30 days** or **90 days**. Rays remembers your choice. The page shows:
 

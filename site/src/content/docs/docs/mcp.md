@@ -19,7 +19,7 @@ Any MCP client:
 { "mcpServers": { "rays": { "command": "dl", "args": ["mcp"] } } }
 ```
 
-`dl` must be on the PATH the client uses: in Rays, open **Settings > General** and click **Install** next to **Command line tool** (Homebrew installs have it already).
+`dl` must be on the PATH the client uses: in Rays, open **General** in the sidebar and click **Install** next to **Command line tool** (Homebrew installs have it already).
 
 ## Tools
 

@@ -63,7 +63,7 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 
 - Extensions for Chrome, Brave, Edge, Firefox and Zen add **Download with Rays** to the right-click menu.
 - A popup on the Rays toolbar button shows whether Rays is connected, lets you paste a link, and updates itself with the store.
-- Settings > Browsers lists every browser on your Mac and sets up any built on Chromium or Firefox, including Brave. Search, a WebKit browser that runs Chrome extensions, works too.
+- The Browsers page lists every browser on your Mac and sets up any built on Chromium or Firefox, including Brave. Search, a WebKit browser that runs Chrome extensions, works too.
 - Optionally hand every browser download to Rays. The browser's copy is cancelled only after Rays accepts the link.
 
 [Browser extension](/docs/app/browser/)
@@ -77,15 +77,15 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 
 ## The app
 
-- **Notifications** when downloads finish or fail, with Open, Show in Finder and Retry. Turn them off in Settings.
+- **Notifications** when downloads finish or fail, with Open, Show in Finder and Retry. Turn them off in the Downloads page's Settings card.
 - **Shortcuts.** Seven actions in Shortcuts, Spotlight and Siri with no setup: Add download, Start queue, Stop queue, Run speed test, Pause all, Resume all and Download copied link.
 - **Activity in the sidebar.** A dot on **Downloads** while something downloads, and a card with the files, speed and time left.
-- The menu bar and Dock icons show the download speed and a badge with the downloads running. Its panel adds links, pauses all, lists the latest four downloads and opens Downloads, Sorter and Cloud.
+- The menu bar icon shows the overall percentage, then the speed, while downloading. The Dock icon shows the speed and a badge with the downloads running. The menu bar panel adds links, pauses all, lists the latest four downloads and opens Downloads, Sorter and Cloud.
 - Close the window and Rays keeps downloading from the menu bar.
 - Updates install themselves: click Update and Rays replaces itself and reopens.
 - Install with the DMG or `brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays`.
-- Uninstall from Settings, which also removes the sorter, browser helpers and `dl`.
-- Light, dark or system appearance.
+- Uninstall from the General page, which also removes the sorter, browser helpers and `dl`.
+- Light, dark or auto appearance, with a choice of accent colour. The app looks like macOS System Settings: a Home page, a card at the top of every page and a folding Settings card for that page's settings. See [Get started](/docs/getting-started/#find-your-way-around).
 
 ## What Rays doesn't do
 
