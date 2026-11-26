@@ -88,6 +88,11 @@ Changed 2026-11-26: the user chose to remove the separate Settings window, the w
 - [ ] Delete the `Settings { }` scene and SettingsView's TabView. ⌘, and the app menu's "Settings…" select `.general` in the main window, bringing it forward. Every `openSettings` call and every `SettingsToolbarButton` selects the matching page instead: `settingsTab = "browsers"` goes to `.browsers`, and so on. Grep `openSettings`, `settingsTab` and `SettingsToolbarButton`, and fix every caller, including `RaysApp.swift`'s `open urls` and the menu bar panel.
 - [ ] The Home page card 4 "Settings" row becomes "General".
 - [ ] Remove dead code: the TabView and any tab that is now empty. The rows extracted in Task 1 stay, because pages use them.
+- [ ] **Theme, on the General page** (user 2026-11-26: "give option to change theme"), modelled on System Settings > Appearance:
+  - Appearance: Auto, Light, Dark as three picture tiles in a row, each a small window thumbnail drawn in SwiftUI with a label under it and a selection ring. This reuses the existing `AppearanceChoice` and its `appearance` key.
+  - Accent colour: a row of round swatches. "Multicolour" follows the system; the others are blue, purple, pink, red, orange, yellow, green and graphite, from `TilePalette` where it has the colour. Store the choice in `@AppStorage("accentChoice")` and apply it app-wide with `.tint()` on the main window's root and the menu bar panel. The selected swatch shows a ring, and its name appears under the row.
+  - Sidebar icon size: Small, Medium, Large as an inline radio group, like System Settings. It scales `TileSize.sidebar` to 16, 20 or 24 and the sidebar text with it.
+  - Tiles keep their own colours. The accent colour changes only controls, selection and links.
 - [ ] `swift build`, then check by hand that ⌘, opens General and that the menu bar panel's settings link still works.
 
 ## Task 8: Home page (like System Settings > General)
