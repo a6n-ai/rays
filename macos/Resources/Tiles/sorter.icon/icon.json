@@ -1,19 +1,24 @@
 {
   "fill": {
-    "automatic-gradient": "extended-srgb:0.93000,0.25000,0.45000,1.00000"
+    "automatic-gradient": "extended-srgb:0.5,0.5,0.5,1.0"
   },
   "groups": [
     {
       "layers": [
         {
-          "glass": true,
+          "glass": false,
           "image-name": "spark.svg",
           "name": "spark"
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.3
+        "opacity": 0.4
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0
       }
     },
     {
@@ -24,13 +29,32 @@
           "name": "front"
         }
       ],
-      "translucency": {
-        "enabled": true,
-        "value": 0.1
-      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.45
+        "opacity": 0.55
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "cards.svg",
+          "name": "cards"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0
       }
     },
     {
@@ -41,13 +65,40 @@
           "name": "back"
         }
       ],
-      "translucency": {
-        "enabled": true,
-        "value": 0.4
-      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.35
+        "opacity": 0.3
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "background.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "background-dark.svg"
+            }
+          ],
+          "name": "background"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0
       }
     }
   ],

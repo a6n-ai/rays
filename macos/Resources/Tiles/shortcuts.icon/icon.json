@@ -1,53 +1,68 @@
 {
   "fill": {
-    "automatic-gradient": "extended-srgb:0.35000,0.34000,0.84000,1.00000"
+    "automatic-gradient": "extended-srgb:0.5,0.5,0.5,1.0"
   },
   "groups": [
     {
       "layers": [
         {
           "glass": false,
-          "image-name": "arrow.svg",
-          "name": "arrow"
+          "image-name": "bolt.svg",
+          "name": "bolt"
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.3
+        "opacity": 0.55
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0
       }
     },
     {
       "layers": [
         {
           "glass": true,
-          "image-name": "front.svg",
-          "name": "front"
+          "image-name": "orb.svg",
+          "name": "orb"
         }
       ],
-      "translucency": {
-        "enabled": true,
-        "value": 0.1
-      },
       "shadow": {
-        "kind": "neutral",
-        "opacity": 0.45
+        "kind": "layer-color",
+        "opacity": 0.55
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0
       }
     },
     {
       "layers": [
         {
-          "glass": true,
-          "image-name": "back.svg",
-          "name": "back"
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "background.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "background-dark.svg"
+            }
+          ],
+          "name": "background"
         }
       ],
-      "translucency": {
-        "enabled": true,
-        "value": 0.4
-      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.35
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0
       }
     }
   ],
