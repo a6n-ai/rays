@@ -4,15 +4,19 @@ import SwiftUI
 struct RemovalPillView: View {
     @Environment(EngineModel.self) private var model
     @State private var hovering = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         if let pill = model.removalPill {
+            // Colour says what happened: orange for the Trash, blue for a row taken off the list (green is updates, red is errors).
+            let tint: Color = pill.trash ? .orange : .blue
             HStack(spacing: 10) {
-                Image(systemName: "trash.fill").foregroundStyle(.secondary)
+                Image(systemName: pill.trash ? "trash.fill" : "minus.circle.fill").foregroundStyle(tint)
                 Text(pill.text).font(.callout.weight(.medium))
                 Button("Undo") { model.undoRemoval() }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.capsule)
+                    .tint(tint)
                     .controlSize(.small)
                     .help("Undo (\u{2318}Z)")
                 Text("\u{2318}Z").font(.caption).foregroundStyle(.secondary)
@@ -27,7 +31,7 @@ struct RemovalPillView: View {
             .padding(.leading, 14)
             .padding(.trailing, 8)
             .padding(.vertical, 6)
-            .glassEffect(.regular, in: .capsule)
+            .glassEffect(reduceTransparency ? .regular : .regular.tint(tint.opacity(0.18)), in: .capsule)
             .padding(.top, 8)
             .onHover { hovering = $0 }
             .task(id: pill.token) {

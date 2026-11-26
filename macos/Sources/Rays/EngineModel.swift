@@ -6,6 +6,8 @@ struct RemovalPill: Equatable {
     let token = UUID()
     let text: String
     var ids: [UInt64]
+    /// True when files went to the Trash; false for Remove from List.
+    var trash = false
     var moves: [(URL, URL)] = []
     static func == (a: Self, b: Self) -> Bool { a.token == b.token && a.ids == b.ids }
 }
@@ -428,7 +430,7 @@ final class EngineModel {
         let text = trash
             ? (jobs.count == 1 ? "Moved \(jobs[0].name) to the Trash" : "Moved \(jobs.count) files to the Trash")
             : (jobs.count == 1 ? "Removed \(jobs[0].name) from the list" : "Removed \(jobs.count) downloads from the list")
-        let pill = RemovalPill(text: text, ids: jobs.map(\.id))
+        let pill = RemovalPill(text: text, ids: jobs.map(\.id), trash: trash)
         removalPill = pill
         pendingRemoval.formUnion(pill.ids)
         NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
