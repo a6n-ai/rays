@@ -28,12 +28,12 @@ struct ShortcutsPage: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
+            CardForm {
+                CardSection {
                     HeroCard(.shortcuts, title: "Shortcuts", subtitle: "Start downloads and queues from Shortcuts and Siri.",
                              learnMore: URL(string: "https://rays.a6n.ai/docs/app/shortcuts/"))
                 }
-                Section {
+                CardSection {
                     ForEach(actions) { action in
                         SettingRow(action.tile, title: action.title, hint: action.detail) {
                             Text("\u{201C}\(action.phrase)\u{201D}").font(.subheadline).foregroundStyle(.secondary)
@@ -48,7 +48,7 @@ struct ShortcutsPage: View {
                 } footer: {
                     Text("These appear in the Shortcuts app and in Spotlight without any setup. Run one from there, or say its phrase to Siri.")
                 }
-                Section {
+                CardSection {
                     step(1, "Open Shortcuts and make a new shortcut.")
                     step(2, "Search for Rays in the actions list.")
                     step(3, "Drag an action into your shortcut.")
@@ -57,7 +57,7 @@ struct ShortcutsPage: View {
                 } footer: {
                     Text("Siri phrases work without any setup. Say one, or find it in Spotlight.")
                 }
-                Section("Other ways to send links to Rays") {
+                CardSection("Other ways to send links to Rays") {
                     way(.shortcuts, "Share menu",
                         "Choose Rays in the Share menu of Safari or any app. Turn it on in System Settings > General > Login Items & Extensions > Sharing.") {
                         Button("Open sharing settings") {

@@ -89,7 +89,7 @@ struct CommandLineSection: View {
     @State private var error: String?
 
     var body: some View {
-        Section {
+        CardSection {
             SettingRow(title: "Command line tool", hint: hint) {
                 switch state {
                 case .installed(let link):

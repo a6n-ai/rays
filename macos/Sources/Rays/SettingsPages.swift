@@ -6,18 +6,18 @@ struct GeneralPage: View {
     @AppStorage(SidebarIconSize.key) private var iconSize = SidebarIconSize.medium
 
     var body: some View {
-        Form {
-            Section {
+        CardForm {
+            CardSection {
                 HeroCard(.general, title: "General", subtitle: "Appearance, menu bar, updates and the command line tool.",
                          style: .centered)
             }
-            Section {
+            CardSection {
                 SettingRow(title: "Appearance") { AppearancePicker() }
             }
-            Section("Theme") {
+            CardSection("Theme") {
                 SettingRow(title: "Colour") { AccentPicker() }
             }
-            Section("Windows") {
+            CardSection("Windows") {
                 SettingRow(title: "Sidebar icon size") {
                     Picker("Sidebar icon size", selection: $iconSize) {
                         ForEach(SidebarIconSize.allCases) { Text($0.title).tag($0) }
@@ -27,7 +27,7 @@ struct GeneralPage: View {
                     .fixedSize()
                 }
             }
-            Section {
+            CardSection {
                 SettingRow(title: "Show in menu bar", hint: "Closing the window keeps Rays running.") {
                     Toggle("Show in menu bar", isOn: $showsMenuBar).labelsHidden()
                 }
@@ -43,11 +43,11 @@ struct GeneralPage: View {
 
 struct AIPage: View {
     var body: some View {
-        Form {
-            Section {
+        CardForm {
+            CardSection {
                 HeroCard(.ai, title: "AI", subtitle: "Apple Intelligence on this Mac sorts and renames your files.")
             }
-            Section { AIStatusRow() }
+            CardSection { AIStatusRow() }
         }
         .formStyle(.grouped)
         .navigationTitle("AI")

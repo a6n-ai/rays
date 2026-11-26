@@ -104,9 +104,15 @@ struct CollapsibleSettingsCard<Content: View>: View {
     }
 
     var body: some View {
-        Section {
-            if inForm { header } else { header.cardRow(expanded ? .first : .only, separatorInset: TileSize.row + 10) }
-            if expanded { content }
+        Group {
+            if inForm {
+                CardSection { header; if expanded { content } }
+            } else {
+                Section {
+                    header.cardRow(expanded ? .first : .only, separatorInset: TileSize.row + 10)
+                    if expanded { content }
+                }
+            }
         }
         .transaction { $0.animation = nil }
     }
@@ -331,5 +337,70 @@ struct SettingRow<Control: View>: View {
         }
         .padding(.vertical, 6)
         .frame(minHeight: LayoutMetrics.cardRowMinHeight)
+    }
+}
+
+/// A page of cards that match the List cards: `controlBackgroundColor`, white in light mode. A grouped Form ignores
+/// `listRowBackground` and draws gray cards, so sections are drawn by hand.
+struct CardForm<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) { content }
+                .padding(LayoutMetrics.margin)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// One card of a CardForm: optional header above, rows separated by hairlines, optional footer below.
+struct CardSection<Header: View, Content: View, Footer: View>: View {
+    let header: Header
+    let content: Content
+    let footer: Footer
+
+    init(@ViewBuilder content: () -> Content, @ViewBuilder header: () -> Header, @ViewBuilder footer: () -> Footer) {
+        self.header = header()
+        self.content = content()
+        self.footer = footer()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header.font(.headline).padding(.horizontal, 4)
+            Group(subviews: content) { rows in
+                VStack(spacing: 0) {
+                    ForEach(rows.indices, id: \.self) { index in
+                        rows[index].padding(.horizontal, 12).padding(.vertical, 2).frame(maxWidth: .infinity, alignment: .leading)
+                        if index < rows.count - 1 { Divider().padding(.leading, 12) }
+                    }
+                }
+                .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 10, style: .continuous))
+            }
+            footer.font(.callout).foregroundStyle(.secondary).padding(.horizontal, 4)
+        }
+    }
+}
+
+extension CardSection where Header == EmptyView, Footer == EmptyView {
+    init(@ViewBuilder content: () -> Content) { self.init(content: content, header: { EmptyView() }, footer: { EmptyView() }) }
+}
+
+extension CardSection where Footer == EmptyView {
+    init(@ViewBuilder content: () -> Content, @ViewBuilder header: () -> Header) {
+        self.init(content: content, header: header, footer: { EmptyView() })
+    }
+}
+
+extension CardSection where Header == EmptyView {
+    init(@ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.init(content: content, header: { EmptyView() }, footer: footer)
+    }
+}
+
+extension CardSection where Header == Text, Footer == EmptyView {
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.init(content: content, header: { Text(title) }, footer: { EmptyView() })
     }
 }

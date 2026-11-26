@@ -37,8 +37,8 @@ private struct SpeedOverview: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        CardForm {
+            CardSection {
                 HeroCard(.speed, title: "Speed test", subtitle: subtitle, caption: model.automaticTestRunning ? "Automatic test" : nil,
                          learnMore: URL(string: "https://rays.a6n.ai/docs/app/speed/")) {
                     HeroActions {
@@ -57,15 +57,15 @@ private struct SpeedOverview: View {
                 }
             }
             CollapsibleSettingsCard(page: "speed", summary: "Automatic tests", inForm: true) { SpeedSettingsRows() }
-            Section {
+            CardSection {
                 DrillInRow(tile: .history, title: "History", subtitle: "Every speed test and download sample") { nav.open("history") }
             }
             if let test = model.lastTest, !test.saved, progress == nil {
-                Section { notice(model.unsavedReason, .warning) }
+                CardSection { notice(model.unsavedReason, .warning) }
             }
-            if let error = model.speedError { Section { notice(error, .error) } }
+            if let error = model.speedError { CardSection { notice(error, .error) } }
             if !model.liveSamples.isEmpty {
-                Section { ChartCard<Int, _>("Speed during the test") { LiveChart(samples: model.liveSamples) } }
+                CardSection { ChartCard<Int, _>("Speed during the test") { LiveChart(samples: model.liveSamples) } }
             }
             bestTime
         }
@@ -88,13 +88,13 @@ private struct SpeedOverview: View {
     @ViewBuilder private var bestTime: some View {
         switch model.bestTime {
         case .window(let start, let end, _, let days, _)?:
-            Section {
+            CardSection {
                 ChartCard<Int, _>("Best time") { HourlyChart(hourly: model.hourly, start: Int(start), end: Int(end)) }
                 Text("Usually fastest \(SchedulerTime.hhmm(start))–\(SchedulerTime.hhmm(end)) · \(days) days")
                     .font(.callout).foregroundStyle(.secondary)
             }
         case .notEnoughData(let days, let needed)?:
-            Section("Best time") {
+            CardSection("Best time") {
                 EmptyState(symbol: "chart.bar", title: "Not enough data yet",
                            message: "\(days) of \(needed) days of data.")
                     .frame(height: 220)
@@ -203,7 +203,7 @@ private struct SpeedHistoryTab: View {
                        message: "Run a test to start.")
         } else {
             List {
-                Section {
+                CardSection {
                     let samples = Array(ListControls.page(shown, page, pageSize).enumerated())
                     ForEach(samples.map { (id: "\(page)-\($0.offset)", index: $0.offset, sample: $0.element) }, id: \.id) { entry in
                         row(entry.sample)

@@ -238,7 +238,7 @@ struct UpdateSettingsSection: View {
     private var updater: Updater { .shared }
 
     var body: some View {
-        Section {
+        CardSection {
             SettingRow(title: "Rays \(updater.current)", hint: statusText) {
                 if let release = updater.available {
                     Button("Update to \(release.version)") {

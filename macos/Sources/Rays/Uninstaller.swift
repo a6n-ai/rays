@@ -48,7 +48,7 @@ struct UninstallSection: View {
     @State private var problems: [String] = []
 
     var body: some View {
-        Section {
+        CardSection {
             DestructiveButton(title: working ? "Uninstalling…" : "Uninstall Rays…") { confirm = true }
                 .opacity(Uninstaller.canUninstall ? 1 : 0.5)
             .disabled(!Uninstaller.canUninstall || working)

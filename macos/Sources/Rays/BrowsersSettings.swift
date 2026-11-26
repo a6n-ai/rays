@@ -5,11 +5,11 @@ struct BrowsersPage: View {
     @State private var model = BrowserCheckModel()
 
     var body: some View {
-        Form {
-            Section {
+        CardForm {
+            CardSection {
                 HeroCard(.browsers, title: "Browsers", subtitle: "Add the Rays extension to send links from your browser.")
             }
-            Section {
+            CardSection {
                 SettingRow(title: "Rays browser extension", hint: "Right-click any link and choose Download with Rays.") {
                     Button("Install all helpers") { model.installAllHelpers(model.states) }
                         .buttonStyle(.glassProminent)
@@ -20,13 +20,13 @@ struct BrowsersPage: View {
                 HelperExplainer()
             }
             if model.loaded && model.states.isEmpty {
-                Section {
+                CardSection {
                     Text("No supported browsers found.")
                         .foregroundStyle(.secondary)
                 }
             }
             ForEach(model.states) { state in
-                Section {
+                CardSection {
                     BrowserStatus(state: state, failure: model.failures[state.browser.bundleID],
                                   install: { model.installHelper(state) },
                                   remove: { model.removeHelper(state) })
@@ -35,10 +35,10 @@ struct BrowsersPage: View {
                 }
             }
             ForEach(model.others) { other in
-                Section { OtherBrowserRow(browser: other) }
+                CardSection { OtherBrowserRow(browser: other) }
             }
             if model.states.contains(where: { $0.helper != .missing }) {
-                Section { RemoveAllHelpersRow(model: model) }
+                CardSection { RemoveAllHelpersRow(model: model) }
             }
         }
         .formStyle(.grouped)

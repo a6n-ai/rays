@@ -9,15 +9,15 @@ struct StatsPage: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
+            CardForm {
+                CardSection {
                     HeroCard(.stats, title: "Stats", subtitle: "How much you downloaded, and from where.",
                              learnMore: URL(string: "https://rays.a6n.ai/docs/app/stats/"))
                 }
                 if let stats, stats.totalFiles > 0 {
-                    Section { figures(stats) }
+                    CardSection { figures(stats) }
                 }
-                Section {
+                CardSection {
                     ChartCard("Downloaded per day", range: $days, ranges: [(7, "7 days"), (30, "30 days"), (90, "90 days")]) {
                         if let stats, stats.totalFiles > 0 {
                             chart(stats)
@@ -31,7 +31,7 @@ struct StatsPage: View {
                     Text("Stats count downloads still in your list.")
                 }
                 if let stats, stats.totalFiles > 0 {
-                    Section("Top sites") { sites(stats) }
+                    CardSection("Top sites") { sites(stats) }
                 }
             }
             .formStyle(.grouped)

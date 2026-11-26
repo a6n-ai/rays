@@ -27,8 +27,8 @@ struct BucketsForm: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        CardForm {
+            CardSection {
                 HeroCard(.cloud, title: "Cloud",
                          subtitle: "Browse S3-compatible buckets like folders and download from them.",
                          learnMore: URL(string: "https://rays.a6n.ai/docs/s3/")) {
@@ -46,12 +46,12 @@ struct BucketsForm: View {
             }
 
             if !model.buckets.isEmpty {
-                Section {
+                CardSection {
                     DrillInRow(tile: .cloud, title: "Browse", subtitle: "Open buckets like folders") { nav.open("browse") }
                     DrillInRow(tile: .downloads, title: "Cloud downloads", subtitle: "Downloads from your buckets") { nav.open("downloads") }
                 }
             }
-            Section("Buckets") {
+            CardSection("Buckets") {
                 if model.buckets.isEmpty {
                     Text("No buckets yet. Open Settings above to add one, then browse it.")
                         .foregroundStyle(.secondary)
