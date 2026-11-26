@@ -1,52 +1,85 @@
 ---
 import DrumPause from './DrumPause.astro';
+const { inline = false } = Astro.props;
 // Decorative panel: the Topography landscape (WebGL, src/scripts/topography.ts). Every scroll, down or up, walks
 // forward over the land. Lines use the Rays logo colours. The card colour shows until it loads.
 ---
 
-<div class="panel" data-topography>
+<div class="panel" data-topography={inline ? 'inline' : 'hero'}>
 	<DrumPause />
 </div>
 
 <script>
-	import { mountTopography } from '../scripts/topography';
+	import { mountTopography, type TopographyHandle } from '../scripts/topography';
 
 	// Valleys, slopes, peaks: the Rays icon's coral, orange and gold; deeper in the light theme.
 	const PALETTES = {
 		dark: ['#f0607a', '#ff8c42', '#ffd24a'],
-		light: ['#be3455', '#c2410c', '#b7791f'],
+		light: ['#b02a4b', '#b43a08', '#8f5a0a'],
 	};
-	const el = document.querySelector<HTMLElement>('[data-topography]');
-	if (el) {
-		const isLight = () => document.documentElement.dataset.theme === 'light';
-		const theme = () => ({ palette: PALETTES[isLight() ? 'light' : 'dark'], lightMode: isLight() });
-		const SPEED = 0.08;
+	const isLight = () => document.documentElement.dataset.theme === 'light';
+	const theme = () => ({ palette: PALETTES[isLight() ? 'light' : 'dark'], lightMode: isLight(), brightness: isLight() ? 2.2 : 1 });
+	const SPEED = 0.08;
+	const phone = matchMedia('(max-width: 899px)');
+	let paused = false;
+	const live = new Set<TopographyHandle>();
+	const mount = (el: HTMLElement) => {
 		const view = mountTopography(el, {
 			...theme(),
 			lineCount: 24,
 			glow: 0.7,
-			speed: SPEED,
+			speed: paused ? 0 : SPEED,
 			scrollTravel: 0.004,
 			// Phones show a short strip, where 1x pixels look the same and scrolling stays smooth.
-			dpr: matchMedia('(max-width: 899px)').matches ? 1 : Math.min(window.devicePixelRatio || 1, 2),
+			dpr: phone.matches ? 1 : Math.min(window.devicePixelRatio || 1, 2),
 		});
 		// The landscape is decoration; only the pause button in the corner is for assistive tech.
 		el.querySelector('canvas')?.setAttribute('aria-hidden', 'true');
-		window.addEventListener('rays:motion', (e) => view.update({ speed: (e as CustomEvent<boolean>).detail ? 0 : SPEED }));
-		new MutationObserver(() => view.update(theme())).observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ['data-theme'],
-		});
-		// The land follows the section being read: ridges for downloads, steady terraces for sorting, flat for
-		// privacy. The renderer eases elevation and tilt itself, so a change glides instead of jumping.
+		live.add(view);
+		return view;
+	};
+	window.addEventListener('rays:motion', (e) => {
+		paused = (e as CustomEvent<boolean>).detail;
+		live.forEach((v) => v.update({ speed: paused ? 0 : SPEED }));
+	});
+	new MutationObserver(() => live.forEach((v) => v.update(theme()))).observe(document.documentElement, {
+		attributes: true,
+		attributeFilter: ['data-theme'],
+	});
+
+	const hero = document.querySelector<HTMLElement>('[data-topography="hero"]');
+	const heroView = hero && mount(hero);
+
+	// Inline strips (phones only; wide screens keep the pinned panel) hold a WebGL context only while near the
+	// screen, so the page never has more than a couple open.
+	document.querySelectorAll<HTMLElement>('[data-topography="inline"]').forEach((el) => {
+		let view: TopographyHandle | undefined;
+		new IntersectionObserver(
+			([e]) => {
+				if (e.isIntersecting && phone.matches && !view) view = mount(el);
+				else if (!e.isIntersecting && view) {
+					live.delete(view);
+					view.destroy();
+					view = undefined;
+				}
+			},
+			{ rootMargin: '150px 0px' },
+		).observe(el);
+	});
+
+	// The land follows the section being read: ridges for downloads, steady terraces for sorting, flat for
+	// privacy. The renderer eases elevation and tilt itself, so a change glides instead of jumping.
+	if (heroView) {
 		const LAND: Record<string, { elevation: number; tilt: number }> = {
 			why: { elevation: 1, tilt: 32 },
 			downloads: { elevation: 1.8, tilt: 28 },
+			links: { elevation: 1.3, tilt: 30 },
 			engine: { elevation: 2.3, tilt: 24 },
 			sorting: { elevation: 0.75, tilt: 40 },
 			private: { elevation: 0.15, tilt: 52 },
 			models: { elevation: 1.6, tilt: 34 },
 			queues: { elevation: 0.9, tilt: 38 },
+			speed: { elevation: 2, tilt: 26 },
 			anywhere: { elevation: 1.1, tilt: 34 },
 		};
 		const sections = [...document.querySelectorAll<HTMLElement>('.passage')].filter((s) => (s.querySelector('h2')?.id ?? '') in LAND);
@@ -54,7 +87,7 @@ import DrumPause from './DrumPause.astro';
 			(entries) => {
 				for (const e of entries) {
 					const id = e.target.querySelector('h2')?.id;
-					if (e.isIntersecting && id) view.update(LAND[id]);
+					if (e.isIntersecting && id) heroView.update(LAND[id]);
 				}
 			},
 			{ rootMargin: '-45% 0px -45% 0px' },
@@ -105,7 +138,14 @@ import DrumPause from './DrumPause.astro';
 		z-index: 2;
 		background: var(--well);
 	}
+	/* Wide screens have the pinned panel; the in-page strips are for phones. */
+	.panel[data-topography='inline'] {
+		display: none;
+	}
 	@media (max-width: 899px) {
+		.panel[data-topography='inline'] {
+			display: block;
+		}
 		.panel {
 			position: relative;
 			top: 0;

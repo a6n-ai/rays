@@ -15,7 +15,7 @@
 	--sl-color-white: #f7f8f8;
 	--sl-color-gray-1: #e2e4e6;
 	--sl-color-gray-2: #b4b8bd;
-	--sl-color-gray-3: #8a8f98;
+	--sl-color-gray-3: #9499a2;
 	--sl-color-gray-4: #4b4f55;
 	--sl-color-gray-5: #26282b;
 	--sl-color-gray-6: #141516;
@@ -35,7 +35,7 @@
 	--sl-color-white: #111214;
 	--sl-color-gray-1: #2a2b2e;
 	--sl-color-gray-2: #45474b;
-	--sl-color-gray-3: #6b6f76;
+	--sl-color-gray-3: #555960;
 	--sl-color-gray-4: #9a9ea5;
 	--sl-color-gray-5: #e3e4e7;
 	--sl-color-gray-6: #f3f4f5;
@@ -431,4 +431,24 @@ details.release > summary:hover {
 }
 details.release[open] > summary {
 	margin-bottom: 0.25rem;
+}
+
+/* The mobile menu button: its icon sits dead centre of the circle, not at the padding corner. */
+.sl-menu-button {
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+}
+
+/* Light theme: contour art needs more weight to read on a pale ground. */
+:root[data-theme='light'] .main-frame .content-panel:first-of-type::before {
+	opacity: 0.38;
+}
+:root[data-theme='light'] .sidebar-pane::after {
+	opacity: 0.24;
+}
+@media (max-width: 640px) {
+	:root[data-theme='light'] .main-frame .content-panel:first-of-type::before {
+		opacity: 0.16;
+	}
 }

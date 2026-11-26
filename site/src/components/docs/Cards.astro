@@ -40,6 +40,7 @@ const { items, cols = 3 } = Astro.props;
 	.card {
 		display: grid;
 		grid-template-rows: auto 1fr;
+		height: 100%;
 		border: 1px solid var(--sl-color-hairline);
 		border-radius: 0.75rem;
 		background: var(--rays-card);
@@ -62,11 +63,24 @@ const { items, cols = 3 } = Astro.props;
 		}
 	}
 	.art {
+		display: block;
 		padding: 1.25rem 1.25rem 0;
 		color: var(--sl-color-white);
 	}
+	.ic {
+		display: grid;
+		place-items: center;
+		width: 1.25rem;
+		height: 1.25rem;
+	}
+	.ic :global(svg) {
+		display: block;
+		width: 1.25rem;
+		height: 1.25rem;
+	}
 	.body {
 		display: grid;
+		align-content: start;
 		gap: 0.35rem;
 		padding: 0.75rem 1.25rem 1.35rem;
 	}

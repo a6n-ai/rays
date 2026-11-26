@@ -7,20 +7,23 @@
 
 <script>
 	const ring = document.querySelector<HTMLElement>('.drum .ring');
-	const toggle = document.querySelector<HTMLButtonElement>('[data-drum-toggle]');
+	const toggles = document.querySelectorAll<HTMLButtonElement>('[data-drum-toggle]');
 	let paused = false;
 	let visible = true;
 	const apply = () => ring && (ring.style.animationPlayState = paused || !visible ? 'paused' : 'running');
-	toggle?.addEventListener('click', () => {
-		paused = !paused;
+	const set = (next: boolean) => {
+		paused = next;
+		toggles.forEach((toggle) => {
 		toggle.setAttribute('aria-pressed', String(paused));
 		toggle.setAttribute('aria-label', paused ? 'Play animation' : 'Pause animation');
 		toggle.innerHTML = paused
 			? '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 2.5v11a1 1 0 0 0 1.5.86l9-5.5a1 1 0 0 0 0-1.72l-9-5.5A1 1 0 0 0 4 2.5Z"/></svg>'
 			: '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" /><rect x="9.5" y="2" width="3.5" height="12" rx="1" /></svg>';
+		});
 		apply();
 		window.dispatchEvent(new CustomEvent('rays:motion', { detail: paused }));
-	});
+	};
+	toggles.forEach((toggle) => toggle.addEventListener('click', () => set(!paused)));
 	if (ring) new IntersectionObserver(([e]) => ((visible = e.isIntersecting), apply())).observe(ring.parentElement!);
 </script>
 
