@@ -17,6 +17,15 @@ struct RaysApp: App {
         .windowToolbarStyle(.unified)
         .onChange(of: appearance, initial: true) { _, new in NSApp.appearance = new.nsAppearance }
         .commands {
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") {
+                    if appDelegate.model.removalPill != nil { appDelegate.model.undoRemoval() }
+                    else { NSApp.sendAction(Selector(("undo:")), to: nil, from: nil) }
+                }
+                .keyboardShortcut("z")
+                Button("Redo") { NSApp.sendAction(Selector(("redo:")), to: nil, from: nil) }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
             CommandGroup(after: .sidebar) {
                 Menu("Appearance") {
                     Picker("Appearance", selection: $appearance) {

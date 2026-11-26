@@ -130,7 +130,7 @@ struct JobRow: View {
             Button("Remove and Delete Partial File", role: .destructive) {
                 model.remove(job.id, deletePartial: true)
             }
-            Button("Remove and Keep Partial File") { model.remove(job.id, deletePartial: false) }
+            Button("Remove and Keep Partial File") { model.removeUndoable([job]) }
             Button("Cancel", role: .cancel) {}
         }
     }
@@ -380,7 +380,7 @@ struct JobRow: View {
         case .stop: confirmStop = true
         case .resume, .retry: model.resume(job.id)
         case .reveal: model.reveal(job)
-        case .removeFromList: model.remove(job.id, deletePartial: false)
+        case .removeFromList: model.removeUndoable([job])
         }
     }
 
@@ -428,7 +428,7 @@ struct JobRow: View {
         }
         Divider()
         Button(role: .destructive) {
-            if job.hasPartial { confirmRemove = true } else { model.remove(job.id, deletePartial: false) }
+            if job.hasPartial { confirmRemove = true } else { model.removeUndoable([job]) }
         } label: {
             Label(job.hasPartial ? "Remove…" : "Remove from List", systemImage: "minus.circle")
         }

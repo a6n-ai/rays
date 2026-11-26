@@ -62,9 +62,10 @@ struct ContentView: View {
                 }
         } detail: {
             detail
-                .overlay(alignment: .top) { UpdatePill() }
+                .overlay(alignment: .top) { VStack(spacing: 0) { UpdatePill(); RemovalPillView() } }
                 .overlay(alignment: .top) { CountdownBanner() }
                 .animation(reduceMotion ? nil : .smooth, value: Updater.shared.showsPill)
+                .animation(reduceMotion ? nil : .smooth, value: model.removalPill)
                 .animation(reduceMotion ? nil : .smooth, value: QueueActions.shared.countdown != nil)
         }
         .containerBackground(.thinMaterial, for: .window)

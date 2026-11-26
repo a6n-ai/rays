@@ -53,6 +53,7 @@ While a download is running, retrying, verifying or about to start, a dot appear
 - The toolbar has three buttons in the middle on every page: **Recent downloads** first, the folder, and settings last.
 - Double-click a finished download to open it.
 - **Remove Missing** clears finished downloads whose file was moved or deleted. Files that are still there stay.
+- **Undo.** Removing a download or moving it to the Trash shows a pill at the top of the window with **Undo** (or press Command-Z) for six seconds; Undo puts the file back where it was and brings the row back.
 
 ## In the Dock and menu bar
 

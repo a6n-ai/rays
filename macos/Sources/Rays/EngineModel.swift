@@ -2,10 +2,22 @@ import AppKit
 import Foundation
 import Observation
 
+struct RemovalPill: Equatable {
+    let token = UUID()
+    let text: String
+    var ids: [UInt64]
+    var moves: [(URL, URL)] = []
+    static func == (a: Self, b: Self) -> Bool { a.token == b.token && a.ids == b.ids }
+}
+
 @MainActor
 @Observable
 final class EngineModel {
-    private(set) var jobs: [JobView] = []
+    private(set) var allJobs: [JobView] = []
+    /// Jobs removed from the lists but not yet from the engine, so Undo can bring them back.
+    private(set) var pendingRemoval = Set<UInt64>()
+    private(set) var removalPill: RemovalPill?
+    var jobs: [JobView] { pendingRemoval.isEmpty ? allJobs : allJobs.filter { !pendingRemoval.contains($0.id) } }
     private let notifier = DownloadNotifier()
     private(set) var startError: String?
     private(set) var notice: String?
@@ -107,8 +119,8 @@ final class EngineModel {
             engine.setReplaceExisting(on: defaults.bool(forKey: SettingsKey.replaceExisting))
             self.engine = engine
             hasHFToken = engine.hasHfToken()
-            jobs = engine.snapshot()
-            jobs.forEach(track)
+            allJobs = engine.snapshot()
+            allJobs.forEach(track)
             buckets = engine.buckets()
             queues = engine.queues()
             runs = engine.queueRuns(limit: UInt32(Self.runLimit))
@@ -130,7 +142,9 @@ final class EngineModel {
         conditions = nil
         engine?.shutdown()
         engine = nil
-        jobs = []
+        commitRemoval()
+        pendingRemoval = []
+        allJobs = []
         queues = []
         runs = []
         startError = nil
@@ -399,16 +413,66 @@ final class EngineModel {
 
     func remove(_ id: UInt64, deletePartial: Bool) { engine?.remove(id: id, deletePartial: deletePartial) }
 
-    /// Finished files go to the Trash (so the user can put them back); unfinished ones lose their partial file.
+    /// Finished files go to the Trash and the rows leave the list; Undo in the pill puts both back until it closes.
     func removeAndTrash(_ jobs: [JobView]) {
-        let urls = jobs.filter(\.isDone).compactMap(locate)
-        if !urls.isEmpty {
-            NSWorkspace.shared.recycle(urls) { _, error in
-                guard error != nil else { return }
-                Task { @MainActor in self.notice = "Couldn't move some files to the Trash." }
+        for job in jobs where !job.isDone { remove(job.id, deletePartial: job.hasPartial) }
+        stageRemoval(jobs.filter(\.isDone), trash: true)
+    }
+
+    /// Remove from List with nothing deleted on disk; the pill's Undo brings the rows back.
+    func removeUndoable(_ jobs: [JobView]) { stageRemoval(jobs, trash: false) }
+
+    private func stageRemoval(_ jobs: [JobView], trash: Bool) {
+        guard !jobs.isEmpty else { return }
+        commitRemoval()
+        let text = trash
+            ? (jobs.count == 1 ? "Moved \(jobs[0].name) to the Trash" : "Moved \(jobs.count) files to the Trash")
+            : (jobs.count == 1 ? "Removed \(jobs[0].name) from the list" : "Removed \(jobs.count) downloads from the list")
+        let pill = RemovalPill(text: text, ids: jobs.map(\.id))
+        removalPill = pill
+        pendingRemoval.formUnion(pill.ids)
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        guard trash else { return }
+        let located = jobs.compactMap { job in locate(job).map { (job.id, $0) } }
+        guard !located.isEmpty else { return }
+        NSWorkspace.shared.recycle(located.map(\.1)) { moved, error in
+            Task { @MainActor in
+                if error != nil { self.notice = "Couldn't move some files to the Trash." }
+                guard self.removalPill?.token == pill.token else { return }
+                self.removalPill?.moves = located.compactMap { _, url in moved[url].map { (url, $0) } }
+                let failed = Set(located.filter { moved[$0.1] == nil }.map(\.0))
+                self.pendingRemoval.subtract(failed)
+                self.removalPill?.ids.removeAll { failed.contains($0) }
+                if self.removalPill?.ids.isEmpty == true { self.removalPill = nil }
             }
         }
-        for job in jobs { remove(job.id, deletePartial: job.hasPartial) }
+    }
+
+    /// Takes the rows off the engine for good; the pill closed, was replaced, or the app is quitting.
+    func commitRemoval() {
+        guard let pill = removalPill else { return }
+        removalPill = nil
+        guard let engine else { pendingRemoval = []; return }
+        for id in pill.ids { engine.remove(id: id, deletePartial: false) }
+    }
+
+    /// Moves trashed files back to where they were and shows the rows again.
+    func undoRemoval() {
+        guard let pill = removalPill else { return }
+        removalPill = nil
+        pendingRemoval.subtract(pill.ids)
+        var stuck: [String] = []
+        for (original, trashed) in pill.moves {
+            do {
+                try FileManager.default.moveItem(at: trashed, to: original)
+            } catch {
+                stuck.append(original.lastPathComponent)
+            }
+        }
+        if !stuck.isEmpty {
+            notice = "Couldn't put back \(stuck.joined(separator: ", ")); \(stuck.count == 1 ? "it is" : "they are") still in the Trash."
+        }
     }
 
     /// A finished download may have been moved by the sorter, so a same-named, same-size file under the downloads folder counts.
@@ -465,6 +529,7 @@ final class EngineModel {
     }
 
     func shutdown() {
+        commitRemoval()
         conditions?.stop()
         engine?.shutdown()
     }
@@ -473,17 +538,18 @@ final class EngineModel {
         switch event {
         case .upsert(let job):
             if job.isActive { runningSince[job.id] = runningSince[job.id] ?? Date() } else { runningSince[job.id] = nil }
-            if let index = jobs.firstIndex(where: { $0.id == job.id }) {
-                if job.isFinished && !jobs[index].isFinished { notifier.note(job) }
-                jobs[index] = job
+            if let index = allJobs.firstIndex(where: { $0.id == job.id }) {
+                if job.isFinished && !allJobs[index].isFinished { notifier.note(job) }
+                allJobs[index] = job
             } else {
-                jobs.append(job)
+                allJobs.append(job)
             }
             track(job)
         case .removed(let id):
             runningSince[id] = nil
             files.forget(id)
-            jobs.removeAll { $0.id == id }
+            pendingRemoval.remove(id)
+            allJobs.removeAll { $0.id == id }
         case .queueChanged(let queue):
             if let index = queues.firstIndex(where: { $0.config.id == queue.config.id }) {
                 queues[index] = queue

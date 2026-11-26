@@ -233,7 +233,11 @@ struct DownloadsView: View {
     }
 
     private func remove(_ targets: [JobView], deletePartial: Bool) {
-        for job in targets { model.remove(job.id, deletePartial: deletePartial && job.hasPartial) }
+        if deletePartial {
+            for job in targets { model.remove(job.id, deletePartial: job.hasPartial) }
+        } else {
+            model.removeUndoable(targets)
+        }
         selection = []
     }
 }
