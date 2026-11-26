@@ -16,6 +16,10 @@ description: "How Rays speeds up downloads on Mac: parallel connections, automat
 
 Downloads go to `~/Downloads` unless you choose another folder in **Settings > General**.
 
+## Shortcuts
+
+Rays adds actions to the Shortcuts app and to Spotlight: **Add download** (a link and an optional queue), **Start queue**, **Stop queue** and **Run speed test**, which returns the speed, for example `212 Mbps`. Unlike the Share menu, **Add download** starts the download at once, because you built the shortcut. **Run speed test** does not run on a hotspot or a network Rays cannot identify; run it from the Speed page and confirm there.
+
 ## How Rays downloads
 
 - **Start now, or queue it.** A download starts at once, in no queue. To run it later, pick a queue in the **Download** button's menu, or use **Move to Queue**. See [Queues and schedules](/docs/app/queues/).

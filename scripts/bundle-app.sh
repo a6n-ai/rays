@@ -31,6 +31,19 @@ xcrun actool "$root/macos/Resources/AppIcon.icon" --compile "$root/$app/Contents
   --minimum-deployment-target 26.0 --app-icon AppIcon --output-partial-info-plist "$root/build/icon-partial.plist" >/dev/null
 [ -f "$app/Contents/Resources/Assets.car" ] || { echo "actool did not produce Assets.car" >&2; exit 1; }
 
+# SwiftPM compiles the App Intents but does not extract their metadata, so Shortcuts would not see them.
+# The constvalues of one architecture describe the same intents as the other.
+mkdir -p build/intents
+fd -e swift . macos/Sources/Rays -a >build/intents/sources.txt
+fd -e swiftconstvalues -p 'Release/.*/arm64/' . "$root/macos/.build/out/Intermediates.noindex/Rays.build" -a >build/intents/constvalues.txt
+[ -s build/intents/constvalues.txt ] || { echo "no swiftconstvalues for arm64 under macos/.build" >&2; exit 1; }
+xcrun appintentsmetadataprocessor --output "$root/$app/Contents/Resources" \
+  --toolchain-dir "$(dirname "$(dirname "$(dirname "$(xcrun --find swiftc)")")")" --module-name Rays \
+  --sdk-root "$(xcrun --show-sdk-path)" --xcode-version "$(xcodebuild -version | awk '/Build version/ {print $3}')" \
+  --platform-family macOS --deployment-target 26.0 --target-triple arm64-apple-macos26.0 \
+  --source-file-list "$root/build/intents/sources.txt" --swift-const-vals-list "$root/build/intents/constvalues.txt"
+[ -d "$app/Contents/Resources/Metadata.appintents" ] || { echo "appintentsmetadataprocessor produced no Metadata.appintents" >&2; exit 1; }
+
 # Universal CLI: the bundled copy is the browser helper, so it must run on Intel Macs too.
 cargo build --release -p dl-cli --target aarch64-apple-darwin
 cargo build --release -p dl-cli --target x86_64-apple-darwin
