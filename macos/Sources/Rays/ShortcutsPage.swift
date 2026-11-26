@@ -26,6 +26,53 @@ struct ShortcutsPage: View {
                phrase: "Download copied link in Rays"),
     ]
 
+    private struct Template: Identifiable {
+        let file: String, symbol: String, detail: String, steps: [String]
+        var id: String { file }
+    }
+
+    private let templates = [
+        Template(file: "Download from Share Sheet", symbol: "square.and.arrow.up", detail: "Downloads links shared from Safari or any app.",
+                 steps: ["Make a new shortcut and turn on Use as Quick Action > Share Sheet.", "Add Repeat with Each, with Shortcut Input.",
+                         "Inside it, add Rays > Add download and set Link to Repeat Item."]),
+        Template(file: "Speed check", symbol: "speedometer", detail: "Tests your speed and shows the result.",
+                 steps: ["Make a new shortcut.", "Add Rays > Run speed test.", "Add Show Result below it."]),
+        Template(file: "Download copied link", symbol: "doc.on.clipboard", detail: "Downloads the link you just copied.",
+                 steps: ["Make a new shortcut.", "Add Get Clipboard.", "Add Rays > Add download and set Link to Clipboard."]),
+        Template(file: "Night downloads", symbol: "moon.stars", detail: "Starts a queue of your choice.",
+                 steps: ["Make a new shortcut.", "Add Rays > Start queue.", "Leave Queue empty so it asks each time."]),
+    ]
+
+    private func bundled(_ t: Template) -> URL? {
+        Bundle.main.url(forResource: t.file, withExtension: "shortcut", subdirectory: "Shortcuts")
+    }
+
+    private func template(_ t: Template) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: LayoutMetrics.gap) {
+                Image(systemName: t.symbol).font(.title3).foregroundStyle(.tint).frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t.file)
+                    Text(t.detail).font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: LayoutMetrics.gap)
+                if let url = bundled(t) {
+                    Button("Add") { NSWorkspace.shared.open(url) }.controlSize(.small)
+                }
+            }
+            if bundled(t) == nil {
+                DisclosureGroup("Build it") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(t.steps.enumerated()), id: \.offset) { step($0.offset + 1, $0.element) }
+                    }
+                    .font(.callout).padding(.top, 4)
+                }
+                .font(.callout).padding(.leading, 28 + LayoutMetrics.gap)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -40,6 +87,11 @@ struct ShortcutsPage: View {
                     // ShortcutsLink is not available on macOS, so this opens the app itself.
                     Button("Open Shortcuts") { NSWorkspace.shared.open(URL(string: "shortcuts://")!) }
                         .buttonStyle(.glassProminent)
+                    section("Ready-made shortcuts")
+                    Text("Common automations built from the actions above.").font(.callout).foregroundStyle(.secondary)
+                    VStack(spacing: 0) {
+                        ForEach(templates) { template($0) }
+                    }
                     section("How to add one")
                     VStack(alignment: .leading, spacing: 6) {
                         step(1, "Open Shortcuts and make a new shortcut.")
