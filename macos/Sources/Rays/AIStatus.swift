@@ -92,9 +92,8 @@ struct AIStatusRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            IconTile(Tile(symbol: readiness.symbol, color: readiness.color))
             VStack(alignment: .leading, spacing: 2) {
-                Text(readiness.title).font(.callout.weight(.semibold))
+                Text(readiness.title)
                 Text(readiness.hint).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -106,6 +105,7 @@ struct AIStatusRow: View {
                     }
                 }
                 .buttonStyle(.glass)
+                .controlSize(.small)
             }
         }
         .accessibilityElement(children: .combine)

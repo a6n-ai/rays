@@ -160,7 +160,7 @@ struct DownloadsView: View {
     }
 
     private func settingsRow(_ row: some View, _ position: CardRowBackground.Position) -> some View {
-        row.padding(.vertical, 6).cardRow(position, separatorInset: TileSize.row + 10)
+        row.padding(.vertical, 6).cardRow(position, separatorInset: 0)
     }
 
     /// Plain text, not the glass empty states: this sits in a List row.

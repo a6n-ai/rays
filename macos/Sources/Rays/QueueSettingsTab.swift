@@ -19,7 +19,7 @@ struct QueueSettingsTab: View {
     private func row(_ index: Int) -> CardRowBackground.Position { CardRowBackground.position(index + 1, of: count + 1) }
 
     var body: some View {
-        SettingRow(.wake, title: "Wake permission",
+        SettingRow(title: "Wake permission",
                    hint: "Rays can wake your Mac to start a scheduled queue. It asks for your administrator password once, to allow setting wake times and nothing else. Without it, keep your Mac awake and Rays running at the start time.",
                    status: installed ? .ok : .off) {
             HStack(spacing: 8) {
@@ -38,26 +38,26 @@ struct QueueSettingsTab: View {
                 .disabled(!installed || busy)
             }
         }
-        .cardRow(row(0), separatorInset: TileSize.row + 10)
+        .cardRow(row(0), separatorInset: 0)
         .task { await refresh() }
         if missing {
-            SettingRow(.warning, title: "Wake permission missing", hint: "A queue wakes the Mac but the permission is missing.", status: .warning) {
+            SettingRow(title: "Wake permission missing", hint: "A queue wakes the Mac but the permission is missing.", status: .warning) {
                 EmptyView()
             }
-            .cardRow(row(1), separatorInset: TileSize.row + 10)
+            .cardRow(row(1), separatorInset: 0)
         }
-        SettingRow(.concurrency, title: "Simultaneous", hint: "Defaults apply to queues you create from now on. Run command and Shut down are set per queue.") {
+        SettingRow(title: "Simultaneous", hint: "Defaults apply to queues you create from now on. Run command and Shut down are set per queue.") {
             StepSlider(title: "Simultaneous", value: Binding(get: { shownRunning }, set: { defaultRunning = $0 }),
                        range: 0...max(cap, 1), lowLabel: "Same as Rays", highLabel: "\(max(cap, 1))") {
                 $0 == 0 ? "Auto" : "\($0)"
             }
         }
-        .cardRow(row(missing ? 2 : 1), separatorInset: TileSize.row + 10)
-        SettingRow(.speedLimit, title: "Speed limit") {
+        .cardRow(row(missing ? 2 : 1), separatorInset: 0)
+        SettingRow(title: "Speed limit") {
             SpeedLimitField(bytes: $defaultSpeed)
         }
-        .cardRow(row(missing ? 3 : 2), separatorInset: TileSize.row + 10)
-        SettingRow(.queues, title: "When finished") {
+        .cardRow(row(missing ? 3 : 2), separatorInset: 0)
+        SettingRow(title: "When finished") {
             Picker("When finished", selection: $defaultFinish) {
                 ForEach(Self.finishChoices, id: \.rawValue) { Label($0.title, systemImage: $0.symbol).tag($0.rawValue) }
             }
@@ -66,7 +66,7 @@ struct QueueSettingsTab: View {
             .controlSize(.small)
             .fixedSize()
         }
-        .cardRow(row(missing ? 4 : 3), separatorInset: TileSize.row + 10)
+        .cardRow(row(missing ? 4 : 3), separatorInset: 0)
     }
 
     private func run(_ work: () async -> Void) async {

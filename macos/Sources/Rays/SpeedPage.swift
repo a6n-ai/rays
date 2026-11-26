@@ -260,12 +260,12 @@ private struct SpeedSettingsRows: View {
     @State private var confirmClear = false
 
     var body: some View {
-        SettingRow(.speed, title: "Test automatically every 3 hours", hint: "Uses about 50 to 200 MB per test") {
+        SettingRow(title: "Test automatically every 3 hours", hint: "Uses about 50 to 200 MB per test") {
             Toggle("Test automatically every 3 hours",
                    isOn: Binding(get: { model.speedSettings.autoTests }, set: { model.setAutoTests($0) }))
                 .labelsHidden()
         }
-        SettingRow(.schedules, title: "Night tests") {
+        SettingRow(title: "Night tests") {
             if let until = model.speedSettings.nightUntil, model.nightWeekActive {
                 HStack {
                     Text("On until " + Date(timeIntervalSince1970: TimeInterval(until)).formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
@@ -276,7 +276,7 @@ private struct SpeedSettingsRows: View {
                 Button("Test at night for a week") { model.startNightWeek() }
             }
         }
-        SettingRow(.trash, title: "Speed history", hint: "Speed data stays on this Mac.") {
+        SettingRow(title: "Speed history", hint: "Speed data stays on this Mac.") {
             Button("Clear speed history…", role: .destructive) { confirmClear = true }
         }
         .confirmationDialog("Clear speed history?", isPresented: $confirmClear, titleVisibility: .visible) {

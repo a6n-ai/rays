@@ -6,7 +6,7 @@ struct ReplaceExistingRow: View {
     @AppStorage(SettingsKey.replaceExisting) private var replaceExisting = false
 
     var body: some View {
-        SettingRow(.duplicates, title: "If a file with the same name exists", hint: "Applies to every download. A replaced file goes to the Trash.") {
+        SettingRow(title: "If a file with the same name exists", hint: "Applies to every download. A replaced file goes to the Trash.") {
             RadioChoice(title: "If a file with the same name exists",
                         selection: Binding(get: { replaceExisting }, set: { model.setReplaceExisting($0) }),
                         choices: [false, true]) { Text($0 ? "Replace" : "Keep both") }
@@ -43,7 +43,7 @@ struct HuggingFaceTokenRows: View {
         Group {
             if card {
                 VStack(alignment: .leading, spacing: 6) {
-                    SettingRow(.models, title: "Hugging Face token", hint: Self.note, status: hasToken ? .ok : nil) { controls }
+                    SettingRow(title: "Hugging Face token", hint: Self.note, status: hasToken ? .ok : nil) { controls }
                     if let tokenError { ErrorLine(text: tokenError) }
                 }
             } else {
@@ -89,7 +89,7 @@ struct AIModelsFolderRow: View {
     let folder: URL
 
     var body: some View {
-        SettingRow(.modelsFolder, title: "AI Models folder", hint: (folder.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath) {
+        SettingRow(title: "AI Models folder", hint: (folder.path(percentEncoded: false) as NSString).abbreviatingWithTildeInPath) {
             Button("Show in Finder") { AIModelsFolder.reveal(folder) }
         }
     }

@@ -95,9 +95,9 @@ struct ModelsView: View {
             }
             CollapsibleSettingsCard(page: "models", summary: "Models folder, Hugging Face token") {
                 AIModelsFolderRow(folder: folder)
-                    .cardRow(.middle, separatorInset: TileSize.row + 10)
+                    .cardRow(.middle, separatorInset: 0)
                 HuggingFaceTokenRows(card: true)
-                    .cardRow(.last, separatorInset: TileSize.row + 10)
+                    .cardRow(.last, separatorInset: 0)
             }
             Section {
                 DrillInRow(tile: .modelsFolder, title: "Downloaded models", subtitle: "Models already in your AI Models folder") {

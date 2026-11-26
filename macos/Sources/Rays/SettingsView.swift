@@ -33,15 +33,13 @@ private struct GeneralTab: View {
     var body: some View {
         Form {
             Section {
-                SettingRow(.appearance,
-                           title: "Appearance", hint: "Match your Mac, or always light or dark.") {
+                SettingRow(title: "Appearance", hint: "Match your Mac, or always light or dark.") {
                     RadioChoice(title: "Appearance", selection: $appearance, choices: AppearanceChoice.allCases) { Text($0.title) }
                 }
 
                 SaveFolderRow(sorter: sorter)
 
-                SettingRow(.menuBar,
-                           title: "Show in menu bar", hint: "See and pause downloads from the menu bar. Closing the window keeps Rays running.") {
+                SettingRow(title: "Show in menu bar", hint: "See and pause downloads from the menu bar. Closing the window keeps Rays running.") {
                     Toggle("Show in menu bar", isOn: $showsMenuBar)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -75,8 +73,7 @@ struct SaveFolderRow: View {
     private var folder: URL { EngineModel.downloadsURL }
 
     var body: some View {
-        SettingRow(.folder,
-                   title: "Save downloads to", hint: "New downloads go here.") {
+        SettingRow(title: "Save downloads to", hint: "New downloads go here.") {
             HStack(spacing: 8) {
                 Text(folder.tildePath)
                     .lineLimit(1)
@@ -124,8 +121,7 @@ struct CopiedLinksRow: View {
     @AppStorage(SettingsKey.clipboard) private var offersCopiedLinks = true
 
     var body: some View {
-        SettingRow(.clipboard,
-                   title: "Offer copied download links",
+        SettingRow(title: "Offer copied download links",
                    hint: "When you copy a link to a file, like a .zip or .dmg, a notification offers to download it. macOS asks once to let Rays read copied links.") {
             Toggle("Offer copied download links", isOn: $offersCopiedLinks)
                 .toggleStyle(.switch)
@@ -138,8 +134,7 @@ struct NotifyRow: View {
     @AppStorage(SettingsKey.notifyDone) private var notifiesWhenDone = true
 
     var body: some View {
-        SettingRow(.notifications,
-                   title: "Notify when downloads finish",
+        SettingRow(title: "Notify when downloads finish",
                    hint: "A notification when a download finishes or fails, with buttons to open it, show it in Finder or retry. Many at once become one summary.") {
             Toggle("Notify when downloads finish", isOn: $notifiesWhenDone)
                 .toggleStyle(.switch)
@@ -153,8 +148,7 @@ struct MaxRunningRow: View {
     @AppStorage(SettingsKey.maxRunning) private var maxRunning = 3
 
     var body: some View {
-        SettingRow(.concurrency,
-                   title: "Downloads at once", hint: "How many files download at the same time.") {
+        SettingRow(title: "Downloads at once", hint: "How many files download at the same time.") {
             StepSlider(title: "Downloads at once", value: Binding(get: { maxRunning }, set: { model.setMaxRunning($0) }), range: 1...10)
         }
     }
@@ -165,8 +159,7 @@ struct PartsRow: View {
     @AppStorage(SettingsKey.connections) private var connections = 4
 
     var body: some View {
-        SettingRow(.parts,
-                   title: "Parts per file", hint: "Big files download in parts at once. 4 works well for most sites.") {
+        SettingRow(title: "Parts per file", hint: "Big files download in parts at once. 4 works well for most sites.") {
             StepSlider(title: "Parts per file", value: Binding(get: { connections }, set: { model.setConnections($0) }), range: 1...16)
         }
     }
@@ -177,8 +170,7 @@ struct SpeedLimitRow: View {
     @AppStorage(SettingsKey.speedLimit) private var speedLimit = 0
 
     var body: some View {
-        SettingRow(.speedLimit,
-                   title: "Speed limit", hint: "Leave some internet for everything else on your Mac. 0 means no limit.") {
+        SettingRow(title: "Speed limit", hint: "Leave some internet for everything else on your Mac. 0 means no limit.") {
             SpeedLimitField(bytes: Binding(get: { speedLimit }, set: { model.setSpeedLimit($0) }))
         }
     }
@@ -239,7 +231,7 @@ struct WakePermissionRow: View {
     @State private var installed: Bool?
 
     var body: some View {
-        SettingRow(.wake, title: "Wake permission",
+        SettingRow(title: "Wake permission",
                    hint: "Lets a queue wake your Mac to start on time.") {
             HStack(spacing: 10) {
                 Text(installed == true ? "Installed" : "Not set up").foregroundStyle(.secondary)

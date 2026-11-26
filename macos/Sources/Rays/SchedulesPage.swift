@@ -68,7 +68,7 @@ struct SchedulesPage: View {
                 .cardRow(.only)
             }
             CollapsibleSettingsCard(page: "schedules", summary: "Wake permission") {
-                WakePermissionRow().cardRow(.last, separatorInset: TileSize.row + 10)
+                WakePermissionRow().cardRow(.last, separatorInset: 0)
             }
             if shown.isEmpty {
                 Section {

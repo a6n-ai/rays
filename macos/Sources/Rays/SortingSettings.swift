@@ -19,7 +19,7 @@ struct SortingTab: View {
             Section { RenameRow(sorter: sorter) }
 
             Section {
-                SettingRow(.watchedFolders, title: watched == 1 ? "1 folder watched" : "\(watched) folders watched",
+                SettingRow(title: watched == 1 ? "1 folder watched" : "\(watched) folders watched",
                            hint: folders.isEmpty ? "Add folders to sort in the Sorter page."
                                                  : folders.map(\.name).joined(separator: ", ")) {
                     Button("Open Sorter", action: openSorter)
@@ -44,7 +44,7 @@ struct SortDelayRow: View {
     let sorter: SorterModel
 
     var body: some View {
-        SettingRow(.sortDelay, title: "Sort new files after",
+        SettingRow(title: "Sort new files after",
                    hint: "Rays waits this long after a file arrives, so you can open or move it first.") {
             StepSlider(title: "Sort new files after",
                        value: Binding(
@@ -62,7 +62,7 @@ struct RenameRow: View {
     let sorter: SorterModel
 
     var body: some View {
-        SettingRow(.rename, title: "Rename files from their content",
+        SettingRow(title: "Rename files from their content",
                    hint: "Off keeps every file's original name. Files are still sorted into folders.") {
             Toggle("Rename files from their content", isOn: Binding(
                 get: { sorter.status?.renameFiles ?? true },

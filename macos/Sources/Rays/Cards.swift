@@ -289,16 +289,17 @@ struct ChartCard<Range: Hashable, Content: View>: View {
     }
 }
 
-/// One settings row: tile, title, optional secondary line (with a status dot), trailing control.
+/// One settings row: optional tile, title, optional secondary line (with a status dot), trailing control.
 /// An HStack, not LabeledContent, so it lays out the same inside a Form and a List.
 struct SettingRow<Control: View>: View {
-    let tile: Tile
+    let tile: Tile?
     let title: String
     let hint: String?
     let status: StatusDot.Kind?
     let control: Control
 
-    init(_ tile: Tile, title: String, hint: String? = nil, status: StatusDot.Kind? = nil,
+    /// Plain settings rows have no tile; only rows that stand for a thing pass one.
+    init(_ tile: Tile? = nil, title: String, hint: String? = nil, status: StatusDot.Kind? = nil,
          @ViewBuilder control: () -> Control) {
         self.tile = tile
         self.title = title
@@ -309,7 +310,7 @@ struct SettingRow<Control: View>: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            IconTile(tile, size: TileSize.row)
+            if let tile { IconTile(tile, size: TileSize.row) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                 if let hint {
