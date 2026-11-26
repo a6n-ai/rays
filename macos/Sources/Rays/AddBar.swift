@@ -65,10 +65,7 @@ struct AddBar: View {
             }
             // An overlay takes no layout space, so the bar does not move when a notice appears.
             .overlay(alignment: .top) {
-                if let notice = model.notice {
-                    noticeCapsule(notice)
-                        .alignmentGuide(.top) { d in d[.bottom] + LayoutMetrics.gap }
-                } else if !detected.isEmpty {
+                if model.notice == nil, !detected.isEmpty {
                     detectionLine
                         .alignmentGuide(.top) { d in d[.top] }
                         .offset(y: -(LayoutMetrics.barHeight / 2 + 22))
@@ -76,6 +73,15 @@ struct AddBar: View {
             }
         }
         .frame(maxWidth: LayoutMetrics.barMaxWidth)
+        // Outside the GlassEffectContainer: inside it, the notice's glass merged into the bar's and was hidden behind it.
+        .overlay(alignment: .top) {
+            if let notice = model.notice {
+                noticeCapsule(notice)
+                    .alignmentGuide(.top) { d in d[.top] }
+                    .offset(y: -(LayoutMetrics.barHeight / 2 + 26))
+                    .transition(.opacity)
+            }
+        }
         .background {
             // Zero-size, invisible button: exists only to own the ⌘L shortcut.
             Button("Add Link") { fieldFocused = true }
@@ -107,6 +113,16 @@ struct AddBar: View {
             input = isBlank ? pending : input + "\n" + pending
             model.pendingAdd = nil
             fieldFocused = true
+        }
+        .onChange(of: model.requestedGrab, initial: true) { _, page in
+            guard let page else { return }
+            grabPage = page
+            model.requestedGrab = nil
+        }
+        .onChange(of: model.requestedExtra, initial: true) { _, kind in
+            guard let kind else { return }
+            extra = kind
+            model.requestedExtra = nil
         }
         .task(id: model.notice) {
             guard model.notice != nil else { return }
@@ -253,7 +269,7 @@ struct AddBar: View {
 
     private func noticeCapsule(_ text: String) -> some View {
         Label {
-            Text(text)
+            Text(text).lineLimit(1).truncationMode(.middle)
         } icon: {
             Image(systemName: "exclamationmark.circle").foregroundStyle(.red)
         }
@@ -262,8 +278,6 @@ struct AddBar: View {
         .padding(.vertical, 6)
         .frame(maxWidth: LayoutMetrics.barMaxWidth)
         .glassEffect(reduceTransparency ? .regular : .regular.tint(Color.red.opacity(0.2)), in: .capsule)
-        .glassEffectID("notice", in: glass)
-        .glassEffectTransition(.matchedGeometry)
     }
 
     private var bestTimeTitle: String {

@@ -27,6 +27,9 @@ final class EngineModel {
     var pendingAdd: String?
     /// A page the add bar menu asks the window to show (Cloud, Models); the window takes it and clears it.
     var requestedDestination: Destination?
+    /// From the menu bar's + menu: a page to scan, or a checksum/mirror sheet to open in the add bar.
+    var requestedGrab: String?
+    var requestedExtra: LinkExtra?
     /// Bumped when the folders on disk may have changed, so the sidebar re-lists them.
     private(set) var folderRevision = 0
     private(set) var generation = 0

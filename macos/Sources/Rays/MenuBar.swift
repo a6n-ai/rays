@@ -223,6 +223,10 @@ struct MenuBarPanel: View {
                 MenuItem("Downloads", symbol: "arrow.down.circle") { show(.openDownloads) }
                 MenuItem("Sorter", symbol: "wand.and.stars") { show(.openSorter) }
                 MenuItem("Cloud", symbol: "cloud") { show(.openCloud) }
+                MenuItem("Queues", symbol: "list.bullet.rectangle") { go(.queues) }
+                MenuItem("Schedules", symbol: "calendar.badge.clock") { go(.schedules) }
+                MenuItem("Speed Test", symbol: "gauge.with.dots.needle.67percent") { go(.speed) }
+                MenuItem("Shortcuts", symbol: "square.2.layers.3d") { go(.shortcuts) }
             }
             .padding(6)
             Divider()
@@ -255,6 +259,7 @@ struct MenuBarPanel: View {
 
     private var addRow: some View {
         HStack(spacing: 6) {
+            addMenu
             TextField("Paste a link", text: $link)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(addTyped)
@@ -318,6 +323,49 @@ struct MenuBarPanel: View {
     }
 
     /// Opens the window, at a sidebar page when given, and puts Rays back in the Dock if it was hidden there.
+    /// What the main add bar's + menu offers; each opens Rays with the typed link where it applies.
+    private var addMenu: some View {
+        Menu {
+            Section("Add") {
+                Button("Find links on a page…", systemImage: "doc.text.magnifyingglass") {
+                    let page = typedLinks.count == 1 ? typedLinks[0] : nil
+                    open { if let page { model.requestedGrab = page } }
+                }
+                Button("From a cloud bucket…", systemImage: "cloud") { go(.cloud) }
+                Button("Hugging Face model…", systemImage: "cube") { go(.models) }
+            }
+            Section("With the link") {
+                Button("Add a checksum…", systemImage: "checkmark.shield") { withLink(.checksum) }
+                Button("Add a mirror…", systemImage: "square.on.square") { withLink(.mirror) }
+            }
+        } label: {
+            Image(systemName: "plus.circle").font(.system(size: 15, weight: .semibold)).foregroundStyle(.tint)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More ways to add")
+        .accessibilityLabel("More ways to add")
+    }
+
+    private func withLink(_ kind: LinkExtra) {
+        let typed = typedLinks.joined(separator: "\n")
+        link = ""
+        open {
+            if !typed.isEmpty { model.pendingAdd = typed }
+            model.requestedExtra = kind
+        }
+    }
+
+    private func go(_ destination: Destination) { open { model.requestedDestination = destination } }
+
+    /// Opens the main window on Downloads, then runs `then` once its views are listening.
+    private func open(then: @escaping () -> Void) {
+        show(.openDownloads)
+        DispatchQueue.main.async { DispatchQueue.main.async(execute: then) }
+    }
+
     private func show(_ page: Notification.Name?) {
         AppDelegate.showInDock()
         openWindow(id: "main")

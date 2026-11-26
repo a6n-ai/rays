@@ -90,6 +90,7 @@ struct JobRow: View {
             moreButton
             if let primary { primaryButton(primary) }
             if primary == .reveal { trashButton }
+            if primary == .retry { removeButton }
         }
         .frame(height: LayoutMetrics.rowHeight)
         .padding(.horizontal, LayoutMetrics.hoverInset)
@@ -347,6 +348,24 @@ struct JobRow: View {
         .buttonStyle(.plain)
         .help("Move \(job.name) to the Trash")
         .accessibilityLabel("Move \(job.name) to the Trash")
+    }
+
+    /// Next to Retry on a failed download, so it can be cleared without the menu. Same path as the menu's Remove.
+    private var removeButton: some View {
+        Button {
+            if job.hasPartial { confirmRemove = true } else { model.removeUndoable([job]) }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: LayoutMetrics.rowAction, height: LayoutMetrics.rowAction)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .frame(width: LayoutMetrics.rowHitArea, height: LayoutMetrics.rowHitArea)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("Remove \(job.name) from the list")
+        .accessibilityLabel("Remove \(job.name) from the list")
     }
 
     /// The context menu, shown on hover so Remove and Move to Trash are found without right-clicking.

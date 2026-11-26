@@ -12,7 +12,8 @@ struct RemovalPillView: View {
             let tint: Color = pill.trash ? .orange : .blue
             HStack(spacing: 10) {
                 Image(systemName: pill.trash ? "trash.fill" : "minus.circle.fill").foregroundStyle(tint)
-                Text(pill.text).font(.callout.weight(.medium))
+                // One line: a long file name is shortened in the middle, so the pill never grows to several lines.
+                Text(pill.text).font(.callout.weight(.medium)).lineLimit(1).truncationMode(.middle)
                 Button("Undo") { model.undoRemoval() }
                     .buttonStyle(.glassProminent)
                     .buttonBorderShape(.capsule)
@@ -28,6 +29,7 @@ struct RemovalPillView: View {
                 .help("Dismiss")
                 .accessibilityLabel("Dismiss removal notice")
             }
+            .frame(maxWidth: 560)
             .padding(.leading, 14)
             .padding(.trailing, 8)
             .padding(.vertical, 6)
