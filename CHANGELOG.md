@@ -4,7 +4,7 @@
 
 - Fixed a crash when downloads were added or removed quickly, for example clicking **Remove** on several rows in a row.
 - Row buttons in the Downloads, Queues, Schedules and Sorter lists look the same but no longer flex when pressed.
-- The Shortcuts page says how to chain Rays actions into your own shortcut.
+- The docs say how to chain Rays actions into your own shortcut.
 - Website: the topography follows more sections, light mode has stronger contrast, the docs menu button and cards line up, and the release chip shows the date.
 
 ## 0.1.25 (26 Nov 2026)
