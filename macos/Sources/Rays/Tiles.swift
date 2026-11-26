@@ -37,7 +37,7 @@ enum SystemIcon: Hashable {
 
     /// App and folder icons carry transparent padding; panes are full-bleed squircles.
     var bleed: CGFloat {
-        switch self { case .pane, .bundled: 1; default: 1.22 }
+        switch self { case .pane, .bundled, .file: 1.04; default: 1.22 }
     }
 
     @MainActor private static var cache: [SystemIcon: NSImage?] = [:]
@@ -55,9 +55,9 @@ enum SystemIcon: Hashable {
 }
 
 extension Tile {
-    static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5)
-    static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5)
-    static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .app("/System/Applications/Automator.app"))
+    static let downloads = Tile(symbol: "arrow.down.to.line", color: TilePalette.blue, glyphScale: 0.5, system: .bundled("downloads"))
+    static let models = Tile(symbol: "cpu.fill", color: TilePalette.purple, glyphScale: 0.5, system: .bundled("models"))
+    static let sorter = Tile(symbol: "wand.and.stars", color: TilePalette.pink, glyphScale: 0.5, system: .bundled("sorter"))
     static let cloud = Tile(symbol: "icloud.fill", color: TilePalette.sky, glyphScale: 0.48, system: .file("/System/Library/PrivateFrameworks/AOSUI.framework/Versions/A/Resources/iCloud.icns"))
     static let queues = Tile(symbol: "list.bullet", color: TilePalette.orange, glyphScale: 0.46, system: .bundled("queues"))
     static let schedules = Tile(symbol: "calendar.badge.clock", color: TilePalette.orange, glyphScale: 0.52, system: .bundled("schedules"))
@@ -108,6 +108,8 @@ struct IconTile: View {
                 .interpolation(.high)
                 .frame(width: size * (tile.system?.bleed ?? 1), height: size * (tile.system?.bleed ?? 1))
                 .frame(width: size, height: size)
+                // One squircle for every icon, so a square-ish system icon (like iCloud's) matches the rest.
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
                 .accessibilityHidden(true)
         } else {
             symbolTile
