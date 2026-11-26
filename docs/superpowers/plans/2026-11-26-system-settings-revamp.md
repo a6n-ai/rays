@@ -76,11 +76,31 @@ Files: `SpeedPage.swift`, `StatsPage.swift`, `ShortcutsPage.swift`.
 - [ ] Shortcuts: a grouped Form with a hero, an Actions card of `SettingRow`s with map tiles and the phrase trailing, and the steps and ways as card rows. It has no settings card.
 - [ ] Charts follow the spec's chart rules.
 
-## Task 7: Settings window, app-wide only
+## Task 7: Remove the Settings window; app-wide settings become sidebar pages
 
-Files: `SettingsView.swift`, `BrowsersSettings.swift`, `HelperExplainer.swift`, `AIStatus.swift`, `CommandLineTool.swift`, `Updater.swift`, `Uninstaller.swift`, and `SortingSettings.swift` (delete `SortingTab` once it is unused).
+Changed 2026-11-26: the user chose to remove the separate Settings window, the way System Settings keeps everything in one window.
 
-- [ ] The tabs become General, AI and Browsers. General has `HeroCard(.general, style: .centered)`, then cards for Appearance, Show in menu bar, Command line tool, Updates and Uninstall. AI has a compact hero and AIStatusRow. Browsers has a compact hero `.browsers`, the extension row, HelperExplainer as a card, per-browser cards and Remove all helpers.
-- [ ] Remove every row that moved to a page (see the spec table). Remove the Downloads and Sorting tabs. If `@AppStorage("settingsTab")` holds a removed tab, it falls back to `general`.
-- [ ] `rg` for each moved row's struct name. Each one must now appear on exactly one page, apart from the AIStatusRow copy the spec allows.
-- [ ] Open each tab at 520pt width in light and dark mode.
+- [ ] Add a last sidebar group, separated by spacing, with three pages built on HeroCard and cards:
+  - **General** (`Tile.general`, gray, gearshape): appearance, menu bar, updates and the command-line tool.
+  - **AI** (`Tile.ai`): AI status and the model settings that SettingsView's AI tab held.
+  - **Browsers** (`Tile.browsers`): the BrowsersTab content.
+  Add `Destination.general`, `.ai` and `.browsers`.
+- [ ] Delete the `Settings { }` scene and SettingsView's TabView. ⌘, and the app menu's "Settings…" select `.general` in the main window, bringing it forward. Every `openSettings` call and every `SettingsToolbarButton` selects the matching page instead: `settingsTab = "browsers"` goes to `.browsers`, and so on. Grep `openSettings`, `settingsTab` and `SettingsToolbarButton`, and fix every caller, including `RaysApp.swift`'s `open urls` and the menu bar panel.
+- [ ] The Home page card 4 "Settings" row becomes "General".
+- [ ] Remove dead code: the TabView and any tab that is now empty. The rows extracted in Task 1 stay, because pages use them.
+- [ ] `swift build`, then check by hand that ⌘, opens General and that the menu bar panel's settings link still works.
+
+## Task 8: Home page (like System Settings > General)
+
+Added 2026-11-26 from the user's General reference. Runs after Task 1, in parallel with Tasks 2 to 6.
+
+Files: new `macos/Sources/Rays/HomePage.swift`; `ContentView.swift` (route `.home`, make it the default selection on first launch).
+
+- [ ] The centred HeroCard: the Rays app icon at 64pt, "Rays", and "Downloads files fast, sorts them, and runs them on your schedule." with a Learn more… link to rays.a6n.ai/docs.
+- [ ] Grouped cards of drill-in rows, each a 22pt tile from the `Tile` map, a title and a › chevron, that select the matching sidebar destination:
+  - Card 1: Downloads, Models, Sorter, Cloud.
+  - Card 2: Queues, Schedules.
+  - Card 3: Speed test, Stats, Shortcuts.
+  - Card 4: Settings, which opens the Settings window; About Rays, showing the version and an updates status line; Docs, which opens the website.
+- [ ] Each row may show a secondary subtitle with live state, for example "3 downloading", "2 queues running", "Last test 79 Mb/s" or "Up to date".
+- [ ] `swift build` passes; take a screenshot.
