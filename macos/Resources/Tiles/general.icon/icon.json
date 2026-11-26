@@ -1,0 +1,42 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.50000,0.51000,0.55000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "hub.svg",
+          "name": "hub"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.3
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "gear.svg",
+          "name": "gear"
+        }
+      ],
+      "translucency": {
+        "enabled": true,
+        "value": 0.1
+      },
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.45
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

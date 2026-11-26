@@ -1,0 +1,42 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.04000,0.48000,1.00000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "arrow.svg",
+          "name": "arrow"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.3
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "card.svg",
+          "name": "card"
+        }
+      ],
+      "translucency": {
+        "enabled": true,
+        "value": 0.1
+      },
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.45
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
