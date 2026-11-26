@@ -701,7 +701,7 @@ fn headers_are_validated_per_url() {
     let bad = add("X-Token", "line\nbreak", ok.clone());
     assert!(bad[0].error.as_deref().unwrap().contains("not valid"));
     assert!(!bad[0].error.as_deref().unwrap().contains("break"), "values stay out of errors");
-    for name in ["Range", "host", "If-Range", "Content-Length", "Transfer-Encoding", "CONNECTION"] {
+    for name in ["Range", "host", "If-Range", "Content-Length", "Transfer-Encoding", "CONNECTION", "Accept-Encoding", "TE", "Upgrade", "Expect", "Proxy-Authorization", "If-None-Match", "if-modified-since"] {
         let r = add(name, "x", ok.clone());
         assert_eq!(r[0].error.as_deref(), Some(format!("header {name} is set by Rays").as_str()));
     }
@@ -802,4 +802,37 @@ fn finished_jobs_drop_their_headers_and_paused_ones_keep_them() {
     let stored = Store::open(&root.path().join("data")).expect("open store").load_all().expect("load jobs");
     assert!(stored[0].headers.is_empty());
     assert_eq!(stored[1].headers, token());
+}
+
+#[test]
+fn headers_with_links_on_two_sites_reject_the_whole_call() {
+    setup();
+    let (a, b) = (Origin::start(), Origin::start());
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let r = engine.add_with(vec![a.url("/file/x.bin"), b.url("/file/x.bin")], None, vec![None; 2], vec![], vec![], vec![token(), token()], None);
+    assert!(r.iter().all(|x| x.id.is_none() && x.error.as_deref() == Some("headers apply to one site; add links for other sites separately")));
+    let r = engine.add_with(vec![a.url("/file/x.bin"), a.url("/file/y.bin")], None, vec![None; 2], vec![], vec![], vec![token(), token()], None);
+    assert!(r.iter().all(|x| x.id.is_some()), "one site is fine");
+    engine.shutdown();
+}
+
+#[test]
+fn a_finished_job_leaves_no_header_value_in_the_database_or_wal() {
+    setup();
+    let origin = Origin::start();
+    let root = tmp();
+    let engine = start(config(root.path(), 2));
+    let marker = "zq-marker-7f3a91c2e8d4";
+    let h = vec![HttpHeader { name: "X-Token".into(), value: marker.into() }];
+    let id = engine.add_with(vec![origin.url("/file/x.bin")], None, vec![None], vec![], vec![], vec![h], None)[0].id.unwrap();
+    wait_done(&engine, id);
+    // The checkpoint runs right after the job is saved as done; give it a moment.
+    thread::sleep(Duration::from_millis(300));
+    let data = root.path().join("data");
+    for name in ["queue.db", "queue.db-wal"] {
+        let bytes = std::fs::read(data.join(name)).unwrap_or_default();
+        assert!(!bytes.windows(marker.len()).any(|w| w == marker.as_bytes()), "{name} still holds the header value");
+    }
+    engine.shutdown();
 }

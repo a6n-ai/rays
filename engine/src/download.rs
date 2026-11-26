@@ -1474,6 +1474,7 @@ pub fn headers_for(job: &Job, url: &str) -> Vec<HttpHeader> {
 /// redirect as a response. reqwest itself strips only Authorization, Cookie and a few more on a cross-host
 /// redirect, so a saved header such as X-Api-Key would follow it; `send_following` takes that hop by hand without them.
 fn strict_client() -> &'static reqwest::Client {
+    // One shared client is enough: it holds no per-job state, only the redirect policy.
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         let policy = reqwest::redirect::Policy::custom(|attempt| {
@@ -1508,13 +1509,16 @@ pub fn job_request(client: &reqwest::Client, job: &Job, url: &str, target: &str)
 /// Sends `req` and takes any redirect the client stopped at (a cross-origin hop) by hand: the same request, to
 /// `Location`, without the saved headers or credentials, keeping Range and If-Range.
 pub async fn send_following(req: reqwest::RequestBuilder, saved: &[HttpHeader]) -> Result<reqwest::Response, reqwest::Error> {
+    if saved.is_empty() {
+        return req.send().await;
+    }
     let (client, built) = req.build_split();
     let mut next = built?;
     for _ in 0..10 {
         let spare = next.try_clone();
         let resp = client.execute(next).await?;
         let hop = resp.headers().get(reqwest::header::LOCATION).and_then(|v| v.to_str().ok()).and_then(|v| resp.url().join(v).ok());
-        let (true, Some(mut again), Some(to)) = (resp.status().is_redirection(), spare, hop) else { return Ok(resp) };
+        let (true, Some(mut again), Some(to)) = (matches!(resp.status().as_u16(), 301 | 302 | 303 | 307 | 308), spare, hop) else { return Ok(resp) };
         if to.origin() != resp.url().origin() {
             let headers = again.headers_mut();
             for name in [reqwest::header::AUTHORIZATION, reqwest::header::COOKIE, reqwest::header::PROXY_AUTHORIZATION] {
@@ -1533,7 +1537,9 @@ pub async fn send_following(req: reqwest::RequestBuilder, saved: &[HttpHeader]) 
 }
 
 /// Headers the engine sets itself; a saved copy would break ranges, framing or the connection.
-const ENGINE_HEADERS: [&str; 6] = ["host", "range", "if-range", "content-length", "transfer-encoding", "connection"];
+const ENGINE_HEADERS: [&str; 11] = [
+    "host", "range", "content-length", "transfer-encoding", "connection", "accept-encoding", "te", "upgrade", "proxy-authorization", "expect", "if-range",
+];
 
 /// Rejects what cannot be sent: s3 links, bad names or values, headers the engine controls. Messages never carry values.
 pub fn check_headers(url: &str, headers: &[HttpHeader]) -> Result<(), String> {
@@ -1545,7 +1551,7 @@ pub fn check_headers(url: &str, headers: &[HttpHeader]) -> Result<(), String> {
     }
     for h in headers {
         let name = reqwest::header::HeaderName::from_bytes(h.name.trim().as_bytes()).map_err(|_| format!("header name {:?} is not valid", h.name))?;
-        if ENGINE_HEADERS.contains(&name.as_str()) {
+        if ENGINE_HEADERS.contains(&name.as_str()) || name.as_str().starts_with("if-") {
             return Err(format!("header {} is set by Rays", h.name.trim()));
         }
         if reqwest::header::HeaderValue::from_str(&h.value).is_err() {

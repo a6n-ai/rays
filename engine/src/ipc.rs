@@ -163,7 +163,8 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             },
             Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
         },
-        Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
+        // A serde message can quote the request, which may carry header values: keep only the position.
+        Err(e) => Response { error: Some(format!("invalid request at line {} column {}", e.line(), e.column())), ..Default::default() },
     }
 }
 
