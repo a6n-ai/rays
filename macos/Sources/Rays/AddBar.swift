@@ -219,7 +219,7 @@ struct AddBar: View {
             Button {
                 grabPage = links.first
             } label: {
-                Label("Find links on page…", systemImage: "doc.text.magnifyingglass")
+                Label("Find links on a page…", systemImage: "doc.text.magnifyingglass")
             }
             .disabled(links.count != 1 || !split.mirrors.joined().isEmpty)
         } label: {

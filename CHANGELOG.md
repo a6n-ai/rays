@@ -1,5 +1,19 @@
 # Release notes
 
+## 0.1.23 (26 Nov 2026)
+
+- **Find links on a page.** Paste a web page link and choose **Find links on a page…** from the new **+** menu in the add bar. Rays lists every file the page links to, so you can filter by type, pick the ones you want and download them or add them to a queue. `dl grab` and the MCP tool `grab_links` do the same.
+- **Mirrors.** Several links to the same file on one line, each from a different site, become one download. Each connection uses the fastest link, and a link that fails is dropped while the others carry on. `dl add URL --mirror URL2` and an MCP `mirrors` option.
+- **Expired links.** When a link stops working partway through, the download says **Link expired** and offers **Update link…**. If the new link is the same file, Rays keeps the bytes it already has; if it's a different file, Rays asks before starting over. `dl relink` and the MCP tool `relink`.
+- **Checksums.** Paste a SHA-256 next to a link, or use **Add a checksum…** in the **+** menu, and Rays checks the file when it finishes. A file that doesn't match is deleted. `dl add --sha256`.
+- **Notifications** when downloads finish or fail, with **Open**, **Show in Finder** and **Retry** on the notification. Several at once come as one summary. Turn them off in Settings.
+- **Shortcuts.** Add download, Start queue, Stop queue, Run speed test, Pause all, Resume all and Download copied link are available in Shortcuts, Spotlight and Siri with no setup. A new **Shortcuts** page in the sidebar lists them and explains how to use them.
+- **Share menu.** Send links to Rays from the Share menu in Safari and other apps. They land in the add bar, and nothing downloads until you press **Download**. Turn it on in System Settings > General > Login Items & Extensions.
+- **Activity in the sidebar.** A dot on **Downloads** while something is downloading, and a card at the bottom of the sidebar with the files, speed and time left.
+- **Move to Trash** button next to **Show in Finder** on finished downloads. After removing or trashing, a pill at the top offers **Undo** (also ⌘Z). Pills are coloured by what happened: orange for the Trash, blue for a removed row, green for updates, red for errors.
+- **Pages everywhere.** Every long list has pages, with 25, 50, 100 or 200 per page.
+- The add bar shows what it found as you type: links, checksums, mirrors, cloud and Hugging Face links.
+
 ## 0.1.22 (25 Nov 2026)
 
 - **Direct downloads.** A download goes into a queue only when you pick one in the Download button's menu or use **Move to Queue**. Otherwise it starts now, in no queue, so the Main queue no longer lists every download. **Download Now** in the menu and **Move to Queue › No Queue** take a download out of its queue. Finished downloads that were in Main move out on the first launch.
