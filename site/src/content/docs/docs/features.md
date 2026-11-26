@@ -26,6 +26,11 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 - **Smart splitting.** Big files start on 4 connections. Rays doubles them only while they make the file faster, steps back down when they stop helping, and replaces a connection that is far slower than the others. [How it works](/docs/engine/).
 - **Pause, resume, quit.** Downloads continue from the bytes already saved, after a pause, a quit or a crash.
 - **Filter and sort** the Downloads list by status or type, in pages of 50, with an icon for each file's type. **Remove Missing** clears finished downloads whose file is gone. Double-click a finished download to open it.
+- **Find links on a page.** Paste a page link, choose **Find links on page…**, and pick which of its files to download.
+- **Mirrors.** Several links to the same file on one line become mirrors. Each connection uses the fastest, and a link that fails is dropped.
+- **Expired links.** When a link stops working partway, **Update link…** takes a fresh one and keeps the bytes already saved if the size matches.
+- **Checksums.** Paste a SHA-256 next to a link and Rays checks the file when it finishes.
+- **Share menu.** Send links to Rays from the Share menu in Safari and other apps.
 - **Copied links.** Copy a download link anywhere on your Mac and Rays offers to download it.
 - **Hugging Face models.** Search Hugging Face, pick a quantization or weights format, and download it, or save it into LM Studio's models folder. **Verify** checks a downloaded model's files against their checksums, offline. [Models](/docs/app/models/)
 - **Queues and schedules.** Group downloads into queues, each with its own speed limit and simultaneous count. Run a queue at set times, only on Wi-Fi, while charging or while the Mac is idle, and choose what the Mac does when it finishes. [Queues and schedules](/docs/app/queues/)
@@ -70,6 +75,8 @@ How Rays tests its engine, with the script to rerun it: [Benchmarks](/docs/engin
 
 ## The app
 
+- **Notifications** when downloads finish or fail, with Open, Show in Finder and Retry. Turn them off in Settings.
+- **Shortcuts.** Add a download, start or stop a queue, or run a speed test from Shortcuts and Siri.
 - The menu bar and Dock icons show the download speed and a badge with the downloads running. Its panel adds links, pauses all, lists the latest four downloads and opens Downloads, Sorter and Cloud.
 - Close the window and Rays keeps downloading from the menu bar.
 - Updates install themselves: click Update and Rays replaces itself and reopens.
