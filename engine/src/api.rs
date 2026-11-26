@@ -82,8 +82,8 @@ impl Engine {
     }
 
     /// `add_to` with an expected SHA-256 per url (empty list: none), checked after the download.
-    pub fn add_with(&self, urls: Vec<String>, dir: Option<String>, names: Vec<Option<String>>, sha256s: Vec<Option<String>>, queue: Option<u64>) -> Vec<AddResult> {
-        self.sched.add_with(urls, dir.map(PathBuf::from), names, sha256s, queue)
+    pub fn add_with(&self, urls: Vec<String>, dir: Option<String>, names: Vec<Option<String>>, sha256s: Vec<Option<String>>, mirrors: Vec<Vec<String>>, queue: Option<u64>) -> Vec<AddResult> {
+        self.sched.add_with(urls, dir.map(PathBuf::from), names, sha256s, mirrors, queue)
     }
 
     pub fn queues(&self) -> Vec<QueueView> {

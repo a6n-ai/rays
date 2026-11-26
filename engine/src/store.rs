@@ -47,10 +47,12 @@ CREATE TABLE jobs(id INTEGER PRIMARY KEY, url TEXT NOT NULL, name TEXT NOT NULL,
     "ALTER TABLE queues ADD COLUMN follow_best_time INTEGER NOT NULL DEFAULT 0",
     // Downloads added without a queue used to land in Main. Finished ones leave it; waiting ones keep its rules.
     "UPDATE jobs SET queue_id = 0 WHERE queue_id = 1 AND state IN ('done', 'failed')",
+    // Extra links for the same file, JSON text.
+    "ALTER TABLE jobs ADD COLUMN mirrors TEXT NOT NULL DEFAULT '[]'",
 ];
 
 const COLUMNS: &str = "id, url, name, part_path, final_path, done, total, etag, last_modified, \
-                       resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id";
+                       resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id, mirrors";
 
 pub struct Store {
     conn: Mutex<rusqlite::Connection>,
@@ -121,9 +123,9 @@ impl Store {
         let conn = self.lock()?;
         conn.execute(
             "INSERT INTO jobs (url, name, part_path, final_path, done, total, etag, last_modified, \
-             resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id) \
+             resumable, state, error, position, created_at, updated_at, segments, dir, fixed_name, sha256, queue_id, mirrors) \
              VALUES (:url, :name, :part_path, :final_path, :done, :total, :etag, :last_modified, \
-             :resumable, :state, :error, :position, :created_at, :updated_at, :segments, :dir, :fixed_name, :sha256, :queue_id)",
+             :resumable, :state, :error, :position, :created_at, :updated_at, :segments, :dir, :fixed_name, :sha256, :queue_id, :mirrors)",
             named_params! {
                 ":url": job.url,
                 ":name": job.name,
@@ -143,6 +145,7 @@ impl Store {
                 ":dir": dir,
                 ":fixed_name": job.fixed_name,
                 ":sha256": job.sha256,
+                ":mirrors": serde_json::to_string(&job.mirrors).unwrap_or_else(|_| "[]".into()),
                 ":queue_id": job.queue_id as i64,
             },
         )?;
@@ -162,7 +165,7 @@ impl Store {
             "UPDATE jobs SET url = :url, name = :name, part_path = :part_path, final_path = :final_path, \
              done = :done, total = :total, etag = :etag, last_modified = :last_modified, \
              resumable = :resumable, state = :state, error = :error, position = :position, \
-             segments = :segments, dir = :dir, fixed_name = :fixed_name, sha256 = :sha256, queue_id = :queue_id, \
+             segments = :segments, dir = :dir, fixed_name = :fixed_name, sha256 = :sha256, queue_id = :queue_id, mirrors = :mirrors, \
              updated_at = :updated_at WHERE id = :id",
             named_params! {
                 ":id": job.id as i64,
@@ -182,6 +185,7 @@ impl Store {
                 ":dir": dir,
                 ":fixed_name": job.fixed_name,
                 ":sha256": job.sha256,
+                ":mirrors": serde_json::to_string(&job.mirrors).unwrap_or_else(|_| "[]".into()),
                 ":queue_id": job.queue_id as i64,
                 ":updated_at": now_secs(),
             },
@@ -621,6 +625,7 @@ fn job_from_row(row: &Row) -> rusqlite::Result<Job> {
         dir: row.get::<_, Option<String>>("dir")?.map(PathBuf::from),
         fixed_name: row.get::<_, i64>("fixed_name")? != 0,
         sha256: row.get("sha256")?,
+        mirrors: serde_json::from_str(&row.get::<_, String>("mirrors")?).unwrap_or_default(),
         queue_id: row.get::<_, i64>("queue_id")? as u64,
     })
 }
@@ -689,6 +694,7 @@ mod tests {
             dir: None,
             fixed_name: false,
             sha256: None,
+            mirrors: Vec::new(),
             queue_id: 1,
         }
     }
@@ -1047,7 +1053,7 @@ mod tests {
     fn finished_main_jobs_become_direct_downloads() {
         let dir = tempfile::tempdir().unwrap();
         let conn = Connection::open(dir.path().join("queue.db")).unwrap();
-        let last = MIGRATIONS.len() - 1;
+        let last = MIGRATIONS.iter().position(|m| m.starts_with("UPDATE jobs SET queue_id = 0")).unwrap();
         for sql in &MIGRATIONS[..last] {
             conn.execute_batch(sql).unwrap();
         }

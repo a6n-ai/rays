@@ -250,6 +250,9 @@ struct JobRow: View {
         if !job.resumable && (job.isActive || job.state == .paused) {
             parts.append(Part("Can't resume", symbol: "exclamationmark.arrow.circlepath", tint: .orange))
         }
+        if job.mirrors > 0 {
+            parts.append(Part(job.mirrors == 1 ? "1 mirror" : "\(job.mirrors) mirrors", symbol: "square.on.square"))
+        }
         if job.isActive && job.connections > 1 {
             parts.append(Part("\(job.connections)", symbol: "point.3.connected.trianglepath.dotted"))
         }

@@ -147,14 +147,14 @@ final class EngineModel {
     }
 
     func add(_ text: String, queue: UInt64? = nil) {
-        let urls = Links.inText(text)
+        let (urls, mirrors) = Links.split(text)
         guard let engine else { return }
         guard !urls.isEmpty else {
             notice = "No link found. Links start with http://, https:// or s3://."
             return
         }
         let sums = Links.checksums(in: text, for: urls)
-        let results = engine.addWith(urls: urls, dir: nil, names: Array(repeating: nil, count: urls.count), sha256s: sums, queue: queue)
+        let results = engine.addWith(urls: urls, dir: nil, names: Array(repeating: nil, count: urls.count), sha256s: sums, mirrors: mirrors, queue: queue)
         let rejected = results.filter { $0.id == nil }
         notice = rejected.isEmpty
             ? nil
@@ -575,6 +575,20 @@ enum Links {
         }
         let sums = urls.map { found[$0] }
         return sums.contains { $0 != nil } ? sums : []
+    }
+
+    /// The links to download and each one's mirrors. A line with several links whose paths end in the same file
+    /// name is one file: the first link is the download, the rest are its mirrors. `mirrors` is empty when no line is.
+    static func split(_ text: String) -> (urls: [String], mirrors: [[String]]) {
+        var extra = [String: [String]]()
+        for line in text.split(whereSeparator: \.isNewline) {
+            let links = inText(String(line))
+            let names = Set(links.map { URL(string: $0)?.lastPathComponent ?? "" })
+            if links.count > 1, names.count == 1, let name = names.first, !name.isEmpty, name != "/" { extra[links[0]] = Array(links.dropFirst()) }
+        }
+        let taken = Set(extra.values.joined())
+        let urls = inText(text).filter { !taken.contains($0) || extra[$0] != nil }
+        return (urls, extra.isEmpty ? [] : urls.map { extra[$0] ?? [] })
     }
 
     /// Every http(s) or s3 link in pasted text, in order, without repeats. Handles the usual ways links get

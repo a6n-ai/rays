@@ -195,6 +195,7 @@ async fn every_part_request_is_signed_fresh() {
         dir: None,
         fixed_name: false,
         sha256: None,
+        mirrors: Vec::new(),
         queue_id: 1,
     };
     let live = Arc::new(Live { job: Mutex::new(job), done: AtomicU64::new(0), connections: AtomicU32::new(0), cancel: Mutex::new(tx), started: 0 });

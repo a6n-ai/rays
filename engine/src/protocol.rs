@@ -17,6 +17,9 @@ pub enum Request {
         /// Expected SHA-256 per url, same order; empty means none.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         sha256: Vec<Option<String>>,
+        /// Extra links for the same file per url, same order; empty means none.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mirrors: Vec<Vec<String>>,
     },
     List,
     /// Gives a paused or failed download a new link and queues it.
@@ -242,7 +245,7 @@ mod tests {
         round(Request::QueueStop { queue: QueueRef::Name("Night".into()) }, r#"{"op":"queue_stop","queue":"Night"}"#);
         round(Request::QueueRunNow { queue: QueueRef::Id(1) }, r#"{"op":"queue_run_now","queue":1}"#);
         round(
-            Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![] },
+            Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![], mirrors: vec![] },
             r#"{"op":"add","urls":["u"],"queue":"Night","best_time":false}"#,
         );
     }
@@ -250,15 +253,15 @@ mod tests {
     #[test]
     fn add_still_takes_numeric_or_missing_queue() {
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":[],"queue":2}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec![], queue: Some(QueueRef::Id(2)), best_time: false, sha256: vec![] });
+        assert_eq!(r, Request::Add { urls: vec![], queue: Some(QueueRef::Id(2)), best_time: false, sha256: vec![], mirrors: vec![] });
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":[]}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec![], queue: None, best_time: false, sha256: vec![] });
+        assert_eq!(r, Request::Add { urls: vec![], queue: None, best_time: false, sha256: vec![], mirrors: vec![] });
     }
 
     #[test]
     fn add_best_time_is_optional() {
         let r: Request = serde_json::from_str(r#"{"op":"add","urls":["u"],"best_time":true}"#).unwrap();
-        assert_eq!(r, Request::Add { urls: vec!["u".into()], queue: None, best_time: true, sha256: vec![] });
+        assert_eq!(r, Request::Add { urls: vec!["u".into()], queue: None, best_time: true, sha256: vec![], mirrors: vec![] });
     }
 
     #[test]

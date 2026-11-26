@@ -203,6 +203,7 @@ fn job_with_id(url: String, dir: &Path, name: &str, id: u64) -> (Arc<Live>, watc
         dir: None,
         fixed_name: false,
         sha256: None,
+        mirrors: Vec::new(),
         queue_id: 1,
     };
     let live = Live { job: Mutex::new(job), done: AtomicU64::new(0), connections: std::sync::atomic::AtomicU32::new(0), started: dl_engine::download::next_seq(), cancel: Mutex::new(tx) };

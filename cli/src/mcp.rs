@@ -92,7 +92,8 @@ fn tools() -> Value {
                     "urls": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
                     "queue": { "type": "string", "description": "Queue name or id from list_queues. Without it the downloads start now, in no queue." },
                     "best_time": { "type": "boolean", "default": false, "description": "Add to the Best time queue instead; queue is ignored." },
-                    "sha256": { "type": "array", "items": { "type": ["string", "null"] }, "description": "Optional expected SHA-256 (64 hex characters) for each url, same order; null skips one. A download that does not match fails." }
+                    "sha256": { "type": "array", "items": { "type": ["string", "null"] }, "description": "Optional expected SHA-256 (64 hex characters) for each url, same order; null skips one. A download that does not match fails." },
+                    "mirrors": { "type": "array", "items": { "type": "array", "items": { "type": "string" } }, "description": "Optional extra links for the same file, one list per url, same order. Each must serve the same size with range support or it is ignored." }
                 },
                 "required": ["urls"]
             }
@@ -209,7 +210,16 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
                     Some(Value::Array(a)) => a.iter().map(|v| v.as_str().map(str::to_owned)).collect(),
                     _ => return Err("sha256 must be an array of hex strings".into()),
                 };
-                Ok(Request::Add { urls, queue: queue_arg(args)?, best_time: args.get("best_time").and_then(Value::as_bool).unwrap_or(false), sha256 })
+                let mirrors = match args.get("mirrors") {
+                    None | Some(Value::Null) => Vec::new(),
+                    Some(Value::Array(a)) => a
+                        .iter()
+                        .map(|v| v.as_array().map(|l| l.iter().filter_map(|m| m.as_str().map(str::to_owned)).collect()))
+                        .collect::<Option<Vec<Vec<String>>>>()
+                        .ok_or("mirrors must be an array of arrays of strings")?,
+                    _ => return Err("mirrors must be an array of arrays of strings".into()),
+                };
+                Ok(Request::Add { urls, queue: queue_arg(args)?, best_time: args.get("best_time").and_then(Value::as_bool).unwrap_or(false), sha256, mirrors })
             })
             .and_then(|req| reply_text(ask(&req))),
         "speed_test" => {
@@ -375,12 +385,12 @@ mod tests {
             [
                 r#"QueueStop { queue: Name("Night") }"#,
                 "QueueRunNow { queue: Id(3) }",
-                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")), best_time: false, sha256: [] }"#,
+                r#"Add { urls: ["https://a/x"], queue: Some(Name("Night")), best_time: false, sha256: [], mirrors: [] }"#,
                 r#"VerifyModel { dir: "/m" }"#,
                 "Queues",
                 "SpeedTest { force: true }",
                 "Speed",
-                r#"Add { urls: ["https://a/y"], queue: None, best_time: true, sha256: [] }"#,
+                r#"Add { urls: ["https://a/y"], queue: None, best_time: true, sha256: [], mirrors: [] }"#,
             ]
         );
     }

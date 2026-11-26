@@ -51,7 +51,7 @@ fn sha_of(path: &Path) -> Vec<u8> {
     sha(&std::fs::read(path).expect("read final file"))
 }
 
-/// Origin on a std thread. Paths: `/file/*` honours Range and sends an ETag; `/noranges/*` always
+/// Origin on a std thread. `/flaky/*` is like `/file/*` but answers 500 to any range that does not start at byte 0. Paths: `/file/*` honours Range and sends an ETag; `/noranges/*` always
 /// answers 200 with no Accept-Ranges. While `stall` is set, a response sends `STALL_AT` bytes and then
 /// goes silent until the client gives up.
 struct Origin {
@@ -109,6 +109,10 @@ fn serve(mut sock: TcpStream, data: &[u8], stalling: bool) {
         .and_then(|r| r.trim().split('-').next())
         .and_then(|n| n.parse::<usize>().ok())
         .filter(|_| ranges);
+    if path.starts_with("/flaky/") && from.is_some_and(|f| f > 0) {
+        let _ = sock.write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        return;
+    }
     let start = from.unwrap_or(0).min(data.len());
     let partial = from.is_some();
 
@@ -299,7 +303,7 @@ fn add_with_checks_the_given_sha256() {
     let url = |n: &str| origin.url(&format!("/file/{n}.bin"));
     let urls = vec![url("a"), url("b"), url("c"), url("d")];
     let sums = vec![Some(good.to_ascii_uppercase()), Some("0".repeat(64)), Some("xyz".into()), None];
-    let r = engine.add_with(urls, None, vec![None; 4], sums, None);
+    let r = engine.add_with(urls, None, vec![None; 4], sums, vec![], None);
     assert_eq!(r[2].error.as_deref(), Some("sha256 must be 64 hex characters"));
     assert!(r[2].id.is_none());
     let (a, b, d) = (r[0].id.unwrap(), r[1].id.unwrap(), r[3].id.unwrap());
@@ -312,8 +316,8 @@ fn add_with_checks_the_given_sha256() {
         assert!(Instant::now() < deadline, "b never failed");
         thread::sleep(Duration::from_millis(5));
     }
-    assert!(engine.add_with(vec![url("e")], None, vec![None], vec![], None)[0].id.is_some());
-    assert!(engine.add_with(vec![url("f")], None, vec![None], vec![None, None], None)[0].id.is_none());
+    assert!(engine.add_with(vec![url("e")], None, vec![None], vec![], vec![], None)[0].id.is_some());
+    assert!(engine.add_with(vec![url("f")], None, vec![None], vec![None, None], vec![], None)[0].id.is_none());
     engine.shutdown();
 }
 
@@ -583,5 +587,27 @@ fn stale_part_from_an_old_database_is_not_taken_as_finished() {
 
     let path = wait_done(&engine, id);
     assert_eq!(sha_of(&path), sha(&payload()));
+    engine.shutdown();
+}
+
+#[test]
+fn mirror_takes_over_when_the_primary_fails() {
+    setup();
+    let (primary, mirror, short) = (Origin::start_big(), Origin::start_big(), Origin::start());
+    let root = tmp();
+    let engine = start(EngineConfig { connections: 4, ..config(root.path(), 2) });
+    let mirrors = vec![vec![short.url("/file/big.bin"), mirror.url("/file/big.bin")]];
+    let r = engine.add_with(vec![primary.url("/flaky/big.bin")], None, vec![None], vec![], mirrors, None);
+    let id = r[0].id.expect("url accepted");
+    let path = wait_done(&engine, id);
+    assert_eq!(sha_of(&path), sha(&big_payload()));
+    assert_eq!(view(&engine, id).unwrap().mirrors, 1, "the mirror with another size is dropped");
+    // Control: without a mirror the same flaky primary fails the job.
+    let alone = add_one(&engine, primary.url("/flaky/alone.bin"));
+    let deadline = Instant::now() + WAIT;
+    while !matches!(view(&engine, alone).unwrap().state, JobState::Failed { .. }) {
+        assert!(Instant::now() < deadline, "flaky primary alone never failed");
+        thread::sleep(Duration::from_millis(5));
+    }
     engine.shutdown();
 }

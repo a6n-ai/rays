@@ -27,8 +27,13 @@ struct AddBar: View {
     private var isExpanded: Bool { fieldFocused || !isBlank }
 
     /// Web links found in what was typed or pasted; text around them is ignored, as on submit.
-    private var links: [String] { isBlank ? [] : Links.inText(input) }
-    private var linkCount: String { links.count == 1 ? "1 link" : "\(links.count) links" }
+    private var split: (urls: [String], mirrors: [[String]]) { isBlank ? ([], []) : Links.split(input) }
+    private var links: [String] { split.urls }
+    private var linkCount: String {
+        let base = links.count == 1 ? "1 link" : "\(links.count) links"
+        let extra = split.mirrors.joined().count
+        return extra == 0 ? base : base + (extra == 1 ? ", 1 mirror" : ", \(extra) mirrors")
+    }
 
     var body: some View {
         GlassEffectContainer(spacing: LayoutMetrics.gap) {

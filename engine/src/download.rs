@@ -708,7 +708,6 @@ fn host_of(url: &str) -> Option<String> {
 struct Shared {
     env: Env,
     id: JobId,
-    url: String,
     part: PathBuf,
     validator: Option<String>,
     /// Per segment, indexed like the job's segments: the attempt it is waiting to retry, 0 when it is not waiting.
@@ -733,6 +732,18 @@ struct Shared {
     blocked_noted: AtomicBool,
     /// The last 429/503, which restarts the wait before the cap is raised again.
     last_reject: Mutex<Option<Instant>>,
+    /// The primary link first, then the mirrors that passed the probe.
+    links: Mutex<Vec<Link>>,
+}
+
+/// One link of a job and what is known about it, for choosing where a new connection goes.
+struct Link {
+    url: String,
+    /// An error on this link ended its use for this run; the last live link is never marked.
+    dead: bool,
+    picks: u32,
+    /// Bytes per second of the latest connection on this link.
+    speed: Option<f64>,
 }
 
 /// How a segment task ended without error.
@@ -746,6 +757,35 @@ enum SegEnd {
 type SegSet = JoinSet<(usize, Result<SegEnd, Stop>)>;
 
 impl Shared {
+    fn links(&self) -> MutexGuard<'_, Vec<Link>> {
+        self.links.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The live link for a new connection: round-robin while some are unmeasured, then the fastest.
+    fn pick(&self) -> (usize, String) {
+        let mut links = self.links();
+        let live = || links.iter().enumerate().filter(|(_, l)| !l.dead);
+        let i = live()
+            .filter(|(_, l)| l.speed.is_none())
+            .min_by_key(|(_, l)| l.picks)
+            .or_else(|| live().max_by(|a, b| a.1.speed.partial_cmp(&b.1.speed).unwrap_or(std::cmp::Ordering::Equal)))
+            .map_or(0, |(i, _)| i);
+        links[i].picks += 1;
+        (i, links[i].url.clone())
+    }
+
+    /// Marks link `i` dead. Returns false when it is the last live link, which stays in use and retries as usual.
+    fn kill(&self, i: usize) -> bool {
+        let mut links = self.links();
+        if !links[i].dead {
+            if links.iter().filter(|l| !l.dead).count() < 2 {
+                return false;
+            }
+            links[i].dead = true;
+        }
+        true
+    }
+
     fn wait_slots(&self) -> MutexGuard<'_, Vec<u8>> {
         self.waits.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -893,6 +933,8 @@ async fn run_split(
             j.segments.clone(),
         )
     });
+    let mirrors = probe_mirrors(env, cancel).await?;
+    let links = std::iter::once(url.clone()).chain(mirrors).map(|url| Link { url, dead: false, picks: 0, speed: None }).collect();
     let done: u64 = segments.iter().map(|s| s.done).sum();
     env.live.done.store(done, Ordering::Relaxed);
     let unfinished = segments.iter().filter(|s| s.start + s.done < s.end).count();
@@ -900,7 +942,6 @@ async fn run_split(
         env: env.clone(),
         id,
         host: host_of(&url),
-        url,
         part,
         validator,
         waits: Mutex::new(vec![0; segments.len()]),
@@ -914,6 +955,7 @@ async fn run_split(
         conn_fails: Mutex::new(Vec::new()),
         blocked_noted: AtomicBool::new(false),
         last_reject: Mutex::new(None),
+        links: Mutex::new(links),
     });
 
     let mut set: SegSet = JoinSet::new();
@@ -1003,6 +1045,26 @@ async fn run_split(
         }
     }
     finish(env).await
+}
+
+/// Asks each mirror for the first byte and keeps those that answer a range with the job's size. The job keeps only
+/// those, so a mirror that fails the probe is not tried again. shortcut: a mirror's ETag is not compared, only its size.
+async fn probe_mirrors(env: &Env, cancel: &mut watch::Receiver<bool>) -> Result<Vec<String>, Stop> {
+    let (mirrors, total) = with_job(&env.live, |j| (j.mirrors.clone(), j.total));
+    let Some(total) = total.filter(|_| !mirrors.is_empty()) else { return Ok(Vec::new()) };
+    let mut kept = Vec::new();
+    for url in mirrors {
+        let req = env.get(&url).header(RANGE, "bytes=0-0");
+        let ok = match or_cancel(cancel, tokio::time::timeout(STALL, req.send())).await? {
+            Ok(Ok(resp)) => resp.status().as_u16() == 206 && content_range_total(&resp) == Some(total),
+            _ => false,
+        };
+        if ok {
+            kept.push(url);
+        }
+    }
+    with_job(&env.live, |j| j.mirrors = kept.clone());
+    Ok(kept)
 }
 
 /// Starts segment `idx` on a new task and lists its stop signal.
@@ -1112,10 +1174,29 @@ async fn segment_task(shared: Arc<Shared>, idx: usize, mut cancel: watch::Receiv
     let mut attempt: u8 = 0;
     loop {
         let mut received = 0;
-        let err = match segment_attempt(&shared, idx, &mut cancel, &mut received).await {
+        let mut link = 0;
+        // An error on a link with others still live drops that link and reconnects on another at once.
+        let err = match segment_attempt(&shared, idx, &mut cancel, &mut received, &mut link).await {
             Ok(end) => return Ok(end),
             Err(Stop::Paused) => return Ok(SegEnd::Parked),
-            Err(Stop::Retry(err)) => err,
+            Err(Stop::Retry(err)) => {
+                if shared.kill(link) {
+                    attempt = 0;
+                    continue;
+                }
+                err
+            }
+            Err(Stop::Failed(reason)) => {
+                if shared.kill(link) {
+                    attempt = 0;
+                    continue;
+                }
+                return Err(Stop::Failed(reason));
+            }
+            Err(Stop::Fallback) if link != 0 && shared.kill(link) => {
+                attempt = 0;
+                continue;
+            }
             Err(other) => return Err(other),
         };
         // A real stretch of data arrived before the drop, so the server is up: reconnect at once, as aria2 does.
@@ -1143,6 +1224,7 @@ async fn segment_attempt(
     idx: usize,
     cancel: &mut watch::Receiver<bool>,
     received: &mut u64,
+    link: &mut usize,
 ) -> Result<SegEnd, Stop> {
     let (from, end) = seg_pos(shared, idx)?;
     if from >= end {
@@ -1154,8 +1236,11 @@ async fn segment_attempt(
     let mut resp = match first {
         Some(resp) => resp,
         None => {
-            let mut req = shared.env.get(&shared.url).header(RANGE, format!("bytes={from}-{}", end - 1));
-            if let Some(v) = &shared.validator {
+            let (i, url) = shared.pick();
+            *link = i;
+            let mut req = shared.env.get(&url).header(RANGE, format!("bytes={from}-{}", end - 1));
+            // A mirror has its own validators, so only the primary can honour the job's.
+            if let Some(v) = shared.validator.as_ref().filter(|_| i == 0) {
                 req = req.header(IF_RANGE, v.as_str());
             }
             let resp = match or_cancel(cancel, tokio::time::timeout(STALL, req.send())).await? {
@@ -1191,7 +1276,7 @@ async fn segment_attempt(
                     shared.env.note_retry_after(&resp);
                     return Err(Stop::Retry(format!("HTTP {status}")));
                 }
-                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &shared.url, resp.url().as_str(), status, error_code(&resp), shared.env.live.done.load(Ordering::Relaxed) > 0))),
+                status => return Err(Stop::Failed(http_failure(&shared.env.hf, &url, resp.url().as_str(), status, error_code(&resp), shared.env.live.done.load(Ordering::Relaxed) > 0))),
             }
             resp
         }
@@ -1200,6 +1285,7 @@ async fn segment_attempt(
     let mut file = tokio::fs::OpenOptions::new().write(true).open(&shared.part).await?;
     file.seek(SeekFrom::Start(from)).await?;
     let _transfer = Transfer::start(&shared.env.live);
+    let began = (*link, Instant::now());
     let mut pos = from;
     // Written and recorded together, so a recorded byte is always on disk; a cancel drops the unrecorded rest.
     let mut buf: Vec<u8> = Vec::with_capacity(WRITE_BATCH);
@@ -1211,7 +1297,7 @@ async fn segment_attempt(
             Ok(Ok(chunk)) => chunk,
             failed => {
                 // Keep what arrived before the drop, so the reconnect asks only for the rest.
-                write_batch(shared, idx, &mut file, &mut buf, &mut pos, received).await?;
+                write_batch(shared, idx, &mut file, &mut buf, &mut pos, received, began).await?;
                 return Err(Stop::Retry(match failed {
                     Err(_) => "timeout: no data for 30 s".to_string(),
                     Ok(Err(e)) => format!("body: {e}"),
@@ -1231,10 +1317,10 @@ async fn segment_attempt(
         or_cancel(cancel, shared.env.limiter.acquire(take)).await?;
         buf.extend_from_slice(&bytes[..take]);
         if buf.len() >= WRITE_BATCH {
-            write_batch(shared, idx, &mut file, &mut buf, &mut pos, received).await?;
+            write_batch(shared, idx, &mut file, &mut buf, &mut pos, received, began).await?;
         }
     }
-    write_batch(shared, idx, &mut file, &mut buf, &mut pos, received).await?;
+    write_batch(shared, idx, &mut file, &mut buf, &mut pos, received, began).await?;
     if pos < seg_pos(shared, idx)?.1 {
         return Err(Stop::Retry(format!("segment {idx} ended early")));
     }
@@ -1249,6 +1335,7 @@ async fn write_batch(
     buf: &mut Vec<u8>,
     pos: &mut u64,
     received: &mut u64,
+    began: (usize, Instant),
 ) -> Result<(), Stop> {
     if buf.is_empty() {
         return Ok(());
@@ -1258,6 +1345,10 @@ async fn write_batch(
     let counted = shared.record(idx, buf.len() as u64);
     *pos += counted;
     *received += counted;
+    let secs = began.1.elapsed().as_secs_f64();
+    if secs >= 0.1 {
+        shared.links()[began.0].speed = Some(*received as f64 / secs);
+    }
     buf.clear();
     Ok(())
 }

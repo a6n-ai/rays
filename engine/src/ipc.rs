@@ -74,7 +74,7 @@ async fn handle(stream: UnixStream, sched: Arc<Scheduler>) {
 
 async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
     match serde_json::from_slice::<Request>(line) {
-        Ok(Request::Add { urls, queue, best_time, sha256 }) => {
+        Ok(Request::Add { urls, queue, best_time, sha256, mirrors }) => {
             let queue = if best_time {
                 sched.best_time_queue().map(Some).map_err(|e| e.to_string())
             } else {
@@ -86,7 +86,7 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             };
             let mut reply = Response { ok: true, ..Default::default() };
             let none = vec![None; urls.len()];
-            for result in sched.add_with(urls, None, none, sha256, queue) {
+            for result in sched.add_with(urls, None, none, sha256, mirrors, queue) {
                 match result.id {
                     Some(id) => reply.added.push(Added { url: result.url, id }),
                     None => reply.rejected.push(Rejected {

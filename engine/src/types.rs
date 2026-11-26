@@ -57,6 +57,8 @@ pub struct JobView {
     pub verified: bool,
     /// True when the job failed because a link that had started transferring stopped working; "Update link" fixes it.
     pub link_expired: bool,
+    /// How many extra links the job has for the same file.
+    pub mirrors: u32,
 }
 
 /// One range of a split download, for drawing a segmented progress bar.
@@ -222,6 +224,8 @@ pub struct Job {
     pub fixed_name: bool,
     /// Expected SHA-256 (hex), checked when the download finishes.
     pub sha256: Option<String>,
+    /// Extra links for the same file; new connections may use any of them.
+    pub mirrors: Vec<String>,
     /// The queue this job belongs to; `NO_QUEUE` (0) is a direct download, 1 is the Main queue.
     pub queue_id: u64,
 }

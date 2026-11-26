@@ -441,7 +441,7 @@ impl Scheduler {
         fixed_names: Vec<Option<String>>,
         queue: Option<u64>,
     ) -> Vec<AddResult> {
-        self.add_with(urls, dir, fixed_names, Vec::new(), queue)
+        self.add_with(urls, dir, fixed_names, Vec::new(), Vec::new(), queue)
     }
 
     /// Like `add_to`, with an expected SHA-256 per url (`sha256s` empty: none). A bad hash rejects only that url.
@@ -451,6 +451,7 @@ impl Scheduler {
         dir: Option<PathBuf>,
         fixed_names: Vec<Option<String>>,
         sha256s: Vec<Option<String>>,
+        mirrors: Vec<Vec<String>>,
         queue: Option<u64>,
     ) -> Vec<AddResult> {
         let queue_id = queue.unwrap_or(NO_QUEUE);
@@ -469,7 +470,10 @@ impl Scheduler {
         if !sha256s.is_empty() && sha256s.len() != urls.len() {
             return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("checksums must match urls".to_owned()) }).collect();
         }
-        let (mut fixed, mut sums) = (fixed_names.into_iter(), sha256s.into_iter());
+        if !mirrors.is_empty() && mirrors.len() != urls.len() {
+            return urls.into_iter().map(|url| AddResult { url, id: None, error: Some("mirrors must match urls".to_owned()) }).collect();
+        }
+        let (mut fixed, mut sums, mut extra) = (fixed_names.into_iter(), sha256s.into_iter(), mirrors.into_iter());
         let results = urls
             .into_iter()
             .map(|url| {
@@ -477,7 +481,13 @@ impl Scheduler {
                 if sum.as_deref().is_some_and(|h| h.len() != 64 || !h.bytes().all(|c| c.is_ascii_hexdigit())) {
                     return AddResult { url, id: None, error: Some("sha256 must be 64 hex characters".to_owned()) };
                 }
-                self.add_one(url, dir.clone(), fixed.next().flatten(), sum, queue_id)
+                let mut mirrors = extra.next().unwrap_or_default();
+                mirrors.retain(|m| m != &url);
+                mirrors.dedup();
+                if let Some(bad) = mirrors.iter().find_map(|m| self.check_url(m).err()) {
+                    return AddResult { url, id: None, error: Some(format!("mirror: {bad}")) };
+                }
+                self.add_one(url, dir.clone(), fixed.next().flatten(), sum, mirrors, queue_id)
             })
             .collect();
         self.refresh();
@@ -557,7 +567,7 @@ impl Scheduler {
             // Another revision or checksum, or another URL: the old job must not finish under the new add.
             self.remove(id, true);
         }
-        let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone(), queue_id);
+        let res = self.add_one(url, Some(parent), Some(name), file.sha256.clone(), Vec::new(), queue_id);
         match (res.id, res.error) {
             (Some(id), _) => hf::HfAddStatus::Added { id },
             (None, error) => rejected(&error.unwrap_or_default()),
@@ -704,14 +714,14 @@ impl Scheduler {
         }
     }
 
-    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, queue_id: u64) -> AddResult {
+    fn add_one(&self, url: String, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, mirrors: Vec<String>, queue_id: u64) -> AddResult {
         if let Err(error) = self.check_url(&url) {
             return AddResult { url, id: None, error: Some(error) };
         }
         if fixed_name.as_deref().is_some_and(|n| !valid_file_name(n)) {
             return AddResult { url, id: None, error: Some("file name must be one path component".to_owned()) };
         }
-        match self.insert_job(&url, dir, fixed_name, sha256, queue_id) {
+        match self.insert_job(&url, dir, fixed_name, sha256, mirrors, queue_id) {
             Ok(id) => AddResult { url, id: Some(id), error: None },
             Err(e) => AddResult { url, id: None, error: Some(e.to_string()) },
         }
@@ -731,7 +741,7 @@ impl Scheduler {
         }
     }
 
-    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, queue_id: u64) -> Result<JobId, EngineError> {
+    fn insert_job(&self, url: &str, dir: Option<PathBuf>, fixed_name: Option<String>, sha256: Option<String>, mirrors: Vec<String>, queue_id: u64) -> Result<JobId, EngineError> {
         let now = now_secs();
         let position = self.next_position.fetch_add(1, Ordering::Relaxed);
         let folder = dir.clone().unwrap_or_else(|| lock(&self.dir).clone());
@@ -742,6 +752,7 @@ impl Scheduler {
             name: fixed_name.unwrap_or_else(|| names::from_url(url)),
             dir,
             sha256,
+            mirrors,
             part_path: PathBuf::new(),
             final_path: None,
             done: 0,
@@ -1137,6 +1148,7 @@ impl Scheduler {
             queue_id: job.queue_id,
             waiting: if job.state == JobState::Queued { self.waiting_reason(job.queue_id) } else { None },
             verified: job.sha256.is_some() && matches!(job.state, JobState::Done { .. }),
+            mirrors: job.mirrors.len() as u32,
             link_expired: matches!(&job.state, JobState::Failed { reason } if reason.starts_with(download::LINK_EXPIRED)),
         }
     }
