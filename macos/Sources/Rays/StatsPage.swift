@@ -19,7 +19,7 @@ struct StatsPage: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(maxWidth: 260)
+                    .fixedSize()
                     if let stats, stats.totalFiles > 0 {
                         figures(stats)
                         Text("Downloaded per day").font(.headline).padding(.top, 4)
@@ -47,7 +47,7 @@ struct StatsPage: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: LayoutMetrics.gap) {
-            ModelTile(symbol: "chart.bar.xaxis", color: .teal, size: 44)
+            ModelTile(symbol: "chart.bar.xaxis", color: .green, size: 44)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Stats").font(.title2.weight(.semibold))
                 Text("How much you downloaded, and from where.")
@@ -77,12 +77,12 @@ struct StatsPage: View {
     private func chart(_ s: Stats) -> some View {
         Chart(s.perDay, id: \.day) { d in
             BarMark(x: .value("Day", Date(timeIntervalSince1970: TimeInterval(d.day)), unit: .day), y: .value("Bytes", d.bytes))
-                .foregroundStyle(Color.teal)
+                .foregroundStyle(Color.green)
         }
         .chartYAxis {
             AxisMarks { value in
                 AxisGridLine()
-                AxisValueLabel { if let v = value.as(UInt64.self) { Text(byteText(v)) } }
+                AxisValueLabel { if let v = value.as(UInt64.self) { Text(v == 0 ? "0" : byteText(v)) } }
             }
         }
         .frame(height: 180)
@@ -102,7 +102,7 @@ struct StatsPage: View {
                     Capsule().fill(.quaternary).frame(height: 4)
                         .overlay(alignment: .leading) {
                             GeometryReader { g in
-                                Capsule().fill(Color.teal).frame(width: g.size.width * Double(h.bytes) / Double(biggest))
+                                Capsule().fill(Color.green).frame(width: g.size.width * Double(h.bytes) / Double(biggest))
                             }
                         }
                 }

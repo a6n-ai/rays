@@ -575,6 +575,11 @@ final class EngineModel {
                 allJobs[index] = job
             } else {
                 allJobs.append(job)
+                // A small download can finish before its first event; the start-up snapshot never comes through here.
+                if job.isFinished {
+                    notifier.note(job)
+                    unpackIfWanted(job)
+                }
             }
             track(job)
         case .removed(let id):

@@ -20,31 +20,43 @@ enum Unpacker {
         return "\(base) \(n)"
     }
 
-    /// Extracts next to the archive with bsdtar; nil when the file is not an archive.
+    /// Extracts next to the archive with bsdtar; nil when the file is not an archive. Like Archive Utility, an archive
+    /// with one top-level item yields that item; otherwise a folder named after the archive.
     /// bsdtar refuses absolute paths and `..` unless given -P, which is never passed.
     nonisolated static func unpack(_ archive: URL, trash: Bool) async -> Result<URL, Error>? {
         guard let base = folderName(for: archive.lastPathComponent) else { return nil }
         return await Task.detached {
             let fm = FileManager.default
             let parent = archive.deletingLastPathComponent()
-            let name = uniqueName(base) { fm.fileExists(atPath: parent.appending(path: $0).path(percentEncoded: false)) }
-            let dest = parent.appending(path: name, directoryHint: .isDirectory)
+            let work = parent.appending(path: ".rays-unpack-\(UUID().uuidString)", directoryHint: .isDirectory)
+            defer { try? fm.removeItem(at: work) }
+            let result: URL
             do {
-                try fm.createDirectory(at: dest, withIntermediateDirectories: false)
+                try fm.createDirectory(at: work, withIntermediateDirectories: false)
                 let process = Process()
                 process.executableURL = URL(filePath: "/usr/bin/bsdtar")
-                process.arguments = ["-xf", archive.path(percentEncoded: false), "-C", dest.path(percentEncoded: false)]
+                process.arguments = ["-xf", archive.path(percentEncoded: false), "-C", work.path(percentEncoded: false)]
                 process.standardOutput = FileHandle.nullDevice
                 process.standardError = FileHandle.nullDevice
                 try process.run()
                 process.waitUntilExit()
                 guard process.terminationStatus == 0 else { throw CocoaError(.fileReadCorruptFile) }
+                let items = try fm.contentsOfDirectory(atPath: work.path(percentEncoded: false)).filter { $0 != ".DS_Store" && $0 != "__MACOSX" }
+                let taken = { (name: String) in fm.fileExists(atPath: parent.appending(path: name).path(percentEncoded: false)) }
+                if items.count == 1, let only = items.first {
+                    let ext = (only as NSString).pathExtension, stem = (only as NSString).deletingPathExtension
+                    let name = ext.isEmpty ? uniqueName(only, exists: taken) : uniqueName(stem) { taken("\($0).\(ext)") } + ".\(ext)"
+                    result = parent.appending(path: name)
+                    try fm.moveItem(at: work.appending(path: only), to: result)
+                } else {
+                    result = parent.appending(path: uniqueName(base, exists: taken), directoryHint: .isDirectory)
+                    try fm.moveItem(at: work, to: result)
+                }
             } catch {
-                try? fm.removeItem(at: dest)
                 return .failure(error)
             }
             if trash { try? fm.trashItem(at: archive, resultingItemURL: nil) }
-            return .success(dest)
+            return .success(result)
         }.value
     }
 }
