@@ -226,14 +226,6 @@ struct HomeRow: View {
     }
 }
 
-/// Stands in for the Home page until its task.
-struct HomePlaceholder: View {
-    var body: some View {
-        HeroCard(.downloads, title: "Rays", subtitle: "Home is coming.", style: .home)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 /// Stands in for the General, AI and Browsers pages until Task 7.
 struct SettingsPagePlaceholder: View {
     let tile: Tile

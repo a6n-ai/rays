@@ -4,7 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(EngineModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var destination: Destination? = .downloads
+    @State private var destination: Destination? = .home
     /// The last sidebar folder, restored on launch the way Apple's apps reopen where you left off.
     @AppStorage("lastFolder") private var lastFolder = ""
     @State private var isDropTargeted = false
@@ -151,7 +151,7 @@ struct ContentView: View {
                 case .shortcuts?:
                     ShortcutsPage()
                 case .home?:
-                    HomePlaceholder()
+                    HomePage(selection: $destination)
                 case .general?:
                     SettingsPagePlaceholder(tile: .general, title: "General")
                 case .ai?:
