@@ -123,6 +123,8 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/a6n-ai-rays-y8wlsu)](https://m8ven.ai/mcp/a6n-ai-rays-y8wlsu?s=readme)
+
 ## License
 
 AGPL-3.0. See [LICENSE](LICENSE).
