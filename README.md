@@ -1,5 +1,7 @@
 # Rays
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/a6n-ai-rays-y8wlsu?v=dc79297708d9ce5962c24d8519d49e67)](https://m8ven.ai/mcp/a6n-ai-rays-y8wlsu?s=readme)
+
 A free download manager for Mac that sorts your downloads into folders with on-device AI.
 Website and docs: [rays.a6n.ai](https://rays.a6n.ai).
 
@@ -122,8 +124,6 @@ access to the Downloads folder.
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
-
-[![M8ven Score](https://m8ven.ai/badge/mcp/a6n-ai-rays-y8wlsu)](https://m8ven.ai/mcp/a6n-ai-rays-y8wlsu?s=readme)
 
 ## License
 
