@@ -1,6 +1,7 @@
 mod bucket;
 mod framing;
 mod mcp;
+mod mcp_http;
 mod sorter;
 
 use dl_engine::protocol::HttpHeader;
@@ -37,6 +38,8 @@ const USAGE: &str = "usage:
   dl config add|remove FOLDER
   dl config set-dest FOLDER CATEGORY PATH | clear-dest FOLDER CATEGORY | set-wait SECONDS | set-rename on|off
   dl mcp                        run the MCP server on stdio (for AI assistants)
+  dl mcp --http [--port N]      run it over HTTP on 127.0.0.1 (default port 7467), with a bearer token
+  dl mcp --token                print the HTTP bearer token
   dl s3://BUCKET/KEY            download an object from a bucket added to Rays";
 
 fn socket_path() -> PathBuf {
@@ -101,6 +104,15 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         [a] if a == "mcp" => return mcp::serve(),
+        [a, b, rest @ ..] if a == "mcp" && b == "--http" => {
+            let port = match rest {
+                [] => mcp_http::DEFAULT_PORT,
+                [flag, p] if flag == "--port" && p.parse::<u16>().is_ok_and(|p| p > 0) => p.parse().unwrap_or(mcp_http::DEFAULT_PORT),
+                _ => return usage(),
+            };
+            return mcp_http::serve(port);
+        }
+        [a, b] if a == "mcp" && b == "--token" => return mcp_http::print_token(),
         [a] if a == "--list" || a == "list" => Request::List,
         [cmd, ..] if ["add", "relink", "grab", "queues", "queue", "verify", "speed", "stats"].contains(&cmd.as_str()) => match queue_command(&args) {
             Ok(req) => req,

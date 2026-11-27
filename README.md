@@ -47,6 +47,7 @@ dl watch ~/Downloads                  # sort automatically whenever a file lands
 dl status                             # wait time, renaming, watched folders, recent moves (--json)
 dl config set-wait 30                 # also set-rename on|off, set-dest, clear-dest, add|remove
 dl mcp                                # MCP server on stdio for AI assistants
+dl mcp --http                         # the same over HTTP on 127.0.0.1:7467 (dl mcp --token)
 ```
 
 The sorter commands run the `sorter` bundled next to `dl` in Rays.app (`DL_SORTER` overrides).
@@ -55,8 +56,9 @@ Full reference: [rays.a6n.ai/docs/dl](https://rays.a6n.ai/docs/dl/).
 ### MCP
 
 `dl mcp` speaks the Model Context Protocol on stdio. Add it to Claude Code with
-`claude mcp add rays -- dl mcp`, or to any client as `{"command": "dl", "args": ["mcp"]}`. Tools:
-`add_downloads`, `list_downloads`, `sorter_status`, and `sort_folder` (a dry run unless `dry_run` is false).
+`claude mcp add rays -- dl mcp`, or to any client as `{"command": "dl", "args": ["mcp"]}`.
+`dl mcp --http` serves it over Streamable HTTP on 127.0.0.1:7467 with a bearer token (`dl mcp --token`).
+The tools, with read-only and destructive hints: [rays.a6n.ai/docs/mcp](https://rays.a6n.ai/docs/mcp/).
 
 Exit codes: `0` success, `1` a URL was rejected or Rays returned an error, `2` wrong usage or Rays/the sorter not reachable.
 

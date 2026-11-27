@@ -640,6 +640,7 @@ enum SettingsKey {
     static let clipboard = "offersCopiedLinks"
     static let notifyDone = "notifiesWhenDone"
     static let unpackArchives = "unpackArchives"
+    static let mcpHTTP = "runsMCPHTTPServer"
     static let trashUnpackedArchive = "trashUnpackedArchive"
     static let queueDefaultMaxRunning = "queueDefaultMaxRunning"
     static let queueDefaultSpeed = "queueDefaultSpeed"

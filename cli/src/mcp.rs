@@ -26,7 +26,7 @@ pub fn serve() -> ExitCode {
 }
 
 /// Returns the reply line, or None for notifications. `ask` sends one request to Rays (swapped out in tests).
-fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Value> {
+pub(crate) fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, String>) -> Option<Value> {
     let msg: Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(e) => return Some(error(Value::Null, -32700, &format!("parse error: {e}"))),
@@ -39,7 +39,7 @@ fn handle_line(line: &str, ask: &mut dyn FnMut(&Request) -> Result<Response, Str
             "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(PROTOCOL),
             "capabilities": { "tools": {} },
             "serverInfo": { "name": "rays", "version": env!("CARGO_PKG_VERSION") },
-            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, relink to give a paused or failed download a new link, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, verify_model to check a downloaded Hugging Face model, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, grab_links to list the files linked from a web page, sorter_status and sort_folder to file downloads into folders, speed_test to measure download speed and best_time for the fastest time of day to download."
+            "instructions": "Rays is a macOS download manager. Use add_downloads to download http/https links or s3://bucket/key objects, list_downloads to check progress, pause_download, resume_download and remove_download to manage one, relink to give a paused or failed download a new link, list_queues, start_queue, stop_queue and run_queue_now to manage download queues, search_models, model_files and download_model to get Hugging Face models, verify_model to check a downloaded one, list_buckets and browse_bucket to find objects in S3 buckets the user added to Rays, grab_links to list the files linked from a web page, sorter_status and sort_folder to file downloads into folders, speed_test to measure download speed and best_time for the fastest time of day to download."
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": tools() }),
@@ -98,7 +98,8 @@ fn tools() -> Value {
                     "headers": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Optional request headers for links that need a login, for example {\"Cookie\": \"session=...\"}. Applied to every url. Values are stored on this Mac and only sent to the link's own host." }
                 },
                 "required": ["urls"]
-            }
+            },
+            "annotations": { "title": "Add downloads", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true }
         },
         {
             "name": "relink",
@@ -107,28 +108,32 @@ fn tools() -> Value {
                 "type": "object",
                 "properties": { "id": { "type": "integer", "description": "Download id from list_downloads." }, "url": { "type": "string" }, "restart": { "type": "boolean", "description": "Start over if the new link is a different file. Default false." } },
                 "required": ["id", "url"]
-            }
+            },
+            "annotations": { "title": "Give a download a new link", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": true }
         },
         {
             "name": "list_queues",
             "description": "Rays download queues: id, name, state (open, waiting for time, waiting for condition, stopped, off), next scheduled start in unix seconds, and counts of queued and running downloads.",
             "inputSchema": { "type": "object", "properties": {} },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "List queues", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "start_queue",
             "description": "Start a queue: lifts a stop on a queue without a schedule, and on a scheduled queue is the same as run_queue_now.",
-            "inputSchema": queue_schema()
+            "inputSchema": queue_schema(),
+            "annotations": { "title": "Start queue", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
         },
         {
             "name": "stop_queue",
             "description": "Stop a queue: its queued downloads wait and its running ones pause until the queue is started again.",
-            "inputSchema": queue_schema()
+            "inputSchema": queue_schema(),
+            "annotations": { "title": "Stop queue", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "run_queue_now",
             "description": "Run a queue now, whatever its schedule window and conditions say, until its run finishes.",
-            "inputSchema": queue_schema()
+            "inputSchema": queue_schema(),
+            "annotations": { "title": "Run queue now", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
         },
         {
             "name": "verify_model",
@@ -138,19 +143,19 @@ fn tools() -> Value {
                 "properties": { "dir": { "type": "string", "description": "Absolute path of the model folder." } },
                 "required": ["dir"]
             },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "Verify model", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "list_downloads",
             "description": "List Rays downloads with id, state (queued, running, paused, retrying, done, failed), bytes done and total, and file name.",
             "inputSchema": { "type": "object", "properties": {} },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "List downloads", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "list_buckets",
             "description": "S3-compatible buckets the user added to Rays: name, provider, region and endpoint. Secret keys are never returned.",
             "inputSchema": { "type": "object", "properties": {} },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "List buckets", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "browse_bucket",
@@ -164,19 +169,71 @@ fn tools() -> Value {
                 },
                 "required": ["bucket"]
             },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "Browse bucket", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
         },
         {
             "name": "grab_links",
             "description": "List the downloadable files (archives, installers, video, audio, images, documents, models) linked from a web page: url, name and kind (file extension). Fails if the link is itself a file. Download the ones you want with add_downloads.",
             "inputSchema": { "type": "object", "properties": { "url": { "type": "string", "description": "An http or https page link." } }, "required": ["url"] },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "Grab links from a page", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
+        },
+        {
+            "name": "pause_download",
+            "description": "Pause a queued or running download. The partial file is kept, so resume_download continues where it stopped.",
+            "inputSchema": { "type": "object", "properties": { "id": { "type": "integer", "description": "Download id from list_downloads." } }, "required": ["id"] },
+            "annotations": { "title": "Pause download", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
+        },
+        {
+            "name": "resume_download",
+            "description": "Queue a paused or failed download again. A download that failed with Link expired needs relink instead.",
+            "inputSchema": { "type": "object", "properties": { "id": { "type": "integer", "description": "Download id from list_downloads." } }, "required": ["id"] },
+            "annotations": { "title": "Resume download", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
+        },
+        {
+            "name": "remove_download",
+            "description": "Take a download off the Rays list, stopping it if it runs. A finished file stays on disk. Set delete_partial to also delete the unfinished partial file, which cannot be resumed after that.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "integer", "description": "Download id from list_downloads." },
+                    "delete_partial": { "type": "boolean", "default": false, "description": "Also delete the unfinished partial file." }
+                },
+                "required": ["id"]
+            },
+            "annotations": { "title": "Remove download", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": true, "openWorldHint": false }
+        },
+        {
+            "name": "search_models",
+            "description": "Search Hugging Face models by name: id, downloads, likes, whether it is gated (needs a login) or has GGUF files, and its task.",
+            "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+            "annotations": { "title": "Search models", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
+        },
+        {
+            "name": "model_files",
+            "description": "The files of a Hugging Face model with sizes, and the ones Rays recommends (one GGUF quantization or the default checkpoint). Use the paths with download_model.",
+            "inputSchema": { "type": "object", "properties": { "repo": { "type": "string", "description": "Model id like owner/name." } }, "required": ["repo"] },
+            "annotations": { "title": "Model files", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
+        },
+        {
+            "name": "download_model",
+            "description": "Download a Hugging Face model with checksums and a record verify_model can check later. Without files, downloads the recommended ones. Files already there or already queued are skipped. Returns the folder and one line per file.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "repo": { "type": "string", "description": "Model id like owner/name." },
+                    "files": { "type": "array", "items": { "type": "string" }, "description": "File paths from model_files. Default: the recommended files." },
+                    "dir": { "type": "string", "description": "Absolute folder to download into. Default: AI Models/<repo> in the Rays download folder." },
+                    "queue": { "type": "string", "description": "Queue name or id from list_queues. Without it the files start now." }
+                },
+                "required": ["repo"]
+            },
+            "annotations": { "title": "Download model", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true }
         },
         {
             "name": "sorter_status",
             "description": "Watched folders, sorter categories, settings and recent moves, as JSON.",
             "inputSchema": { "type": "object", "properties": {} },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "Sorter status", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "sort_folder",
@@ -189,7 +246,7 @@ fn tools() -> Value {
                     "all": { "type": "boolean", "default": false, "description": "Also sort files that were there before the first run." }
                 }
             },
-            "annotations": { "destructiveHint": true }
+            "annotations": { "title": "Sort folder", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "speed_test",
@@ -197,7 +254,8 @@ fn tools() -> Value {
             "inputSchema": {
                 "type": "object",
                 "properties": { "force": { "type": "boolean", "default": false, "description": "Also test on a metered or unidentified network. Set only when the user asked for it." } }
-            }
+            },
+            "annotations": { "title": "Speed test", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true }
         },
         {
             "name": "stats",
@@ -206,13 +264,13 @@ fn tools() -> Value {
                 "type": "object",
                 "properties": { "days": { "type": "integer", "minimum": 1, "default": 30, "description": "How many days back, counting today." } }
             },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "Download stats", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         },
         {
             "name": "best_time",
             "description": "The last speed test and the fastest 4 hours of the day to download over the last 28 days (local time, with typical speed and confidence), or how many days of data are still needed.",
             "inputSchema": { "type": "object", "properties": {} },
-            "annotations": { "readOnlyHint": true }
+            "annotations": { "title": "Best time to download", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
         }
     ])
 }
@@ -273,6 +331,29 @@ fn call(name: &str, args: &Value, ask: &mut dyn FnMut(&Request) -> Result<Respon
             None => Err("url is required".into()),
         },
         "browse_bucket" => browse(args).and_then(|req| reply_text(ask(&req))),
+        "pause_download" => id_arg(args).and_then(|id| reply_text(ask(&Request::Pause { id }))),
+        "resume_download" => id_arg(args).and_then(|id| reply_text(ask(&Request::Resume { id }))),
+        "remove_download" => id_arg(args).and_then(|id| {
+            let delete_partial = args.get("delete_partial").and_then(Value::as_bool).unwrap_or(false);
+            reply_text(ask(&Request::Remove { id, delete_partial }))
+        }),
+        "search_models" => match args.get("query").and_then(Value::as_str).filter(|q| !q.trim().is_empty()) {
+            Some(q) => reply_text(ask(&Request::HfSearch { query: q.to_owned() })),
+            None => Err("query is required".into()),
+        },
+        "model_files" => repo_arg(args).and_then(|repo| reply_text(ask(&Request::HfModel { repo }))),
+        "download_model" => repo_arg(args).and_then(|repo| {
+            let files = match args.get("files") {
+                None | Some(Value::Null) => Vec::new(),
+                Some(Value::Array(a)) => a.iter().map(|v| v.as_str().map(str::to_owned)).collect::<Option<_>>().ok_or("files must be an array of strings")?,
+                _ => return Err("files must be an array of strings".into()),
+            };
+            let dir = match args.get("dir").and_then(Value::as_str) {
+                Some(d) if !d.starts_with('/') => return Err("dir must be an absolute path".into()),
+                d => d.map(str::to_owned),
+            };
+            reply_text(ask(&Request::HfAdd { repo, files, dir, queue: queue_arg(args)? }))
+        }),
         "sorter_status" => sorter::output(&["status".into(), "--json".into()]),
         "sort_folder" => sort_args(args).and_then(|a| sorter::output(&a)),
         _ => return None,
@@ -286,6 +367,17 @@ fn urls(args: &Value) -> Result<Vec<String>, String> {
         return Err("urls must be a non-empty array of strings".into());
     }
     Ok(urls)
+}
+
+fn id_arg(args: &Value) -> Result<u64, String> {
+    args.get("id").and_then(Value::as_u64).ok_or_else(|| "id must be a download id from list_downloads".into())
+}
+
+fn repo_arg(args: &Value) -> Result<String, String> {
+    match args.get("repo").and_then(Value::as_str) {
+        Some(r) if r.split('/').count() == 2 && !r.contains("..") && !r.starts_with('/') => Ok(r.to_owned()),
+        _ => Err("repo must be a Hugging Face model id like owner/name".into()),
+    }
 }
 
 fn browse(args: &Value) -> Result<Request, String> {
@@ -346,12 +438,46 @@ mod tests {
                 ..Default::default()
             },
             Request::Grab { url } => Response { ok: true, grabbed: vec![GrabLine { url: format!("{url}a.zip"), name: "a.zip".into(), kind: "zip".into() }], ..Default::default() },
+            Request::Pause { id } | Request::Resume { id } | Request::Remove { id, .. } => Response { ok: true, summary: Some(format!("{req:?} {id}")), ..Default::default() },
+            Request::HfAdd { repo, files, dir, .. } => Response { ok: true, summary: Some(format!("{repo} {files:?} {dir:?}")), ..Default::default() },
             other => panic!("unexpected request {other:?}"),
         })
     }
 
     fn ask(line: &str) -> Option<Value> {
         handle_line(line, &mut fake)
+    }
+
+    fn call_tool(name: &str, args: &str) -> Value {
+        let line = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{name}","arguments":{args}}}}}"#);
+        ask(&line).unwrap()["result"].clone()
+    }
+
+    #[test]
+    fn every_tool_declares_a_title_and_all_four_hints() {
+        for tool in tools().as_array().unwrap() {
+            let a = &tool["annotations"];
+            assert!(a["title"].is_string(), "{}", tool["name"]);
+            for hint in ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"] {
+                assert!(a[hint].is_boolean(), "{} lacks {hint}", tool["name"]);
+            }
+            assert!(!(a["readOnlyHint"] == true && a["destructiveHint"] == true), "{}", tool["name"]);
+        }
+    }
+
+    #[test]
+    fn download_tools_need_an_id_and_remove_keeps_the_partial_by_default() {
+        assert_eq!(call_tool("pause_download", "{}")["isError"], true);
+        let r = call_tool("remove_download", r#"{"id":4}"#);
+        assert!(r["content"][0]["text"].as_str().unwrap().contains("delete_partial: false"), "{r}");
+    }
+
+    #[test]
+    fn download_model_checks_repo_and_dir() {
+        assert_eq!(call_tool("download_model", r#"{"repo":"../x"}"#)["isError"], true);
+        assert_eq!(call_tool("download_model", r#"{"repo":"a/b","dir":"rel"}"#)["isError"], true);
+        let r = call_tool("download_model", r#"{"repo":"a/b","files":["m.gguf"]}"#);
+        assert!(r["content"][0]["text"].as_str().unwrap().contains(r#"a/b [\"m.gguf\"] None"#), "{r}");
     }
 
     #[test]
@@ -392,6 +518,12 @@ mod tests {
                 "list_buckets",
                 "browse_bucket",
                 "grab_links",
+                "pause_download",
+                "resume_download",
+                "remove_download",
+                "search_models",
+                "model_files",
+                "download_model",
                 "sorter_status",
                 "sort_folder",
                 "speed_test",

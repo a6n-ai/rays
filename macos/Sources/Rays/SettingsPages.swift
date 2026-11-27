@@ -45,9 +45,10 @@ struct AIPage: View {
     var body: some View {
         CardForm {
             CardSection {
-                HeroCard(.ai, title: "AI", subtitle: "Apple Intelligence on this Mac sorts and renames your files.")
+                HeroCard(.ai, title: "AI", subtitle: "Apple Intelligence on this Mac sorts and renames your files, and AI apps use Rays through MCP.")
             }
             CardSection { AIStatusRow() }
+            MCPSection()
         }
         .formStyle(.grouped)
         .navigationTitle("AI")

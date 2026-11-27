@@ -35,6 +35,8 @@ dl watch FOLDER | dl unwatch FOLDER
 dl status [--json]            sorter settings, watched folders, recent moves
 dl config ...                 change sorter settings
 dl mcp                        MCP server on stdio
+dl mcp --http [--port N]      MCP server over HTTP on 127.0.0.1
+dl mcp --token                the HTTP bearer token
 dl --help
 ```
 

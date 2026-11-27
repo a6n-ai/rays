@@ -407,6 +407,10 @@ impl Scheduler {
         *lock(&self.dir) = dir;
     }
 
+    pub fn downloads_dir(&self) -> PathBuf {
+        lock(&self.dir).clone()
+    }
+
     pub fn set_connections(&self, n: u32) {
         self.connections.store(n.clamp(1, MAX_CONNECTIONS), Ordering::Relaxed);
     }

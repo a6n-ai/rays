@@ -92,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in Feedback.offerCrashReportIfNeeded() }
         dock = DockProgress(model: model)
         clipboard = ClipboardWatcher(model: model)
+        MCPHTTPServer.shared.restore()
     }
     private var dock: DockProgress?
     private var clipboard: ClipboardWatcher?

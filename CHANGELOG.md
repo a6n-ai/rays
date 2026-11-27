@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.28 (27 Nov 2026)
+
+- **MCP on the AI page.** A new **MCP server** card copies the setup for Claude Code or any MCP app, and can run an **HTTP server** at `http://127.0.0.1:7467/mcp` for apps that connect to an address. It listens on this Mac only and needs a token, which the card copies too. In Terminal: `dl mcp --http` and `dl mcp --token`.
+- **New MCP tools.** `pause_download`, `resume_download` and `remove_download` manage one download, and `search_models`, `model_files` and `download_model` get Hugging Face models with checksums, like the Models page.
+- **Tool hints.** Every MCP tool now has a title and says whether it only reads, can delete or move files, is safe to repeat and reaches the internet, so AI apps can ask before the risky ones.
+
 ## 0.1.27 (27 Nov 2026)
 
 - **Rays looks like System Settings.** Every page starts with a page card, then a folding **Settings** card with that page's own settings, then its content in cards. The sidebar has icon tiles: new Downloads, Sorter and Cloud tiles in the System Settings style, new Queues, Schedules and Speed test icons, the Hugging Face mark for Models, and the real macOS icon where one fits, such as Siri for AI or Stocks for Stats. Remove and uninstall actions are red text at the bottom of the page.

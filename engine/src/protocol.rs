@@ -110,6 +110,30 @@ pub enum Request {
         #[serde(default)]
         token: Option<String>,
     },
+    Pause { id: u64 },
+    Resume { id: u64 },
+    /// Takes a download off the list. `delete_partial` also deletes an unfinished `.part`; a finished file stays.
+    Remove {
+        id: u64,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        delete_partial: bool,
+    },
+    #[serde(rename = "hf_search")]
+    HfSearch { query: String },
+    #[serde(rename = "hf_model")]
+    HfModel { repo: String },
+    /// Downloads files of a Hugging Face model into `dir` (absolute), or into AI Models/<repo> in the download
+    /// folder. Empty `files` means the recommended ones.
+    #[serde(rename = "hf_add")]
+    HfAdd {
+        repo: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        files: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        dir: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue: Option<QueueRef>,
+    },
 }
 
 /// A queue by id, or by name (matched case-insensitively).
@@ -155,6 +179,12 @@ pub struct Response {
     pub speed_test: Option<SpeedTestLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stats: Option<StatsLine>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<ModelLine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelRepoLine>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub model_adds: Vec<ModelAddLine>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -278,6 +308,43 @@ pub struct ObjectLine {
     pub modified: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ModelLine {
+    pub id: String,
+    pub downloads: u64,
+    pub likes: u64,
+    pub gated: bool,
+    pub gguf: bool,
+    pub pipeline_tag: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ModelRepoLine {
+    pub id: String,
+    pub sha: String,
+    pub gated: bool,
+    pub files: Vec<ModelFileLine>,
+    /// The files Rays picks when none are named.
+    pub recommended: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ModelFileLine {
+    pub path: String,
+    pub size: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ModelAddLine {
+    pub path: String,
+    /// added, already there, already queued or rejected
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Added {
     pub url: String,
@@ -315,6 +382,9 @@ mod tests {
         round(Request::QueueStart { queue: QueueRef::Id(2) }, r#"{"op":"queue_start","queue":2}"#);
         round(Request::QueueStop { queue: QueueRef::Name("Night".into()) }, r#"{"op":"queue_stop","queue":"Night"}"#);
         round(Request::QueueRunNow { queue: QueueRef::Id(1) }, r#"{"op":"queue_run_now","queue":1}"#);
+        round(Request::Pause { id: 3 }, r#"{"op":"pause","id":3}"#);
+        round(Request::Remove { id: 3, delete_partial: true }, r#"{"op":"remove","id":3,"delete_partial":true}"#);
+        round(Request::HfAdd { repo: "a/b".into(), files: vec![], dir: None, queue: None }, r#"{"op":"hf_add","repo":"a/b"}"#);
         round(
             Request::Add { urls: vec!["u".into()], queue: Some(QueueRef::Name("Night".into())), best_time: false, sha256: vec![], mirrors: vec![], headers: vec![] },
             r#"{"op":"add","urls":["u"],"queue":"Night","best_time":false}"#,

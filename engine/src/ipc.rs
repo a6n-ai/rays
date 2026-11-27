@@ -1,6 +1,6 @@
 //! Unix socket listener for the `dl` CLI. See design doc "Socket protocol".
 use crate::hf::{self, VerifyStatus};
-use crate::protocol::{self, Added, BestTimeLine, BucketLine, GrabLine, JobLine, ListingLine, ObjectLine, ProviderLine, QueueLine, QueueRef, Rejected, Request, Response, SpeedLine, SpeedTestLine, VerifyLine};
+use crate::protocol::{self, Added, BestTimeLine, BucketLine, GrabLine, JobLine, ListingLine, ModelAddLine, ModelFileLine, ModelLine, ModelRepoLine, ObjectLine, ProviderLine, QueueLine, QueueRef, Rejected, Request, Response, SpeedLine, SpeedTestLine, VerifyLine};
 use crate::s3::{self, BucketConfig};
 use crate::scheduler::Scheduler;
 use crate::speed::{BestTime, Confidence};
@@ -178,6 +178,35 @@ async fn respond(sched: &Arc<Scheduler>, line: &[u8]) -> Response {
             },
             Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
         },
+        Ok(Request::Pause { id }) => job_op(sched, id, |s| s.pause(id)),
+        Ok(Request::Resume { id }) => job_op(sched, id, |s| s.resume(id)),
+        Ok(Request::Remove { id, delete_partial }) => job_op(sched, id, |s| s.remove(id, delete_partial)),
+        Ok(Request::HfSearch { query }) => match sched.hf_search(&query).await {
+            Ok(models) => Response {
+                ok: true,
+                models: models
+                    .into_iter()
+                    .map(|m| ModelLine { id: m.id, downloads: m.downloads, likes: m.likes, gated: m.gated, gguf: m.gguf, pipeline_tag: m.pipeline_tag })
+                    .collect(),
+                ..Default::default()
+            },
+            Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
+        },
+        Ok(Request::HfModel { repo }) => match sched.hf_model(&repo).await {
+            Ok(r) => Response {
+                ok: true,
+                model: Some(ModelRepoLine {
+                    recommended: hf::hf_recommended(r.files.clone()),
+                    files: r.files.into_iter().map(|f| ModelFileLine { path: f.path, size: f.size }).collect(),
+                    id: r.id,
+                    sha: r.sha,
+                    gated: r.gated,
+                }),
+                ..Default::default()
+            },
+            Err(e) => Response { error: Some(e.to_string()), ..Default::default() },
+        },
+        Ok(Request::HfAdd { repo, files, dir, queue }) => hf_add(sched, &repo, files, dir, queue).await,
         // A serde message can quote the request, which may carry header values: keep only the position.
         Err(e) => Response { error: Some(format!("invalid request at line {} column {}", e.line(), e.column())), ..Default::default() },
     }
@@ -283,6 +312,47 @@ async fn verify_model(dir: &str) -> Response {
         })
         .collect();
     Response { ok: true, verified, summary: Some(summary), ..Default::default() }
+}
+
+fn job_op(sched: &Arc<Scheduler>, id: u64, op: impl FnOnce(&Arc<Scheduler>)) -> Response {
+    if sched.view(id).is_none() {
+        return Response { error: Some(format!("no download with id {id}")), ..Default::default() };
+    }
+    op(sched);
+    Response { ok: true, ..Default::default() }
+}
+
+async fn hf_add(sched: &Arc<Scheduler>, repo: &str, files: Vec<String>, dir: Option<String>, queue: Option<QueueRef>) -> Response {
+    let fail = |e: String| Response { error: Some(e), ..Default::default() };
+    let queue = match queue.map(|q| find_queue(sched, &q)).transpose() {
+        Ok(q) => q,
+        Err(e) => return fail(e),
+    };
+    let r = match sched.hf_model(repo).await {
+        Ok(r) => r,
+        Err(e) => return fail(e.to_string()),
+    };
+    let wanted = if files.is_empty() { hf::hf_recommended(r.files.clone()) } else { files };
+    if let Some(missing) = wanted.iter().find(|w| !r.files.iter().any(|f| &f.path == *w)) {
+        return fail(format!("{missing} is not a file of {}", r.id));
+    }
+    let picked: Vec<hf::HfFile> = r.files.into_iter().filter(|f| wanted.contains(&f.path)).collect();
+    // The repo id comes from Hugging Face, not the caller; add_hf still refuses a relative or `..` folder.
+    let dest = dir.map_or_else(|| sched.downloads_dir().join("AI Models").join(&r.id), std::path::PathBuf::from);
+    let model_adds = sched
+        .add_hf(&r.id, &r.sha, picked, &dest, queue)
+        .into_iter()
+        .map(|a| {
+            let (status, id, error) = match a.status {
+                hf::HfAddStatus::Added { id } => ("added", Some(id), None),
+                hf::HfAddStatus::AlreadyThere => ("already there", None, None),
+                hf::HfAddStatus::AlreadyQueued { id } => ("already queued", Some(id), None),
+                hf::HfAddStatus::Rejected { error } => ("rejected", None, Some(error)),
+            };
+            ModelAddLine { path: a.path, status: status.into(), id, error }
+        })
+        .collect();
+    Response { ok: true, summary: Some(dest.display().to_string()), model_adds, ..Default::default() }
 }
 
 fn done(result: Result<(), EngineError>) -> Response {

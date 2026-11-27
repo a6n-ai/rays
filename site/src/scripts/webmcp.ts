@@ -16,7 +16,7 @@ if (ctx) {
 		homebrew: 'brew trust a6n-ai/tap && brew install --cask a6n-ai/tap/rays',
 		firstOpen: 'DMG installs: System Settings > Privacy & Security > Open Anyway. Homebrew skips this.',
 		cli: 'https://rays.a6n.ai/docs/dl/',
-		mcp: 'dl mcp (stdio). Claude Code: claude mcp add rays -- dl mcp',
+		mcp: 'dl mcp (stdio) or dl mcp --http (127.0.0.1:7467, bearer token). Claude Code: claude mcp add rays -- dl mcp',
 		releaseNotes: 'https://rays.a6n.ai/releases/',
 	};
 	ctx
