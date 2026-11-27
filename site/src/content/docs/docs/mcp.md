@@ -19,7 +19,7 @@ Any MCP client:
 { "mcpServers": { "rays": { "command": "dl", "args": ["mcp"] } } }
 ```
 
-`dl` must be on the PATH the client uses: in Rays, open **General** in the sidebar and click **Install** next to **Command line tool** (Homebrew installs have it already). Or open **AI** in the sidebar: the **MCP server** card copies both setups with the full path to `dl`, so nothing needs installing.
+`dl` must be on the PATH the client uses: in Rays, open **General** in the sidebar and click **Install** next to **Command line tool** (Homebrew installs have it already). Or open **AI** in the sidebar: **Connect an AI app** adds Rays to Claude, Cursor or VS Code in one click, and copies the Claude Code command or the JSON for other apps, with the full path to `dl`, so nothing needs installing. ChatGPT connects only to MCP servers on the internet, so it can't reach Rays on this Mac.
 
 ### Over HTTP
 

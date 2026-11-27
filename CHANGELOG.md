@@ -1,5 +1,11 @@
 # Release notes
 
+## 0.1.29 (27 Nov 2026)
+
+- **Connect an AI app.** The AI page lists Claude, Claude Code, Cursor, Visual Studio Code and ChatGPT with their icons. **Add** puts Rays in Claude's config, or opens Cursor or VS Code to confirm, and the row shows **Added** once it's there. Claude Code copies its command, and **Other apps** copies the JSON.
+- **HTTP server rows.** Address, token, Claude Code command and JSON config each have their own **Copy** button, and the page no longer jumps when the server is turned on or off.
+- **Hints on the site's agent tool.** `get_install_options`, the WebMCP tool on rays.a6n.ai, now has a title and all four MCP hints.
+
 ## 0.1.28 (27 Nov 2026)
 
 - **MCP on the AI page.** A new **MCP server** card copies the setup for Claude Code or any MCP app, and can run an **HTTP server** at `http://127.0.0.1:7467/mcp` for apps that connect to an address. It listens on this Mac only and needs a token, which the card copies too. In Terminal: `dl mcp --http` and `dl mcp --token`.

@@ -66,38 +66,22 @@ final class MCPHTTPServer {
 struct MCPSection: View {
     @AppStorage(SettingsKey.mcpHTTP) private var httpOn = false
     private var server = MCPHTTPServer.shared
-
-    private var dl: String { CommandLineTool.bundled.path(percentEncoded: false) }
+    @State private var copied: String?
 
     var body: some View {
-        CardSection("MCP server") {
-            SettingRow(title: "Apps on this Mac",
-                       hint: "Claude, Cursor and other AI apps start Rays's MCP server themselves to download files, run queues, get models and sort folders.") {
-                Menu("Copy") {
-                    Button("Claude Code command") { copy("claude mcp add rays -- \(quoted(dl)) mcp") }
-                    Button("JSON config") { copy(#"{ "mcpServers": { "rays": { "command": "\#(dl)", "args": ["mcp"] } } }"#) }
-                }
-                .fixedSize()
-            }
+        MCPAppsSection()
+        CardSection("HTTP server") {
             SettingRow(title: "HTTP server", hint: httpHint, status: server.running ? .ok : nil) {
                 Toggle("HTTP server", isOn: $httpOn).labelsHidden()
             }
-            if server.running {
-                SettingRow(title: "Connect over HTTP", hint: "Clients send the token as a bearer token. Keep it private.") {
-                    Menu("Copy") {
-                        Button("Address") { copy(MCPHTTPServer.url) }
-                        Button("Token") { server.token.map(copy) }
-                        Button("Claude Code command") {
-                            server.token.map { copy("claude mcp add --transport http rays \(MCPHTTPServer.url) --header \"Authorization: Bearer \($0)\"") }
-                        }
-                        Button("JSON config") {
-                            server.token.map {
-                                copy(#"{ "mcpServers": { "rays": { "type": "http", "url": "\#(MCPHTTPServer.url)", "headers": { "Authorization": "Bearer \#($0)" } } } }"#)
-                            }
-                        }
-                    }
-                    .fixedSize()
-                }
+            // Always shown, so turning the server on or off doesn't move the page.
+            copyRow("Address", hint: MCPHTTPServer.url, id: "address") { MCPHTTPServer.url }
+            copyRow("Token", hint: "Clients send it as a bearer token. Keep it private.", id: "token") { server.token }
+            copyRow("Claude Code command", hint: "Paste it in Terminal.", id: "claude") {
+                server.token.map { "claude mcp add --transport http rays \(MCPHTTPServer.url) --header \"Authorization: Bearer \($0)\"" }
+            }
+            copyRow("JSON config", hint: "For other apps that connect to an address.", id: "json") {
+                server.token.map { #"{ "mcpServers": { "rays": { "type": "http", "url": "\#(MCPHTTPServer.url)", "headers": { "Authorization": "Bearer \#($0)" } } } }"# }
             }
             if let error = server.error { ErrorLine(text: error) }
         }
@@ -105,11 +89,20 @@ struct MCPSection: View {
     }
 
     private var httpHint: String {
-        server.running ? "Listening at \(MCPHTTPServer.url), on this Mac only."
-                       : "For AI apps that connect to an address instead. Listens on this Mac only and needs a token."
+        server.running ? "On, listening on this Mac only."
+                       : "For apps that connect to an address. This Mac only, with a token."
     }
 
-    private func quoted(_ s: String) -> String { s.contains(" ") ? "'\(s)'" : s }
+    private func copyRow(_ title: String, hint: String, id: String, text: @escaping () -> String?) -> some View {
+        SettingRow(title: title, hint: hint) {
+            Button(copied == id ? "Copied" : "Copy") {
+                guard let value = text() else { return }
+                copy(value)
+                copied = id
+            }
+            .disabled(!server.running)
+        }
+    }
 
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
