@@ -93,6 +93,37 @@ final class SorterModel {
         _ = await perform(["watch", folder.path])
     }
 
+    /// launchd pins each watch to the sorter's code hash from when it was registered, and kills the first run of a
+    /// replaced binary ("Launch Constraint Violation"). Registering again after an update pins the new one.
+    /// shortcut: an update installed while Rays stays closed can still lose one run before the next launch.
+    func reregisterIfReplaced(defaults: UserDefaults = .standard) async {
+        let key = "registeredSorterBinary"
+        let bundled = Sorter.defaultPath
+        guard !Sorter.isTemporary(bundled),
+              let attributes = try? FileManager.default.attributesOfItem(atPath: bundled),
+              let modified = attributes[.modificationDate] as? Date, let size = attributes[.size] as? Int
+        else { return }
+        let current = "\(modified.timeIntervalSince1970)-\(size)"
+        let registered = defaults.string(forKey: key)
+        guard registered != current else { return }
+        await refresh()
+        guard let status else { return }
+        for folder in Self.foldersToReregister(status.folders, bundled: bundled, registered: registered, current: current) {
+            guard await perform(["watch", folder.path]).status == 0 else { return }
+        }
+        defaults.set(current, forKey: key)
+    }
+
+    /// Only watches that run this app's sorter: a watch on another copy is left for the user to update.
+    nonisolated static func foldersToReregister(_ folders: [SorterFolder], bundled: String,
+                                                registered: String?, current: String) -> [SorterFolder] {
+        guard registered != current else { return [] }
+        let ours = Sorter.canonicalPath(URL(filePath: bundled))
+        return folders.filter {
+            $0.watching && $0.agentBinary.map { Sorter.canonicalPath(URL(filePath: $0)) } == ours
+        }
+    }
+
     func sortNow(_ folder: SorterFolder) async {
         let result = await perform([folder.path])
         if result.status == 0 { sortResults[folder.path] = Sorter.lastLine(result.stdout) }

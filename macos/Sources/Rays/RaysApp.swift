@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dock = DockProgress(model: model)
         clipboard = ClipboardWatcher(model: model)
         MCPHTTPServer.shared.restore()
+        Task { await SorterModel().reregisterIfReplaced() }
     }
     private var dock: DockProgress?
     private var clipboard: ClipboardWatcher?

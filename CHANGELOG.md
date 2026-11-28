@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.1.30 (28 Nov 2026)
+
+- **Folder watching after an update.** Rays registers its watched folders again when its sorter changes, so macOS is less likely to stop the first sort after an update. If an update is installed while Rays is closed, open Rays once.
+
 ## 0.1.29 (27 Nov 2026)
 
 - **Connect an AI app.** The AI page lists Claude, Claude Code, Cursor, Visual Studio Code and ChatGPT with their icons. **Add** puts Rays in Claude's config, or opens Cursor or VS Code to confirm, and the row shows **Added** once it's there. Claude Code copies its command, and **Other apps** copies the JSON.
